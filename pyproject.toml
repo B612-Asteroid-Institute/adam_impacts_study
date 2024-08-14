@@ -36,6 +36,22 @@ dev = [
   "ruff",
 ]
 
+[tool.pdm.scripts]
+check = { composite = ["lint", "typecheck", "test"] }
+format = { composite = ["black ./src/adam_impact_study", "isort ./src/adam_impact_study"] }
+lint = { composite = [
+  "ruff check ./src/adam_impact_study",
+  "black --check ./src/adam_impact_study",
+  "isort --check-only ./src/adam_impact_study",
+] }
+fix = "ruff ./src/adam_impact_study --fix"
+typecheck = "mypy --strict ./src/adam_impact_study"
+
+test = "pytest --benchmark-disable {args}"
+doctest = "pytest --doctest-plus --doctest-only"
+benchmark = "pytest --benchmark-only"
+coverage = "pytest --cov=adam_impact_study --cov-report=xml"
+
 [tool.pdm]
 distribution = true
 
@@ -44,3 +60,9 @@ line-length = 88
 
 [tool.isort]
 profile = "black"
+
+[tool.ruff]
+line-length = 110
+target-version = "py311"
+lint.ignore = []
+exclude = ["build"]
