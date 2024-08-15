@@ -111,21 +111,21 @@ def run_fo_od(
         sorcha_df_to_fo_input(df, f"{RESULT_DIR}/{fo_input_file_base}_{obj_id}.csv")
         fo_output_folder = f"{fo_output_file_base}_{obj_id}"
 
-        #Generate the find_orb commands
+        # Generate the find_orb commands
         fo_command = (
             f"cd {FO_DIR}; ./fo {fo_input_file_base}_{obj_id}.csv "
             f"-O {fo_output_folder}; cp -r {fo_output_folder} "
             f"{RUN_DIR}/{RESULT_DIR}/; cd {RUN_DIR}"
         )
 
-        #Ensure the output directory exists and copy the input file
+        # Ensure the output directory exists and copy the input file
         os.makedirs(f"{FO_DIR}/{fo_output_folder}", exist_ok=True)
         shutil.copyfile(
             f"{RESULT_DIR}/{fo_input_file_base}_{obj_id}.csv",
             f"{FO_DIR}/{fo_input_file_base}_{obj_id}.csv",
         )
-        
-        #Run find_orb and check for output
+
+        # Run find_orb and check for output
         subprocess.run(fo_command, shell=True)
         if not os.path.exists(f"{fo_output_file_base}_{obj_id}/covar.json"):
             print("No find_orb output for object: ", obj_id)
@@ -133,12 +133,12 @@ def run_fo_od(
         elements_dict, covar_dict = read_fo_output(
             f"{RESULT_DIR}/{fo_output_file_base}_{obj_id}"
         )
-        
+
         # Convert to ADAM Orbit objects
         orbit = fo_to_adam_orbit_cov(elements_dict, covar_dict)[obj_id]
         if orbits is None:
             orbits = orbit
         else:
             orbits = qv.concatenate([orbits, orbit])
-    
+
     return orbits

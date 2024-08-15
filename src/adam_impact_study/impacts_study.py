@@ -120,7 +120,7 @@ def run_impact_study_fo(
         print("Object ID: ", obj)
         df = sorcha_observations_df[sorcha_observations_df["ObjID"] == obj]
         unique_days = np.floor(df["fieldMJD_TAI"]).unique()
-        
+
         for day in unique_days:
             day = int(day)
             print("Day: ", day)
@@ -128,7 +128,7 @@ def run_impact_study_fo(
             fo_file_name = f"{fo_input_file_base}_{day}"
             fo_output_folder = f"{fo_output_file_base}_{day}"
             sorcha_df_to_fo_input(filtered_df, f"{RESULT_DIR}/{fo_file_name}")
-            
+
             try:
                 # Run find_orb to compute orbits
                 fo_orbit = run_fo_od(
@@ -142,7 +142,7 @@ def run_impact_study_fo(
             except Exception as e:
                 print(f"Error running find_orb output for {obj}: {e}")
                 continue
-            
+
             if len(fo_orbit) > 0:
                 time = initial_orbit_objects.select("object_id", obj).coordinates.time[
                     0
@@ -162,7 +162,7 @@ def run_impact_study_fo(
                 except Exception as e:
                     print(f"Error calculating impacts for {obj}: {e}")
                     continue
-        
+
         ip_dict_obj_fo[obj] = ip_dict
 
     return ip_dict_obj_fo
