@@ -134,7 +134,7 @@ def run_sorcha(
     sorcha_config_file : str
         Path to the Sorcha configuration file.
     sorcha_orbits_file : str
-        Path to the file where the Sorcha orbit data will be saved.
+        Path to the file where the Sorcha orbits are written as input.
     sorcha_physical_params_file : str
         Path to the file where the Sorcha physical parameters data will be saved.
     sorcha_output_file : str
