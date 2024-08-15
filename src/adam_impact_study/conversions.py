@@ -81,7 +81,7 @@ def sorcha_output_to_df(sorcha_output_file):
 
 def adam_orbit_from_sorcha_input(sorcha_orbits_file):
     """
-    Convert Sorcha orbit format data to an ADAM Orbit object.
+    Convert orbits in sorcha format to an ADAM Orbit object.
 
     Parameters
     ----------
@@ -122,7 +122,7 @@ def sorcha_output_to_od_observations(sorcha_observations_df):
     Parameters
     ----------
     sorcha_observations_df : pandas.DataFrame
-        DataFrame containing Sorcha observations with columns:
+        DataFrame containing Sorcha observations with relevant columns:
         - "ObjID": Object ID
         - "fieldMJD_TAI": Observation time in MJD (TAI)
         - "RA_deg": Right Ascension in degrees
@@ -178,7 +178,7 @@ def sorcha_df_to_fo_input(sorcha_df, fo_file_name):
     Parameters
     ----------
     sorcha_df : pandas.DataFrame
-        DataFrame containing Sorcha data with columns:
+        DataFrame containing Sorcha data with relevant columns:
         - "ObjID": Object ID
         - "fieldMJD_TAI": Observation time in MJD (TAI)
         - "RA_deg": Right Ascension in degrees
