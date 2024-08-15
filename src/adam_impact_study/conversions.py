@@ -13,8 +13,28 @@ from adam_core.orbits import Orbits
 from adam_core.time import Timestamp
 
 
-# Convert impactors data frame to adam orbit
 def impactor_to_adam_orbit(impactor_df):
+    """
+    Convert a DataFrame of impactor data into an ADAM Orbit object.
+
+    Parameters
+    ----------
+    impactor_df : pandas.DataFrame
+        DataFrame containing impactor data with columns:
+        - "a_au": Semi-major axis (au)
+        - "e": Eccentricity
+        - "i_deg": Inclination (degrees)
+        - "node_deg": Longitude of the ascending node (degrees)
+        - "argperi_deg": Argument of periapsis (degrees)
+        - "M_deg": Mean anomaly (degrees)
+        - "epoch_mjd": Epoch in Modified Julian Date (MJD)
+        - "ObjID": Object ID
+
+    Returns
+    -------
+    orbit : `~adam_core.orbits.orbits.Orbits`
+        ADAM Orbit object created from the input data.
+    """
     keplerian_coords = KeplerianCoordinates.from_kwargs(
         a=impactor_df["a_au"],
         e=impactor_df["e"],
@@ -36,8 +56,21 @@ def impactor_to_adam_orbit(impactor_df):
     return orbit
 
 
-# Generate a dataframe from sorcha output
 def sorcha_output_to_df(sorcha_output_file):
+    """
+    Generate a DataFrame from a Sorcha output file.
+
+    Parameters
+    ----------
+    sorcha_output_file : str
+        Path to the Sorcha output CSV file.
+
+    Returns
+    -------
+    sorcha_output_df : pandas.DataFrame
+        DataFrame containing the Sorcha output data, sorted by Object ID
+        and observation time (fieldMJD_TAI).
+    """
     sorcha_output_df = pd.read_csv(sorcha_output_file, float_precision="round_trip")
     # sort by object id
     sorcha_output_df = sorcha_output_df.sort_values(
@@ -46,8 +79,20 @@ def sorcha_output_to_df(sorcha_output_file):
     return sorcha_output_df
 
 
-# Covert sorcha orbit format to adam orbit (for testing of sorcha demo files)
 def adam_orbit_from_sorcha_input(sorcha_orbits_file):
+    """
+    Convert Sorcha orbit format data to an ADAM Orbit object.
+
+    Parameters
+    ----------
+    sorcha_orbits_file : str
+        Path to the Sorcha orbits file.
+
+    Returns
+    -------
+    orbit : `~adam_core.orbits.orbits.Orbits`
+        ADAM Orbit object created from the Sorcha orbit data.
+    """
     sorcha_orbits_df = pd.read_csv(sorcha_orbits_file, sep=" ")
     keplerian_coords = KeplerianCoordinates.from_kwargs(
         a=sorcha_orbits_df["a"],
@@ -71,6 +116,24 @@ def adam_orbit_from_sorcha_input(sorcha_orbits_file):
 
 
 def sorcha_output_to_od_observations(sorcha_observations_df):
+    """
+    Convert a Sorcha observations DataFrame to OrbitDeterminationObservations.
+
+    Parameters
+    ----------
+    sorcha_observations_df : pandas.DataFrame
+        DataFrame containing Sorcha observations with columns:
+        - "ObjID": Object ID
+        - "fieldMJD_TAI": Observation time in MJD (TAI)
+        - "RA_deg": Right Ascension in degrees
+        - "Dec_deg": Declination in degrees
+        - "astrometricSigma_deg": Astrometric uncertainty in degrees
+
+    Returns
+    -------
+    od_observations : dict
+        Dictionary of OrbitDeterminationObservations objects, keyed by Object ID.
+    """
     od_observations = {}
 
     object_ids = sorcha_observations_df["ObjID"].unique()
@@ -109,6 +172,30 @@ def sorcha_output_to_od_observations(sorcha_observations_df):
 
 
 def sorcha_df_to_fo_input(sorcha_df, fo_file_name):
+    """
+    Convert a Sorcha DataFrame to a Find_Orb input file.
+
+    Parameters
+    ----------
+    sorcha_df : pandas.DataFrame
+        DataFrame containing Sorcha data with columns:
+        - "ObjID": Object ID
+        - "fieldMJD_TAI": Observation time in MJD (TAI)
+        - "RA_deg": Right Ascension in degrees
+        - "Dec_deg": Declination in degrees
+        - "astrometricSigma_deg": Astrometric uncertainty in degrees
+        - "trailedSourceMag": Trailed source magnitude
+        - "trailedSourceMagSigma": Uncertainty in trailed source magnitude
+        - "optFilter": Optical filter used
+
+    fo_file_name : str
+        Name of the Find_Orb input file to be created.
+
+    Returns
+    -------
+    fo_file_name : str
+        Path to the generated Find_Orb input file.
+    """
     with open(fo_file_name, "w") as w:
         w.write("trkSub|stn|obsTime|ra|dec|rmsRA|rmsDec|mag|rmsMag|band\n")
         for index, row in sorcha_df.iterrows():
@@ -127,8 +214,22 @@ def sorcha_df_to_fo_input(sorcha_df, fo_file_name):
     return fo_file_name
 
 
-# Convert the find_orb output to ADAM Orbit objects
 def fo_to_adam_orbit_cov(elements_dict, covar_dict):
+    """
+    Convert Find_Orb output to ADAM Orbit objects, including covariance.
+
+    Parameters
+    ----------
+    elements_dict : dict
+        Dictionary containing orbital elements for each object, keyed by Object ID.
+    covar_dict : dict
+        Dictionary containing covariance matrices and state vectors for each object.
+
+    Returns
+    -------
+    orbits_dict : dict
+        Dictionary of ADAM Orbit objects, keyed by Object ID.
+    """
     orbits_dict = {}
     for object_id, elements in elements_dict.items():
 
