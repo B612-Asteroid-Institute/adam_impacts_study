@@ -2,6 +2,7 @@ import numpy as np
 import pandas as pd
 from adam_core.dynamics.impacts import calculate_impact_probabilities, calculate_impacts
 from adam_core.propagator.adam_assist import ASSISTPropagator
+
 from adam_impact_study.conversions import (
     impactor_to_adam_orbit,
     sorcha_output_to_df,
