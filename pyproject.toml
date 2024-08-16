@@ -8,12 +8,13 @@ authors = [
 dependencies = [
     "numpy",
     "matplotlib",
-    "adam_core @ git+https://github.com/B612-Asteroid-Institute/adam_core.git@13165ed9feedb8d2e06e39f95a90ed61fd0a8b0e",
+    "adam_core",
+    "adam_assist",
     "sorcha",
     "jax==0.4.17",
     "jaxlib==0.4.17",
 ]
-requires-python = ">=3.10"
+requires-python = ">=3.11"
 readme = "README.md"
 license = {text = "MIT"}
 

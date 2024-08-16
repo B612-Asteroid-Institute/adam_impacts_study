@@ -18,9 +18,9 @@ sorcha_config_file = "data/sorcha_config_demo.ini"
 sorcha_orbits_file = f"data/sorcha_input_{RUN_NAME}.csv"
 sorcha_physical_params_file = f"data/sorcha_params_{RUN_NAME}.csv"
 sorcha_output_name = f"sorcha_output_{RUN_NAME}"
-sorcha_output_file = f"data/{sorcha_output_name}.csv"
-fo_input_file_base = f"data/fo_input_{RUN_NAME}"
-fo_output_file_base = f"data/fo_output_{RUN_NAME}"
+sorcha_output_file = f"{sorcha_output_name}.csv"
+fo_input_file_base = f"fo_input_{RUN_NAME}"
+fo_output_file_base = f"fo_output_{RUN_NAME}"
 
 physical_params_string = "15.88 1.72 0.48 -0.11 -0.12 -0.12 0.15"
 
@@ -39,5 +39,7 @@ impact_dict = run_impact_study_fo(
     RUN_DIR,
     RESULT_DIR,
 )
+
+print(impact_dict)
 
 plot_ip_over_time(impact_dict)

@@ -4,7 +4,7 @@ import shutil
 import subprocess
 
 import quivr as qv
-from conversions import fo_to_adam_orbit_cov, sorcha_df_to_fo_input
+from adam_impact_study.conversions import fo_to_adam_orbit_cov, sorcha_df_to_fo_input
 
 
 def read_fo_output(fo_output_dir):
@@ -117,6 +117,7 @@ def run_fo_od(
             f"-O {fo_output_folder}; cp -r {fo_output_folder} "
             f"{RUN_DIR}/{RESULT_DIR}/; cd {RUN_DIR}"
         )
+        print(f"Find Orb command: {fo_command}")
 
         # Ensure the output directory exists and copy the input file
         os.makedirs(f"{FO_DIR}/{fo_output_folder}", exist_ok=True)
@@ -127,7 +128,7 @@ def run_fo_od(
 
         # Run find_orb and check for output
         subprocess.run(fo_command, shell=True)
-        if not os.path.exists(f"{fo_output_file_base}_{obj_id}/covar.json"):
+        if not os.path.exists(f"{FO_DIR}/{fo_output_file_base}_{obj_id}/covar.json"):
             print("No find_orb output for object: ", obj_id)
             continue
         elements_dict, covar_dict = read_fo_output(

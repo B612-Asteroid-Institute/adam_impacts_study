@@ -2,13 +2,13 @@ import numpy as np
 import pandas as pd
 from adam_core.dynamics.impacts import calculate_impact_probabilities, calculate_impacts
 from adam_core.propagator.adam_assist import ASSISTPropagator
-from conversions import (
+from adam_impact_study.conversions import (
     impactor_to_adam_orbit,
     sorcha_output_to_df,
     sorcha_output_to_od_observations,
 )
-from fo_od import run_fo_od, sorcha_df_to_fo_input
-from sorcha_utils import run_sorcha
+from adam_impact_study.fo_od import run_fo_od, sorcha_df_to_fo_input
+from adam_impact_study.sorcha_utils import run_sorcha
 
 
 def run_impact_study_fo(
@@ -108,7 +108,7 @@ def run_impact_study_fo(
         RESULT_DIR,
     )
     sorcha_observations_df = sorcha_output_to_df(
-        f"{sorcha_output_name}/{sorcha_output_file}"
+        f"{RESULT_DIR}/{sorcha_output_name}/{sorcha_output_file}"
     )
     od_observations = sorcha_output_to_od_observations(sorcha_observations_df)
 
@@ -143,7 +143,7 @@ def run_impact_study_fo(
                 print(f"Error running find_orb output for {obj}: {e}")
                 continue
 
-            if len(fo_orbit) > 0:
+            if fo_orbit is not None and len(fo_orbit) > 0:
                 time = initial_orbit_objects.select("object_id", obj).coordinates.time[
                     0
                 ]

@@ -3,7 +3,7 @@ import subprocess
 
 import pandas as pd
 import quivr as qv
-from conversions import sorcha_output_to_df
+from adam_impact_study.conversions import sorcha_output_to_df
 
 
 class SorchaPhysicalParameters(qv.Table):
