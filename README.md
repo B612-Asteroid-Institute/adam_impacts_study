@@ -1,7 +1,7 @@
 # Adam Impact Study
 
 ## Description
-This package includes all the functions and utilities needed to run the impact study. 
+This package includes all the functions and utilities needed to run the impact study.
 
 ## Installation
 
@@ -58,6 +58,3 @@ pip install .[dev]
 ```
 
 ## Usage
-
-
-
