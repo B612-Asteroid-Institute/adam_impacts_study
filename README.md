@@ -111,4 +111,3 @@ plot_ip_over_time(impact_dict)
 ```
 
 This code and the input files needed to run it can be found in the 'demo' section.
->>>>>>> 4037ef15a6bcb6045847ecd3647bacfe6d745873
