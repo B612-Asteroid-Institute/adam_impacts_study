@@ -4,8 +4,7 @@ from adam_core.dynamics.impacts import calculate_impact_probabilities, calculate
 from adam_core.propagator.adam_assist import ASSISTPropagator
 
 from adam_impact_study.conversions import (
-    impactor_to_adam_orbit,
-    sorcha_output_to_df,
+    impactor_file_to_adam_orbit,
     sorcha_output_to_od_observations,
 )
 from adam_impact_study.fo_od import run_fo_od, sorcha_df_to_fo_input
@@ -13,6 +12,7 @@ from adam_impact_study.sorcha_utils import run_sorcha
 
 
 def run_impact_study_fo(
+    impactor_df,
     impactors_file,
     sorcha_config_file,
     sorcha_orbits_file,
@@ -73,8 +73,7 @@ def run_impact_study_fo(
     propagator = ASSISTPropagator()
 
     # Read impactor data and convert to ADAM orbit objects
-    impactor_df = pd.read_csv(impactors_file, float_precision="round_trip")
-    initial_orbit_objects = impactor_to_adam_orbit(impactor_df)
+    initial_orbit_objects = impactor_file_to_adam_orbit(impactors_file)
 
     # Prepare physical parameters DataFrame
     physical_params_list = [
@@ -97,7 +96,8 @@ def run_impact_study_fo(
     physical_params_df = pd.DataFrame(data)
 
     # Run Sorcha to generate observational data
-    sorcha_observations_df = run_sorcha(
+    #KK updat to concatonate the observations instead of using dictoinary
+    od_observations_dict = run_sorcha(
         impactor_df,
         sorcha_config_file,
         sorcha_orbits_file,
@@ -108,17 +108,14 @@ def run_impact_study_fo(
         sorcha_output_name,
         RESULT_DIR,
     )
-    sorcha_observations_df = sorcha_output_to_df(
-        f"{RESULT_DIR}/{sorcha_output_name}/{sorcha_output_file}"
-    )
-    od_observations = sorcha_output_to_od_observations(sorcha_observations_df)
 
     # Iterate over each object and calculate impact probabilities
-    object_ids = od_observations.keys()
+    object_ids = od_observations_dict.keys()
     ip_dict_obj_fo = {}
     for obj in object_ids:
         ip_dict = {}
         print("Object ID: ", obj)
+        #KK: update to use the od_observations
         df = sorcha_observations_df[sorcha_observations_df["ObjID"] == obj]
         unique_days = np.floor(df["fieldMJD_TAI"]).unique()
 

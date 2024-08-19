@@ -4,7 +4,7 @@ import subprocess
 import pandas as pd
 import quivr as qv
 
-from adam_impact_study.conversions import sorcha_output_to_df
+from adam_impact_study.conversions import sorcha_output_to_od_observations
 
 
 class SorchaPhysicalParameters(qv.Table):
@@ -169,7 +169,6 @@ def run_sorcha(
     subprocess.run(sorcha_command_string, shell=True)
 
     # Read the sorcha output
-    sorcha_observations_df = sorcha_output_to_df(
-        f"{RESULT_DIR}/{sorcha_output_name}/{sorcha_output_file}"
-    )
-    return sorcha_observations_df
+    sorcha_output_file = "{RESULT_DIR}/{sorcha_output_name}/{sorcha_output_file}"
+    od_observations = sorcha_output_to_od_observations(sorcha_output_file)
+    return od_observations
