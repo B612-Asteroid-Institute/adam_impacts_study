@@ -4,7 +4,7 @@
 This package includes all the functions and utilities needed to run the impact study.
 
 ## Installation
-
+First clone the repository with git.
 ### Using PDM (recommended)
 To install the necessary dependencies using PDM, run:
 
