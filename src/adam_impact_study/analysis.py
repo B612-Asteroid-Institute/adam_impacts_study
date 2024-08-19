@@ -25,4 +25,4 @@ def plot_ip_over_time(ip_dict):
         plt.xlabel("Day")
         plt.ylabel("Impact Probability")
         plt.plot(ip_df["Day"], ip_df["IP"])
-        plt.show()
+        plt.savefig(f"IP_{obj}.png")
