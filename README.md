@@ -18,14 +18,14 @@ This command will install all dependencies as specified in the `pyproject.toml` 
 If you do not have PDM installed, you can alternatively install dependencies using pip:
 
 ```bash
-pip install -r requirements.txt
+pip install .
 ```
 
 However, using PDM is recommended to ensure consistent and reproducible environments.
 
 ### Download Ephemeris Files
 
-To download the assist ephemeris files, run:
+If using pdm, first activate the environement with: `eval $(pdm venv activate)`, then to download the assist ephemeris files, run:
 
 ```
 python set_up_assist.py
