@@ -58,7 +58,6 @@ pip install .[dev]
 ```
 
 ## Usage
-<<<<<<< HEAD
 =======
 
 This code can be used to run the impact study, examining impact probabilities over time. For example, the demo code below can be run to look at the expected impact probabilities of 10 synthetic objects over the course of one year.
