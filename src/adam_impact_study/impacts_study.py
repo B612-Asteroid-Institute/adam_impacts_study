@@ -1,18 +1,18 @@
 import numpy as np
 import pandas as pd
+import pyarrow.compute as pc
 from adam_core.dynamics.impacts import calculate_impact_probabilities, calculate_impacts
 from adam_core.propagator.adam_assist import ASSISTPropagator
 
 from adam_impact_study.conversions import (
     impactor_file_to_adam_orbit,
     sorcha_output_to_od_observations,
+    od_observations_to_fo_input
 )
-from adam_impact_study.fo_od import run_fo_od, sorcha_df_to_fo_input
+from adam_impact_study.fo_od import run_fo_od
 from adam_impact_study.sorcha_utils import run_sorcha
 
-
 def run_impact_study_fo(
-    impactor_df,
     impactors_file,
     sorcha_config_file,
     sorcha_orbits_file,
@@ -73,14 +73,14 @@ def run_impact_study_fo(
     propagator = ASSISTPropagator()
 
     # Read impactor data and convert to ADAM orbit objects
-    initial_orbit_objects = impactor_file_to_adam_orbit(impactors_file)
+    adam_orbit_objects = impactor_file_to_adam_orbit(impactors_file)
 
     # Prepare physical parameters DataFrame
     physical_params_list = [
         float(param) for param in sorcha_physical_params_string.split()
     ]
     data = []
-    for obj_id in initial_orbit_objects.object_id:
+    for obj_id in adam_orbit_objects.object_id:
         data.append(
             {
                 "ObjID": str(obj_id),
@@ -98,7 +98,7 @@ def run_impact_study_fo(
     # Run Sorcha to generate observational data
     #KK updat to concatonate the observations instead of using dictoinary
     od_observations_dict = run_sorcha(
-        impactor_df,
+        adam_orbit_objects,
         sorcha_config_file,
         sorcha_orbits_file,
         sorcha_physical_params_file,
@@ -115,22 +115,22 @@ def run_impact_study_fo(
     for obj in object_ids:
         ip_dict = {}
         print("Object ID: ", obj)
-        #KK: update to use the od_observations
-        df = sorcha_observations_df[sorcha_observations_df["ObjID"] == obj]
-        unique_days = np.floor(df["fieldMJD_TAI"]).unique()
-
+        od_obs = od_observations_dict[obj]
+        days = od_obs.coordinates.time.days.to_numpy()
+        unique_days = np.unique(days)
         for day in unique_days:
-            day = int(day)
             print("Day: ", day)
-            filtered_df = df[np.floor(df["fieldMJD_TAI"]) <= day]
-            fo_file_name = f"{fo_input_file_base}_{day}"
-            fo_output_folder = f"{fo_output_file_base}_{day}"
-            sorcha_df_to_fo_input(filtered_df, f"{RESULT_DIR}/{fo_file_name}")
+            filtered_obs = od_obs.apply_mask(pc.less_equal(od_obs.coordinates.time.days.to_numpy(), day))
+            print("Filtered Observations: ", filtered_obs)
+            print("Filtered Days: ", filtered_obs.coordinates.time.days.to_numpy())
 
+            fo_file_name = f"{fo_input_file_base}_{obj}_{day}.csv"
+            fo_output_folder = f"{fo_output_file_base}_{obj}_{day}"
+            od_observations_to_fo_input(filtered_obs, f"{RESULT_DIR}/{fo_file_name}", obj)
+            
             try:
                 # Run find_orb to compute orbits
                 fo_orbit = run_fo_od(
-                    filtered_df,
                     fo_file_name,
                     fo_output_folder,
                     FO_DIR,
@@ -140,20 +140,21 @@ def run_impact_study_fo(
             except Exception as e:
                 print(f"Error running find_orb output for {obj}: {e}")
                 continue
+            print(f"Fo orbit: {fo_orbit}")
 
             if fo_orbit is not None and len(fo_orbit) > 0:
-                time = initial_orbit_objects.select("object_id", obj).coordinates.time[
-                    0
-                ]
+                time = adam_orbit_objects.select("object_id", obj).coordinates.time[0]
                 orbit = fo_orbit
                 try:
                     # Propagate orbits and calculate impact probabilities
                     result = propagator.propagate_orbits(
                         orbit, time, covariance=True, num_samples=1000
                     )
+                    print(result)
                     results, impacts = calculate_impacts(
                         result, 60, propagator, num_samples=10000
                     )
+                    print(impacts)
                     ip = calculate_impact_probabilities(results, impacts)
                     ip_dict[day] = ip.cumulative_probability[0].as_py()
                     print(f"Impact Probability: {ip.cumulative_probability[0].as_py()}")

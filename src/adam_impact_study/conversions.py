@@ -1,5 +1,7 @@
+import json
 import numpy as np
 import pandas as pd
+import quivr as qv
 from adam_core.coordinates import (
     CartesianCoordinates,
     CoordinateCovariances,
@@ -50,7 +52,6 @@ def impactor_file_to_adam_orbit(impactor_file):
 
 
 def sorcha_output_to_od_observations(sorcha_output_file):
-    #read directly from the sorcha output file
     """
     Convert a Sorcha observations DataFrame to OrbitDeterminationObservations.
 
@@ -105,8 +106,7 @@ def sorcha_output_to_od_observations(sorcha_output_file):
     return od_observations
 
 
-def sorcha_df_to_fo_input(sorcha_df, fo_file_name):
-    #change to read from od_observations adam-core object
+def od_observations_to_fo_input(od_observations, fo_file_name, object_id):
     """
     Convert a Sorcha DataFrame to a Find_Orb input file.
 
@@ -132,24 +132,86 @@ def sorcha_df_to_fo_input(sorcha_df, fo_file_name):
         Path to the generated Find_Orb input file.
     """
     with open(fo_file_name, "w") as w:
-        w.write("trkSub|stn|obsTime|ra|dec|rmsRA|rmsDec|mag|rmsMag|band\n")
-        for index, row in sorcha_df.iterrows():
-            time_tai = Timestamp.from_mjd([row["fieldMJD_TAI"]], scale="tai")
-            time_utc = time_tai.rescale("utc")
+        w.write("trkSub|stn|obsTime|ra|dec|rmsRA|rmsDec\n") #|mag|rmsMag|band
+        for obs in od_observations:
+            sigmas = obs.coordinates.covariance.sigmas
+            time_utc = obs.coordinates.time
             time = time_utc.to_astropy()
             w.write(
-                f"{row['ObjID']}|X05|{time.isot[0]}|{row['RA_deg']}|"
-                f"{row['Dec_deg']}|"
-                f"{float(row['astrometricSigma_deg'])*3600}|"
-                f"{float(row['astrometricSigma_deg'])*3600}|"
-                f"{row['trailedSourceMag']}|"
-                f"{row['trailedSourceMagSigma']}|"
-                f"{row['optFilter']}\n"
+                f"{object_id}|X05|{time.isot[0]}|{obs.coordinates.lon[0]}|"
+                f"{obs.coordinates.lat[0]}|"
+                f"{format(sigmas[0][1]*3600, '.5f')}|"
+                f"{format(sigmas[0][2]*3600, '.5f')}\n"
             )
     return fo_file_name
 
 
-def fo_to_adam_orbit_cov(elements_dict, covar_dict):
+def read_fo_output(fo_output_dir):
+    """
+    Read the find_orb output files from the specified directory into dictionaries
+    containing orbital elements and covariances.
+
+    Parameters
+    ----------
+    fo_output_dir : str
+        Directory path where find_orb output files (e.g., total.json and covar.json) are located.
+
+    Returns
+    -------
+    elements_dict : dict
+        Dictionary containing orbital elements for each object.
+    covar_dict : dict
+        Dictionary containing covariance matrices for each object.
+    """
+    covar_dict = read_fo_covariance(f"{fo_output_dir}/covar.json")
+    elements_dict = read_fo_orbits(f"{fo_output_dir}/total.json")
+    return elements_dict, covar_dict
+
+
+def read_fo_covariance(covar_file):
+    """
+    Read the find_orb covariance JSON file into a dictionary.
+
+    Parameters
+    ----------
+    covar_file : str
+        Path to the find_orb covariance JSON file (covar.json).
+
+    Returns
+    -------
+    covar_json : dict
+        Dictionary containing the covariance data from the JSON file.
+    """
+    with open(covar_file, "r") as f:
+        covar_json = json.load(f)
+    return covar_json
+
+
+def read_fo_orbits(input_file):
+    """
+    Read the find_orb total.json file into a dictionary of orbital elements.
+
+    Parameters
+    ----------
+    input_file : str
+        Path to the find_orb total.json file.
+
+    Returns
+    -------
+    elements_dict : dict
+        Dictionary containing orbital elements for each object.
+    """
+    with open(input_file, "r") as f:
+        total_json = json.load(f)
+    objects = total_json.get("objects", {})
+    elements_dict = {}
+    for object_id, object_data in objects.items():
+        elements = object_data.get("elements", {})
+        elements_dict[object_id] = elements
+    return elements_dict
+
+
+def fo_to_adam_orbit_cov(fo_output_folder):
     #change to read directly from the find_orb output file
     """
     Convert Find_Orb output to ADAM Orbit objects, including covariance.
@@ -166,7 +228,10 @@ def fo_to_adam_orbit_cov(elements_dict, covar_dict):
     orbits_dict : dict
         Dictionary of ADAM Orbit objects, keyed by Object ID.
     """
-    orbits_dict = {}
+
+    elements_dict, covar_dict = read_fo_output(fo_output_folder)
+
+    orbits = None
     for object_id, elements in elements_dict.items():
 
         covar_matrix = np.array([covar_dict["covar"]])
@@ -187,10 +252,14 @@ def fo_to_adam_orbit_cov(elements_dict, covar_dict):
             frame="ecliptic",
             covariance=covariances_cartesian,
         )
-        orbits = Orbits.from_kwargs(
+        orbit = Orbits.from_kwargs(
             object_id=[object_id],
             orbit_id=[object_id],
             coordinates=cartesian_coordinates,
         )
-        orbits_dict[object_id] = orbits
-    return orbits_dict
+        if orbits is None:
+            orbits = orbit
+        else:
+            orbits = qv.concatenate([orbits, orbit])
+            
+    return orbits

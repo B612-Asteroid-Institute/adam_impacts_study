@@ -19,6 +19,7 @@ def plot_ip_over_time(ip_dict):
         This function does not return any value. It generates and displays plots for each object.
     """
     for obj in ip_dict.keys():
+        plt.figure()
         obj_dict = ip_dict[obj]
         ip_df = pd.DataFrame(list(obj_dict.items()), columns=["Day", "IP"])
         plt.scatter(ip_df["Day"], ip_df["IP"])
@@ -27,3 +28,4 @@ def plot_ip_over_time(ip_dict):
         plt.ylabel("Impact Probability")
         plt.plot(ip_df["Day"], ip_df["IP"])
         plt.savefig(f"IP_{obj}.png")
+        plt.close()
