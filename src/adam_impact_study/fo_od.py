@@ -20,12 +20,10 @@ def run_fo_od(
 
     Parameters
     ----------
-    sorcha_observations_df : pandas.DataFrame
-        DataFrame containing Sorcha observations
-    fo_input_file_base : str
-        Base name for the find_orb input files to be created.
-    fo_output_file_base : str
-        Base name for the find_orb output folders.
+    fo_input_file : str
+        Name of the find_orb input file.
+    fo_output_folder : str
+        Name of the find_orb output folder.
     FO_DIR : str
         Directory path where the find_orb executable is located.
     RUN_DIR : str
@@ -35,8 +33,8 @@ def run_fo_od(
 
     Returns
     -------
-    orbits : `~adam_core.orbits.orbits.Orbits`
-        Concatenated ADAM Orbit object containing orbits for all objects.
+    orbit : `~adam_core.orbits.orbits.Orbits`
+        Orbit object containing the orbital elements and covariance matrix.
     """
 
     # Generate the find_orb commands

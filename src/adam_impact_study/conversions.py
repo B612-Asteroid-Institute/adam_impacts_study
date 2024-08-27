@@ -14,10 +14,21 @@ from adam_core.orbit_determination import OrbitDeterminationObservations
 from adam_core.orbits import Orbits
 from adam_core.time import Timestamp
 
+class Photometry(qv.Table):
+    mag = qv.Float64Column()
+    mag_sigma = qv.Float64Column(nullable=True)
+    filter = qv.LargeStringColumn()
+
+class Observations(qv.Table):
+    obs_id = qv.LargeStringColumn()
+    orbit_id = qv.LargeStringColumn()
+    coordinates = SphericalCoordinates.as_column()
+    observers = Observers.as_column()
+    photometry = Photometry.as_column(nullable=True)
 
 def impactor_file_to_adam_orbit(impactor_file):
     """
-    Convert a DataFrame of impactor data into an ADAM Orbit object.
+    Generate an ADAM Orbit object from an impactor data file.
 
     Parameters
     ----------
@@ -53,11 +64,12 @@ def impactor_file_to_adam_orbit(impactor_file):
 
 def sorcha_output_to_od_observations(sorcha_output_file):
     """
-    Convert a Sorcha observations DataFrame to OrbitDeterminationObservations.
+    Convert Sorcha observations output files to OrbitDeterminationObservations.
 
     Parameters
     ----------
     sorcha_output_file : str
+        Path to the Sorcha output file.
 
     Returns
     -------
@@ -80,6 +92,11 @@ def sorcha_output_to_od_observations(sorcha_output_file):
         sigmas = np.full((len(object_obs), 6), np.nan)
         sigmas[:, 1] = object_obs["astrometricSigma_deg"]
         sigmas[:, 2] = object_obs["astrometricSigma_deg"]
+        photometry = Photometry.from_kwargs(
+            mag=object_obs["trailedSourceMag"],
+            mag_sigma=object_obs["trailedSourceMagSigma"],
+            filter=object_obs["optFilter"],
+        )
         coordinates = SphericalCoordinates.from_kwargs(
             lon=object_obs["RA_deg"],
             lat=object_obs["Dec_deg"],
@@ -97,34 +114,31 @@ def sorcha_output_to_od_observations(sorcha_output_file):
                 ("origin.code", "ascending"),
             ]
         )
-        od_observations[obj] = OrbitDeterminationObservations.from_kwargs(
-            id=[f"{obj}_{i}" for i in range(len(object_obs))],
+        od_observations[obj] = Observations.from_kwargs(
+            obs_id=[f"{obj}_{i}" for i in range(len(object_obs))],
+            orbit_id=[obj for i in range(len(object_obs))],
             coordinates=coordinates_sorted,
             observers=Observers.from_code("X05", coordinates_sorted.time),
+            photometry=photometry,
         )
 
     return od_observations
 
 
-def od_observations_to_fo_input(od_observations, fo_file_name, object_id):
+def od_observations_to_fo_input(od_observations, fo_file_name):
     """
-    Convert a Sorcha DataFrame to a Find_Orb input file.
+    Convert an OrbitDeteminationObservations object into a Find_Orb input file.
 
     Parameters
     ----------
-    sorcha_df : pandas.DataFrame
-        DataFrame containing Sorcha data with relevant columns:
-        - "ObjID": Object ID
-        - "fieldMJD_TAI": Observation time in MJD (TAI)
-        - "RA_deg": Right Ascension in degrees
-        - "Dec_deg": Declination in degrees
-        - "astrometricSigma_deg": Astrometric uncertainty in degrees
-        - "trailedSourceMag": Trailed source magnitude
-        - "trailedSourceMagSigma": Uncertainty in trailed source magnitude
-        - "optFilter": Optical filter used
+    od_observations : `~adam_core.orbit_determination.OrbitDeterminationObservations`
+        OrbitDeterminationObservations object containing observations to be converted.
 
     fo_file_name : str
         Name of the Find_Orb input file to be created.
+
+    object_id : str
+        Object ID of orbit connected to observations.
 
     Returns
     -------
@@ -138,10 +152,13 @@ def od_observations_to_fo_input(od_observations, fo_file_name, object_id):
             time_utc = obs.coordinates.time
             time = time_utc.to_astropy()
             w.write(
-                f"{object_id}|X05|{time.isot[0]}|{obs.coordinates.lon[0]}|"
+                f"{obs.orbit_id}|X05|{time.isot[0]}|{obs.coordinates.lon[0]}|"
                 f"{obs.coordinates.lat[0]}|"
                 f"{format(sigmas[0][1]*3600, '.5f')}|"
-                f"{format(sigmas[0][2]*3600, '.5f')}\n"
+                f"{format(sigmas[0][2]*3600, '.5f')}|"
+                f"{obs.photometry.mag}|"
+                f"{obs.photometry.mag_sigma}|"
+                f"{obs.photometry.filter}\n"
             )
     return fo_file_name
 
@@ -212,21 +229,18 @@ def read_fo_orbits(input_file):
 
 
 def fo_to_adam_orbit_cov(fo_output_folder):
-    #change to read directly from the find_orb output file
     """
     Convert Find_Orb output to ADAM Orbit objects, including covariance.
 
     Parameters
     ----------
-    elements_dict : dict
-        Dictionary containing orbital elements for each object, keyed by Object ID.
-    covar_dict : dict
-        Dictionary containing covariance matrices and state vectors for each object.
+    fo_output_folder : str
+        Path to the folder containing Find_Orb output files.
 
     Returns
     -------
-    orbits_dict : dict
-        Dictionary of ADAM Orbit objects, keyed by Object ID.
+    orbits : `~adam_core.orbits.orbits.Orbits`
+        ADAM Orbit object created from the Find_Orb output data.
     """
 
     elements_dict, covar_dict = read_fo_output(fo_output_folder)

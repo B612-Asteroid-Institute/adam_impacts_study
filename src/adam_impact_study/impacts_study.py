@@ -1,6 +1,7 @@
 import numpy as np
 import pandas as pd
 import pyarrow.compute as pc
+import quivr as qv
 from adam_core.dynamics.impacts import calculate_impact_probabilities, calculate_impacts
 from adam_core.propagator.adam_assist import ASSISTPropagator
 
@@ -11,6 +12,11 @@ from adam_impact_study.conversions import (
 )
 from adam_impact_study.fo_od import run_fo_od
 from adam_impact_study.sorcha_utils import run_sorcha
+
+class ImpactStudyResults(qv.Table):
+    object_id = qv.LargeStringColumn()
+    day = qv.Float64Column()
+    impact_probability = qv.Float64Column()
 
 def run_impact_study_fo(
     impactors_file,
@@ -112,6 +118,7 @@ def run_impact_study_fo(
     # Iterate over each object and calculate impact probabilities
     object_ids = od_observations_dict.keys()
     ip_dict_obj_fo = {}
+    impact_results = None
     for obj in object_ids:
         ip_dict = {}
         print("Object ID: ", obj)
@@ -126,7 +133,7 @@ def run_impact_study_fo(
 
             fo_file_name = f"{fo_input_file_base}_{obj}_{day}.csv"
             fo_output_folder = f"{fo_output_file_base}_{obj}_{day}"
-            od_observations_to_fo_input(filtered_obs, f"{RESULT_DIR}/{fo_file_name}", obj)
+            od_observations_to_fo_input(filtered_obs, f"{RESULT_DIR}/{fo_file_name}")
             
             try:
                 # Run find_orb to compute orbits
@@ -141,6 +148,8 @@ def run_impact_study_fo(
                 print(f"Error running find_orb output for {obj}: {e}")
                 continue
             print(f"Fo orbit: {fo_orbit}")
+            if fo_orbit is not None:
+                print(f"Fo orbit elements: {fo_orbit.coordinates.values}")
 
             if fo_orbit is not None and len(fo_orbit) > 0:
                 time = adam_orbit_objects.select("object_id", obj).coordinates.time[0]
@@ -150,18 +159,35 @@ def run_impact_study_fo(
                     result = propagator.propagate_orbits(
                         orbit, time, covariance=True, num_samples=1000
                     )
-                    print(result)
+                    print(f"Propagated orbit: {result}")
+                    if result is not None:
+                        print(f"Propagated orbit elements: {result.coordinates.values}")
                     results, impacts = calculate_impacts(
                         result, 60, propagator, num_samples=10000
                     )
-                    print(impacts)
+                    print(f"Impacts: {impacts}")
                     ip = calculate_impact_probabilities(results, impacts)
-                    ip_dict[day] = ip.cumulative_probability[0].as_py()
-                    print(f"Impact Probability: {ip.cumulative_probability[0].as_py()}")
+                    print(f"IP: {ip}")  
+                    #print(f"Impact Probability: {ip.cumulative_probability[0].as_py()}")
                 except Exception as e:
                     print(f"Error calculating impacts for {obj}: {e}")
                     continue
+                if ip is not None:
+                    print(f"Impact Probability: {ip.cumulative_probability[0].as_py()}")
+                    ip_dict[day] = ip.cumulative_probability[0].as_py()
+                if ip.cumulative_probability[0].as_py() is not None:
+                    impact_result = ImpactStudyResults.from_kwargs(
+                        object_id=[obj],
+                        day=[day],
+                        impact_probability=[ip.cumulative_probability[0].as_py()]
+                    )
+                    print(f"Impact Result: {impact_result}")
+                    if impact_results is None:
+                        impact_results = impact_result
+                    else:
+                        impact_results = qv.concatenate([impact_results, impact_result])
+                    print(f"Impact Results: {impact_results}")  
 
         ip_dict_obj_fo[obj] = ip_dict
 
-    return ip_dict_obj_fo
+    return ip_dict_obj_fo, impact_results
