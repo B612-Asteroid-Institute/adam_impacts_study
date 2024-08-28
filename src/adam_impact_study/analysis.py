@@ -3,7 +3,7 @@ import pyarrow.compute as pc
 from adam_impact_study.impacts_study import ImpactStudyResults
 
 
-def plot_ip_over_time(impact_study_results: ImpactStudyResults):
+def plot_ip_over_time(impact_study_results: ImpactStudyResults) -> None:
     # change to x axis #days before impact
     """
     Plot the impact probability (IP) over time for each object in the provided observations.

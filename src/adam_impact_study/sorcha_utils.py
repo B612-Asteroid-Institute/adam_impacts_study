@@ -4,8 +4,9 @@ import subprocess
 import pandas as pd
 import quivr as qv
 
-from adam_impact_study.conversions import sorcha_output_to_od_observations
+from adam_core.orbits import Orbits
 
+from adam_impact_study.conversions import sorcha_output_to_od_observations, Observations
 
 class SorchaPhysicalParameters(qv.Table):
 
@@ -51,7 +52,9 @@ class SorchaObservations(qv.Table):
     Obj_Sun_LTC_km = qv.Float64Column()
 
 
-def generate_sorcha_orbits(adam_orbits, sorcha_orbits_file):
+def generate_sorcha_orbits(
+        adam_orbits: Orbits, sorcha_orbits_file: str
+    ) -> None:
     """
     Generate a Sorcha orbit file from a DataFrame of impactor data.
 
@@ -59,6 +62,9 @@ def generate_sorcha_orbits(adam_orbits, sorcha_orbits_file):
     ----------
     adam_orbits : `~adam_core.orbits.orbits.Orbits`
         ADAM Orbits object containing orbital parameters for the impactors.
+
+    sorcha_orbits_file : str
+        Path to the file where the Sorcha orbit data will be saved.
 
     Returns
     -------
@@ -83,7 +89,9 @@ def generate_sorcha_orbits(adam_orbits, sorcha_orbits_file):
     return
 
 
-def generate_sorcha_physical_params(sorcha_physical_params_file, physical_params_df):
+def generate_sorcha_physical_params(
+        sorcha_physical_params_file: str, physical_params_df: pd.DataFrame
+    ) -> None:
     """
     Generate a Sorcha physical parameters file from a DataFrame of physical parameters.
 
@@ -104,23 +112,23 @@ def generate_sorcha_physical_params(sorcha_physical_params_file, physical_params
 
 
 def run_sorcha(
-    adam_orbits,
-    sorcha_config_file,
-    sorcha_orbits_file,
-    sorcha_physical_params_file,
-    sorcha_output_file,
-    physical_params_df,
-    pointing_file,
-    sorcha_output_name,
-    RESULT_DIR,
-):
+    adam_orbits: Orbits,
+    sorcha_config_file: str,
+    sorcha_orbits_file: str,
+    sorcha_physical_params_file: str,
+    sorcha_output_file: str,
+    physical_params_df: pd.DataFrame,
+    pointing_file: str,
+    sorcha_output_name: str,
+    RESULT_DIR: str,
+) -> Observations:
     """
     Run the Sorcha software to generate observational data based on input orbital and physical parameters.
 
     Parameters
     ----------
-    impactor_df : pandas.DataFrame
-        DataFrame containing orbital parameters for the impactors.
+    adam_orbits : Orbits
+        ADAM Orbits object containing orbital parameters for the impactors.
     sorcha_config_file : str
         Path to the Sorcha configuration file.
     sorcha_orbits_file : str
@@ -129,7 +137,7 @@ def run_sorcha(
         Path to the file where the Sorcha physical parameters data will be saved.
     sorcha_output_file : str
         Name of the Sorcha output file.
-    physical_params_df : pandas.DataFrame
+    physical_params_df : pd.DataFrame
         DataFrame containing physical parameters for the impactors.
     pointing_file : str
         Path to the file containing pointing data.
@@ -140,8 +148,8 @@ def run_sorcha(
 
     Returns
     -------
-    sorcha_observations_df : pandas.DataFrame
-        DataFrame containing the Sorcha-generated observations.
+    sorcha_observations : Observations (qv.Table)
+        Observations object containing the Sorcha observations.
     """
     # Generate the sorcha input files
     generate_sorcha_orbits(adam_orbits, sorcha_orbits_file)

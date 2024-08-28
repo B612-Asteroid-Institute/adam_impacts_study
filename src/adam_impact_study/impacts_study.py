@@ -4,7 +4,7 @@ import pyarrow.compute as pc
 import quivr as qv
 from adam_core.dynamics.impacts import calculate_impact_probabilities, calculate_impacts
 from adam_core.propagator.adam_assist import ASSISTPropagator
-
+from adam_core.orbits import Orbits
 from adam_impact_study.conversions import (
     impactor_file_to_adam_orbit,
     od_observations_to_fo_input,
@@ -20,20 +20,20 @@ class ImpactStudyResults(qv.Table):
 
 
 def run_impact_study_fo(
-    impactors_file,
-    sorcha_config_file,
-    sorcha_orbits_file,
-    sorcha_physical_params_file,
-    sorcha_output_file,
-    sorcha_physical_params_string,
-    pointing_file,
-    sorcha_output_name,
-    fo_input_file_base,
-    fo_output_file_base,
-    FO_DIR,
-    RUN_DIR,
-    RESULT_DIR,
-):
+    impactors_file: str,
+    sorcha_config_file: str,
+    sorcha_orbits_file: str,
+    sorcha_physical_params_file: str,
+    sorcha_output_file: str,
+    sorcha_physical_params_string: str,
+    pointing_file: str,
+    sorcha_output_name: str,
+    fo_input_file_base: str,
+    fo_output_file_base: str,
+    FO_DIR: str,
+    RUN_DIR: str,
+    RESULT_DIR: str,
+) -> ImpactStudyResults:
     """
     Run an impact study using the given impactors and configuration files.
 
@@ -73,9 +73,9 @@ def run_impact_study_fo(
 
     Returns
     -------
-    None
-        The function prints the impact probability results for each object,
-        and generates a plot
+    impact_results : ImpactStudyResults
+        Table containing the results of the impact study with columns 'object_id',
+        'day', and 'impact_probability'.
     """
 
     propagator = ASSISTPropagator()
@@ -104,7 +104,6 @@ def run_impact_study_fo(
     physical_params_df = pd.DataFrame(data)
 
     # Run Sorcha to generate observational data
-    # KK updat to concatonate the observations instead of using dictoinary
     od_observations = run_sorcha(
         adam_orbit_objects,
         sorcha_config_file,
