@@ -59,7 +59,7 @@ def generate_sorcha_orbits(adam_orbits, sorcha_orbits_file):
     ----------
     adam_orbits : `~adam_core.orbits.orbits.Orbits`
         ADAM Orbits object containing orbital parameters for the impactors.
-        
+
     Returns
     -------
     None

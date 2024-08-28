@@ -7,15 +7,17 @@ from adam_core.propagator.adam_assist import ASSISTPropagator
 
 from adam_impact_study.conversions import (
     impactor_file_to_adam_orbit,
-    od_observations_to_fo_input
+    od_observations_to_fo_input,
 )
 from adam_impact_study.fo_od import run_fo_od
 from adam_impact_study.sorcha_utils import run_sorcha
+
 
 class ImpactStudyResults(qv.Table):
     object_id = qv.LargeStringColumn()
     day = qv.Float64Column()
     impact_probability = qv.Float64Column()
+
 
 def run_impact_study_fo(
     impactors_file,
@@ -102,7 +104,7 @@ def run_impact_study_fo(
     physical_params_df = pd.DataFrame(data)
 
     # Run Sorcha to generate observational data
-    #KK updat to concatonate the observations instead of using dictoinary
+    # KK updat to concatonate the observations instead of using dictoinary
     od_observations = run_sorcha(
         adam_orbit_objects,
         sorcha_config_file,
@@ -125,14 +127,16 @@ def run_impact_study_fo(
         unique_days = np.unique(days)
         for day in unique_days:
             print("Day: ", day)
-            filtered_obs = od_obs.apply_mask(pc.less_equal(od_obs.coordinates.time.days.to_numpy(), day))
+            filtered_obs = od_obs.apply_mask(
+                pc.less_equal(od_obs.coordinates.time.days.to_numpy(), day)
+            )
             print("Filtered Observations: ", filtered_obs)
             print("Filtered Days: ", filtered_obs.coordinates.time.days.to_numpy())
 
             fo_file_name = f"{fo_input_file_base}_{obj}_{day}.csv"
             fo_output_folder = f"{fo_output_file_base}_{obj}_{day}"
             od_observations_to_fo_input(filtered_obs, f"{RESULT_DIR}/{fo_file_name}")
-            
+
             try:
                 # Run find_orb to compute orbits
                 fo_orbit = run_fo_od(
@@ -164,7 +168,7 @@ def run_impact_study_fo(
                     )
                     print(f"Impacts: {impacts}")
                     ip = calculate_impact_probabilities(results, impacts)
-                    print(f"IP: {ip.cumulative_probability[0].as_py()}")  
+                    print(f"IP: {ip.cumulative_probability[0].as_py()}")
                 except Exception as e:
                     print(f"Error calculating impacts for {obj}: {e}")
                     continue
@@ -172,13 +176,13 @@ def run_impact_study_fo(
                     impact_result = ImpactStudyResults.from_kwargs(
                         object_id=[obj],
                         day=[day],
-                        impact_probability=[ip.cumulative_probability[0].as_py()]
+                        impact_probability=[ip.cumulative_probability[0].as_py()],
                     )
                     print(f"Impact Result: {impact_result}")
                     if impact_results is None:
                         impact_results = impact_result
                     else:
                         impact_results = qv.concatenate([impact_results, impact_result])
-                    print(f"Impact Results: {impact_results}")  
+                    print(f"Impact Results: {impact_results}")
 
     return impact_results

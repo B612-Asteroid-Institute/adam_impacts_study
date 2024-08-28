@@ -1,4 +1,5 @@
 import json
+
 import numpy as np
 import pandas as pd
 import quivr as qv
@@ -13,10 +14,12 @@ from adam_core.observers import Observers
 from adam_core.orbits import Orbits
 from adam_core.time import Timestamp
 
+
 class Photometry(qv.Table):
     mag = qv.Float64Column()
     mag_sigma = qv.Float64Column(nullable=True)
     filter = qv.LargeStringColumn()
+
 
 class Observations(qv.Table):
     obs_id = qv.LargeStringColumn()
@@ -24,6 +27,7 @@ class Observations(qv.Table):
     coordinates = SphericalCoordinates.as_column()
     observers = Observers.as_column()
     photometry = Photometry.as_column(nullable=True)
+
 
 def impactor_file_to_adam_orbit(impactor_file):
     """
@@ -76,7 +80,9 @@ def sorcha_output_to_od_observations(sorcha_output_file):
         Observations object continaining the Sorcha observations.
     """
 
-    sorcha_observations_df = pd.read_csv(sorcha_output_file, float_precision="round_trip")
+    sorcha_observations_df = pd.read_csv(
+        sorcha_output_file, float_precision="round_trip"
+    )
     sorcha_observations_df = sorcha_observations_df.sort_values(
         by=["ObjID", "fieldMJD_TAI"], ignore_index=True
     )
@@ -151,7 +157,7 @@ def od_observations_to_fo_input(od_observations, fo_file_name):
         Path to the generated Find_Orb input file.
     """
     with open(fo_file_name, "w") as w:
-        w.write("trkSub|stn|obsTime|ra|dec|rmsRA|rmsDec\n") #|mag|rmsMag|band
+        w.write("trkSub|stn|obsTime|ra|dec|rmsRA|rmsDec\n")  # |mag|rmsMag|band
         for obs in od_observations:
             sigmas = obs.coordinates.covariance.sigmas
             time_utc = obs.coordinates.time
@@ -280,5 +286,5 @@ def fo_to_adam_orbit_cov(fo_output_folder):
             orbits = orbit
         else:
             orbits = qv.concatenate([orbits, orbit])
-            
+
     return orbits

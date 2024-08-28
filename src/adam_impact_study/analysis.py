@@ -3,8 +3,9 @@ import pandas as pd
 import pyarrow.compute as pc
 import quivr as qv
 
+
 def plot_ip_over_time(impact_study_results):
-    #change to x axis #days before impact
+    # change to x axis #days before impact
     """
     Plot the impact probability (IP) over time for each object in the provided observations.
 
@@ -23,7 +24,9 @@ def plot_ip_over_time(impact_study_results):
     for obj in object_ids:
         print("Object ID Plotting: ", obj)
         plt.figure()
-        ips = impact_study_results.apply_mask(pc.equal(impact_study_results.object_id, obj))
+        ips = impact_study_results.apply_mask(
+            pc.equal(impact_study_results.object_id, obj)
+        )
         plt.scatter(ips.day, ips.impact_probability)
         plt.title(obj)
         plt.xlabel("Day")
@@ -31,4 +34,3 @@ def plot_ip_over_time(impact_study_results):
         plt.plot(ips.day, ips.impact_probability)
         plt.savefig(f"New_IP_{obj}.png")
         plt.close()
-
