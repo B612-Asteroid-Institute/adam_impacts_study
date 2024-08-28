@@ -24,6 +24,7 @@ fo_output_file_base = f"fo_output_{RUN_NAME}"
 
 physical_params_string = "15.88 1.72 0.48 -0.11 -0.12 -0.12 0.15"
 
+# Run the impact study
 impact_study_results = run_impact_study_fo(
     impactors_file,
     sorcha_config_file,

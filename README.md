@@ -89,7 +89,8 @@ fo_output_file_base = f"fo_output_{RUN_NAME}"
 
 physical_params_string = "15.88 1.72 0.48 -0.11 -0.12 -0.12 0.15"
 
-impact_dict = run_impact_study_fo(
+# Run the impact study
+impact_study_results = run_impact_study_fo(
     impactors_file,
     sorcha_config_file,
     sorcha_orbits_file,
@@ -105,9 +106,9 @@ impact_dict = run_impact_study_fo(
     RESULT_DIR,
 )
 
-print(impact_dict)
+print(impact_study_results)
 
-plot_ip_over_time(impact_dict)
+plot_ip_over_time(impact_study_results)
 ```
 
 This code and the input files needed to run it can be found in the 'demo' section.

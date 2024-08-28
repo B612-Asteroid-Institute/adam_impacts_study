@@ -7,7 +7,6 @@ from adam_core.propagator.adam_assist import ASSISTPropagator
 
 from adam_impact_study.conversions import (
     impactor_file_to_adam_orbit,
-    sorcha_output_to_od_observations,
     od_observations_to_fo_input
 )
 from adam_impact_study.fo_od import run_fo_od
@@ -73,7 +72,8 @@ def run_impact_study_fo(
     Returns
     -------
     None
-        The function prints the impact probability results for each object.
+        The function prints the impact probability results for each object,
+        and generates a plot
     """
 
     propagator = ASSISTPropagator()
@@ -103,7 +103,7 @@ def run_impact_study_fo(
 
     # Run Sorcha to generate observational data
     #KK updat to concatonate the observations instead of using dictoinary
-    od_observations_dict = run_sorcha(
+    od_observations = run_sorcha(
         adam_orbit_objects,
         sorcha_config_file,
         sorcha_orbits_file,
@@ -116,13 +116,11 @@ def run_impact_study_fo(
     )
 
     # Iterate over each object and calculate impact probabilities
-    object_ids = od_observations_dict.keys()
-    ip_dict_obj_fo = {}
+    object_ids = od_observations.object_id.unique()
     impact_results = None
     for obj in object_ids:
-        ip_dict = {}
         print("Object ID: ", obj)
-        od_obs = od_observations_dict[obj]
+        od_obs = od_observations.apply_mask(pc.equal(od_observations.object_id, obj))
         days = od_obs.coordinates.time.days.to_numpy()
         unique_days = np.unique(days)
         for day in unique_days:
@@ -160,21 +158,16 @@ def run_impact_study_fo(
                         orbit, time, covariance=True, num_samples=1000
                     )
                     print(f"Propagated orbit: {result}")
-                    if result is not None:
-                        print(f"Propagated orbit elements: {result.coordinates.values}")
+                    print(f"Propagated orbit elements: {result.coordinates.values}")
                     results, impacts = calculate_impacts(
                         result, 60, propagator, num_samples=10000
                     )
                     print(f"Impacts: {impacts}")
                     ip = calculate_impact_probabilities(results, impacts)
-                    print(f"IP: {ip}")  
-                    #print(f"Impact Probability: {ip.cumulative_probability[0].as_py()}")
+                    print(f"IP: {ip.cumulative_probability[0].as_py()}")  
                 except Exception as e:
                     print(f"Error calculating impacts for {obj}: {e}")
                     continue
-                if ip is not None:
-                    print(f"Impact Probability: {ip.cumulative_probability[0].as_py()}")
-                    ip_dict[day] = ip.cumulative_probability[0].as_py()
                 if ip.cumulative_probability[0].as_py() is not None:
                     impact_result = ImpactStudyResults.from_kwargs(
                         object_id=[obj],
@@ -188,6 +181,4 @@ def run_impact_study_fo(
                         impact_results = qv.concatenate([impact_results, impact_result])
                     print(f"Impact Results: {impact_results}")  
 
-        ip_dict_obj_fo[obj] = ip_dict
-
-    return ip_dict_obj_fo, impact_results
+    return impact_results

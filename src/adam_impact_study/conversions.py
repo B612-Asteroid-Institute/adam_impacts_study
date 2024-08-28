@@ -10,7 +10,6 @@ from adam_core.coordinates import (
     SphericalCoordinates,
 )
 from adam_core.observers import Observers
-from adam_core.orbit_determination import OrbitDeterminationObservations
 from adam_core.orbits import Orbits
 from adam_core.time import Timestamp
 
@@ -21,7 +20,7 @@ class Photometry(qv.Table):
 
 class Observations(qv.Table):
     obs_id = qv.LargeStringColumn()
-    orbit_id = qv.LargeStringColumn()
+    object_id = qv.LargeStringColumn()
     coordinates = SphericalCoordinates.as_column()
     observers = Observers.as_column()
     photometry = Photometry.as_column(nullable=True)
@@ -64,7 +63,7 @@ def impactor_file_to_adam_orbit(impactor_file):
 
 def sorcha_output_to_od_observations(sorcha_output_file):
     """
-    Convert Sorcha observations output files to OrbitDeterminationObservations.
+    Convert Sorcha observations output files to Observations type.
 
     Parameters
     ----------
@@ -73,15 +72,15 @@ def sorcha_output_to_od_observations(sorcha_output_file):
 
     Returns
     -------
-    od_observations : dict
-        Dictionary of OrbitDeterminationObservations objects, keyed by Object ID.
+    od_observations : qv.Table
+        Observations object continaining the Sorcha observations.
     """
 
     sorcha_observations_df = pd.read_csv(sorcha_output_file, float_precision="round_trip")
     sorcha_observations_df = sorcha_observations_df.sort_values(
         by=["ObjID", "fieldMJD_TAI"], ignore_index=True
     )
-    od_observations = {}
+    od_observations = None
 
     object_ids = sorcha_observations_df["ObjID"].unique()
 
@@ -114,25 +113,31 @@ def sorcha_output_to_od_observations(sorcha_output_file):
                 ("origin.code", "ascending"),
             ]
         )
-        od_observations[obj] = Observations.from_kwargs(
+
+        od_observation = Observations.from_kwargs(
             obs_id=[f"{obj}_{i}" for i in range(len(object_obs))],
-            orbit_id=[obj for i in range(len(object_obs))],
+            object_id=[obj for i in range(len(object_obs))],
             coordinates=coordinates_sorted,
             observers=Observers.from_code("X05", coordinates_sorted.time),
             photometry=photometry,
         )
+
+        if od_observations is None:
+            od_observations = od_observation
+        else:
+            od_observations = qv.concatenate([od_observations, od_observation])
 
     return od_observations
 
 
 def od_observations_to_fo_input(od_observations, fo_file_name):
     """
-    Convert an OrbitDeteminationObservations object into a Find_Orb input file.
+    Convert an Observations object into a Find_Orb input file.
 
     Parameters
     ----------
-    od_observations : `~adam_core.orbit_determination.OrbitDeterminationObservations`
-        OrbitDeterminationObservations object containing observations to be converted.
+    od_observations : qv.Table
+        Observations object containing observations to be converted.
 
     fo_file_name : str
         Name of the Find_Orb input file to be created.
@@ -152,7 +157,7 @@ def od_observations_to_fo_input(od_observations, fo_file_name):
             time_utc = obs.coordinates.time
             time = time_utc.to_astropy()
             w.write(
-                f"{obs.orbit_id}|X05|{time.isot[0]}|{obs.coordinates.lon[0]}|"
+                f"{obs.object_id}|X05|{time.isot[0]}|{obs.coordinates.lon[0]}|"
                 f"{obs.coordinates.lat[0]}|"
                 f"{format(sigmas[0][1]*3600, '.5f')}|"
                 f"{format(sigmas[0][2]*3600, '.5f')}|"
@@ -267,8 +272,8 @@ def fo_to_adam_orbit_cov(fo_output_folder):
             covariance=covariances_cartesian,
         )
         orbit = Orbits.from_kwargs(
-            object_id=[object_id],
             orbit_id=[object_id],
+            object_id=[object_id],
             coordinates=cartesian_coordinates,
         )
         if orbits is None:
