@@ -1,9 +1,6 @@
-import json
 import os
 import shutil
 import subprocess
-
-import quivr as qv
 
 from adam_impact_study.conversions import fo_to_adam_orbit_cov
 

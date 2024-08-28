@@ -1,7 +1,5 @@
 import matplotlib.pyplot as plt
-import pandas as pd
 import pyarrow.compute as pc
-import quivr as qv
 
 
 def plot_ip_over_time(impact_study_results):
