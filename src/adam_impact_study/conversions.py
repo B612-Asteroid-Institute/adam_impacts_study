@@ -13,6 +13,7 @@ from adam_core.coordinates import (
 from adam_core.observers import Observers
 from adam_core.orbits import Orbits
 from adam_core.time import Timestamp
+from typing import Dict, Tuple
 
 
 class Photometry(qv.Table):
@@ -29,7 +30,7 @@ class Observations(qv.Table):
     photometry = Photometry.as_column(nullable=True)
 
 
-def impactor_file_to_adam_orbit(impactor_file):
+def impactor_file_to_adam_orbit(impactor_file: str) -> Orbits:
     """
     Generate an ADAM Orbit object from an impactor data file.
 
@@ -65,7 +66,7 @@ def impactor_file_to_adam_orbit(impactor_file):
     return orbit
 
 
-def sorcha_output_to_od_observations(sorcha_output_file):
+def sorcha_output_to_od_observations(sorcha_output_file: str) -> Observations:
     """
     Convert Sorcha observations output files to Observations type.
 
@@ -136,7 +137,9 @@ def sorcha_output_to_od_observations(sorcha_output_file):
     return od_observations
 
 
-def od_observations_to_fo_input(od_observations, fo_file_name):
+def od_observations_to_fo_input(
+    od_observations: Observations, fo_file_name: str
+) -> str:
     """
     Convert an Observations object into a Find_Orb input file.
 
@@ -174,7 +177,7 @@ def od_observations_to_fo_input(od_observations, fo_file_name):
     return fo_file_name
 
 
-def read_fo_output(fo_output_dir):
+def read_fo_output(fo_output_dir: str) -> Tuple[Dict[str, dict], Dict[str, dict]]:
     """
     Read the find_orb output files from the specified directory into dictionaries
     containing orbital elements and covariances.
@@ -196,7 +199,7 @@ def read_fo_output(fo_output_dir):
     return elements_dict, covar_dict
 
 
-def read_fo_covariance(covar_file):
+def read_fo_covariance(covar_file: str) -> Dict[str, dict]:
     """
     Read the find_orb covariance JSON file into a dictionary.
 
@@ -215,7 +218,7 @@ def read_fo_covariance(covar_file):
     return covar_json
 
 
-def read_fo_orbits(input_file):
+def read_fo_orbits(input_file: str) -> Dict[str, dict]:
     """
     Read the find_orb total.json file into a dictionary of orbital elements.
 
@@ -239,7 +242,7 @@ def read_fo_orbits(input_file):
     return elements_dict
 
 
-def fo_to_adam_orbit_cov(fo_output_folder):
+def fo_to_adam_orbit_cov(fo_output_folder: str) -> Orbits:
     """
     Convert Find_Orb output to ADAM Orbit objects, including covariance.
 
