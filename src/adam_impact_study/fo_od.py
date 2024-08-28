@@ -1,17 +1,16 @@
 import os
 import shutil
 import subprocess
-
+from adam_core.orbits import Orbits
 from adam_impact_study.conversions import fo_to_adam_orbit_cov
 
-
 def run_fo_od(
-    fo_input_file,
-    fo_output_folder,
-    FO_DIR,
-    RUN_DIR,
-    RESULT_DIR,
-):
+    fo_input_file: str,
+    fo_output_folder: str,
+    FO_DIR: str,
+    RUN_DIR: str,
+    RESULT_DIR: str,
+) -> Orbits:
     """
     Run the find_orb orbit determination process for each object
 
