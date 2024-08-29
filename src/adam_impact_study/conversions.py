@@ -124,7 +124,7 @@ def sorcha_output_to_od_observations(sorcha_output_file: str) -> Optional[Observ
 
         od_observation = Observations.from_kwargs(
             obs_id=[f"{obj}_{i}" for i in range(len(object_obs))],
-            object_id=[obj for i in range(len(object_obs))],
+            object_id=pa.repeat(obj, len(object_obs)),
             coordinates=coordinates_sorted,
             observers=Observers.from_code("X05", coordinates_sorted.time),
             photometry=photometry,
