@@ -1,10 +1,12 @@
+from typing import Optional
+
 import numpy as np
 import pandas as pd
 import pyarrow.compute as pc
 import quivr as qv
 from adam_core.dynamics.impacts import calculate_impact_probabilities, calculate_impacts
 from adam_core.propagator.adam_assist import ASSISTPropagator
-from adam_core.orbits import Orbits
+
 from adam_impact_study.conversions import (
     impactor_file_to_adam_orbit,
     od_observations_to_fo_input,
@@ -33,7 +35,7 @@ def run_impact_study_fo(
     FO_DIR: str,
     RUN_DIR: str,
     RESULT_DIR: str,
-) -> ImpactStudyResults:
+) -> Optional[ImpactStudyResults]:
     """
     Run an impact study using the given impactors and configuration files.
 
@@ -75,7 +77,7 @@ def run_impact_study_fo(
     -------
     impact_results : ImpactStudyResults
         Table containing the results of the impact study with columns 'object_id',
-        'day', and 'impact_probability'.
+        'day', and 'impact_probability'. If no impacts were found, returns None.
     """
 
     propagator = ASSISTPropagator()
@@ -115,6 +117,8 @@ def run_impact_study_fo(
         sorcha_output_name,
         RESULT_DIR,
     )
+    if od_observations is None:
+        return None
 
     # Iterate over each object and calculate impact probabilities
     object_ids = od_observations.object_id.unique()

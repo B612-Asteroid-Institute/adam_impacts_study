@@ -1,5 +1,6 @@
 import matplotlib.pyplot as plt
 import pyarrow.compute as pc
+
 from adam_impact_study.impacts_study import ImpactStudyResults
 
 

@@ -1,4 +1,5 @@
 import json
+from typing import Dict, Optional, Tuple
 
 import numpy as np
 import pandas as pd
@@ -13,7 +14,6 @@ from adam_core.coordinates import (
 from adam_core.observers import Observers
 from adam_core.orbits import Orbits
 from adam_core.time import Timestamp
-from typing import Dict, Tuple
 
 
 class Photometry(qv.Table):
@@ -66,7 +66,7 @@ def impactor_file_to_adam_orbit(impactor_file: str) -> Orbits:
     return orbit
 
 
-def sorcha_output_to_od_observations(sorcha_output_file: str) -> Observations:
+def sorcha_output_to_od_observations(sorcha_output_file: str) -> Optional[Observations]:
     """
     Convert Sorcha observations output files to Observations type.
 
@@ -79,6 +79,7 @@ def sorcha_output_to_od_observations(sorcha_output_file: str) -> Observations:
     -------
     od_observations : qv.Table
         Observations object continaining the Sorcha observations.
+        Returns None if the input file is empty.
     """
 
     sorcha_observations_df = pd.read_csv(
