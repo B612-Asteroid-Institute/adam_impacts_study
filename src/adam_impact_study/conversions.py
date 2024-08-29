@@ -4,6 +4,7 @@ from typing import Dict, Optional, Tuple
 import numpy as np
 import pandas as pd
 import quivr as qv
+import pyarrow as pa
 from adam_core.coordinates import (
     CartesianCoordinates,
     CoordinateCovariances,
