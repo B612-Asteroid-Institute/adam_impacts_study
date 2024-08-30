@@ -12,6 +12,14 @@ from adam_core.coordinates import (
     Origin,
     SphericalCoordinates,
 )
+from adam_core.observations import (
+    ADES_to_string,
+    ADESObservations,
+    ObsContext,
+    ObservatoryObsContext,
+    SubmitterObsContext,
+    TelescopeObsContext,
+)
 from adam_core.observers import Observers
 from adam_core.orbits import Orbits
 from adam_core.time import Timestamp
@@ -139,44 +147,62 @@ def sorcha_output_to_od_observations(sorcha_output_file: str) -> Optional[Observ
     return od_observations
 
 
-def od_observations_to_fo_input(
-    od_observations: Observations, fo_file_name: str
+def od_observations_to_ades_file(
+    od_observations: Observations, ades_file_name: str
 ) -> str:
     """
-    Convert an Observations object into a Find_Orb input file.
+    Convert an Observations object into an ADES file.
 
     Parameters
     ----------
     od_observations : qv.Table
         Observations object containing observations to be converted.
 
-    fo_file_name : str
-        Name of the Find_Orb input file to be created.
-
-    object_id : str
-        Object ID of orbit connected to observations.
+    ades_file_name : str
+        Name of the ADES file to be created.
 
     Returns
     -------
-    fo_file_name : str
-        Path to the generated Find_Orb input file.
+    ades_file_name : str
+        Path to the generated ADES file.
     """
-    with open(fo_file_name, "w") as w:
-        w.write("trkSub|stn|obsTime|ra|dec|rmsRA|rmsDec\n")  # |mag|rmsMag|band
-        for obs in od_observations:
-            sigmas = obs.coordinates.covariance.sigmas
-            time_utc = obs.coordinates.time
-            time = time_utc.to_astropy()
-            w.write(
-                f"{obs.object_id}|X05|{time.isot[0]}|{obs.coordinates.lon[0]}|"
-                f"{obs.coordinates.lat[0]}|"
-                f"{format(sigmas[0][1]*3600, '.5f')}|"
-                f"{format(sigmas[0][2]*3600, '.5f')}|"
-                f"{obs.photometry.mag}|"
-                f"{obs.photometry.mag_sigma}|"
-                f"{obs.photometry.filter}\n"
-            )
-    return fo_file_name
+
+    ades_obs = ADESObservations.from_kwargs(
+        trkSub=od_observations.object_id,
+        obsTime=od_observations.coordinates.time,
+        ra=od_observations.coordinates.lon,
+        dec=od_observations.coordinates.lat,
+        rmsRA=od_observations.coordinates.covariance.sigmas[:, 1] * 3600,
+        rmsDec=od_observations.coordinates.covariance.sigmas[:, 2] * 3600,
+        mag=od_observations.photometry.mag,
+        rmsMag=od_observations.photometry.mag_sigma,
+        band=od_observations.photometry.filter,
+        stn=pa.repeat("X05", len(od_observations)),
+        mode=pa.repeat("NA", len(od_observations)),
+        astCat=pa.repeat("NA", len(od_observations)),
+    )
+
+    obs_contexts = {
+        "X05": ObsContext(
+            observatory=ObservatoryObsContext(
+                mpcCode="X05", name="Sorcha-based Rubin Demo"
+            ),
+            submitter=SubmitterObsContext(name="N/A", institution="N/A"),
+            observers=["N/A"],
+            measurers=["N/A"],
+            telescope=TelescopeObsContext(name="N/A", design="N/A"),
+        )
+    }
+
+    ades_string = ADES_to_string(ades_obs, obs_contexts)
+
+    ades_file_name = "TESTADES.ades"
+
+    # Write the ADES string to a file
+    with open(ades_file_name, "w") as w:
+        w.write(ades_string)
+
+    return ades_file_name
 
 
 def read_fo_output(fo_output_dir: str) -> Tuple[Dict[str, dict], Dict[str, dict]]:
