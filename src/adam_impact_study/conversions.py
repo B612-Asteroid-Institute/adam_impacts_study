@@ -185,18 +185,18 @@ def od_observations_to_ades_file(
     obs_contexts = {
         "X05": ObsContext(
             observatory=ObservatoryObsContext(
-                mpcCode="X05", name="Sorcha-based Rubin Demo"
-            ),
+            mpcCode="X05", name="Vera C. Rubin Observatory - LSST"
+        ),
             submitter=SubmitterObsContext(name="N/A", institution="N/A"),
             observers=["N/A"],
             measurers=["N/A"],
-            telescope=TelescopeObsContext(name="N/A", design="N/A"),
+            telescope=TelescopeObsContext(
+            name="LSST Camera", design="Reflector", detector="CCD", aperture=8.4
+        )
         )
     }
 
     ades_string = ADES_to_string(ades_obs, obs_contexts)
-
-    ades_file_name = "TESTADES.ades"
 
     # Write the ADES string to a file
     with open(ades_file_name, "w") as w:
