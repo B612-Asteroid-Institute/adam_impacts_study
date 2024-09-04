@@ -1,5 +1,6 @@
 from typing import Optional
 
+import os
 import numpy as np
 import pandas as pd
 import pyarrow.compute as pc
@@ -83,6 +84,8 @@ def run_impact_study_fo(
 
     propagator = ASSISTPropagator()
 
+    os.makedirs(f"{RESULT_DIR}", exist_ok=True)
+
     # Read impactor data and convert to ADAM orbit objects
     adam_orbit_objects = impactor_file_to_adam_orbit(impactors_file)
 
@@ -139,8 +142,7 @@ def run_impact_study_fo(
 
             fo_file_name = f"{fo_input_file_base}_{obj}_{day}.csv"
             fo_output_folder = f"{fo_output_file_base}_{obj}_{day}"
-            od_observations_to_fo_input(filtered_obs, f"{RESULT_DIR}/{fo_file_name}")
-            #od_observations_to_ades_file(filtered_obs, f"{RESULT_DIR}/{fo_file_name}")
+            od_observations_to_ades_file(filtered_obs, f"{RESULT_DIR}/{fo_file_name}")
 
             try:
                 # Run find_orb to compute orbits

@@ -32,5 +32,5 @@ def plot_ip_over_time(impact_study_results: ImpactStudyResults) -> None:
         plt.xlabel("Day")
         plt.ylabel("Impact Probability")
         plt.plot(ips.day, ips.impact_probability)
-        plt.savefig(f"New_IP_{obj}.png")
+        plt.savefig(f"IP_{obj}.png")
         plt.close()

@@ -55,13 +55,13 @@ def impactor_file_to_adam_orbit(impactor_file: str) -> Orbits:
     """
     impactor_table = pa.csv.read_csv(impactor_file)
     keplerian_coords = KeplerianCoordinates.from_kwargs(
-        a=impactor_table["a_au"].to_numpy(),
-        e=impactor_table["e"].to_numpy(),
-        i=impactor_table["i_deg"].to_numpy(),
-        raan=impactor_table["node_deg"].to_numpy(),
-        ap=impactor_table["argperi_deg"].to_numpy(),
-        M=impactor_table["M_deg"].to_numpy(),
-        time=Timestamp.from_mjd(impactor_table["epoch_mjd"].to_numpy(), scale="tdb"),
+        a=impactor_table["a_au"].to_numpy(zero_copy_only=False),
+        e=impactor_table["e"].to_numpy(zero_copy_only=False),
+        i=impactor_table["i_deg"].to_numpy(zero_copy_only=False),
+        raan=impactor_table["node_deg"].to_numpy(zero_copy_only=False),
+        ap=impactor_table["argperi_deg"].to_numpy(zero_copy_only=False),
+        M=impactor_table["M_deg"].to_numpy(zero_copy_only=False),
+        time=Timestamp.from_mjd(impactor_table["epoch_mjd"].to_numpy(zero_copy_only=False), scale="tdb"),
         origin=Origin.from_kwargs(
             code=np.full(len(impactor_table), "SUN", dtype="object")
         ),
@@ -69,8 +69,8 @@ def impactor_file_to_adam_orbit(impactor_file: str) -> Orbits:
     )
 
     orbit = Orbits.from_kwargs(
-        orbit_id=impactor_table["ObjID"].to_numpy(),
-        object_id=impactor_table["ObjID"].to_numpy(),
+        orbit_id=impactor_table["ObjID"].to_numpy(zero_copy_only=False),
+        object_id=impactor_table["ObjID"].to_numpy(zero_copy_only=False),
         coordinates=keplerian_coords.to_cartesian(),
     )
 
@@ -101,23 +101,23 @@ def sorcha_output_to_od_observations(sorcha_output_file: str) -> Optional[Observ
     sorcha_observations_table = sorcha_observations_table.take(sort_indices)
     od_observations = None
 
-    object_ids = pc.unique(sorcha_observations_table['ObjID']).to_numpy()
+    object_ids = pc.unique(sorcha_observations_table['ObjID']).to_numpy(zero_copy_only=False)
 
     for obj in object_ids:
         object_obs = sorcha_observations_table.filter(pc.equal(sorcha_observations_table['ObjID'], obj)) 
-        times = Timestamp.from_mjd(object_obs["fieldMJD_TAI"].values, scale="tai")
+        times = Timestamp.from_mjd(object_obs["fieldMJD_TAI"].to_numpy(zero_copy_only=False), scale="tai")
         times = times.rescale("utc")
         sigmas = np.full((len(object_obs), 6), np.nan)
-        sigmas[:, 1] = object_obs["astrometricSigma_deg"].to_numpy()
-        sigmas[:, 2] = object_obs["astrometricSigma_deg"].to_numpy()
+        sigmas[:, 1] = object_obs["astrometricSigma_deg"].to_numpy(zero_copy_only=False)
+        sigmas[:, 2] = object_obs["astrometricSigma_deg"].to_numpy(zero_copy_only=False)
         photometry = Photometry.from_kwargs(
-            mag=object_obs["trailedSourceMag"].to_numpy(),
-            mag_sigma=object_obs["trailedSourceMagSigma"].to_numpy(),
+            mag=object_obs["trailedSourceMag"].to_numpy(zero_copy_only=False),
+            mag_sigma=object_obs["trailedSourceMagSigma"].to_numpy(zero_copy_only=False),
             filter=object_obs["optFilter"].to_numpy(),
         )
         coordinates = SphericalCoordinates.from_kwargs(
-            lon=object_obs["RA_deg"].to_numpy(),
-            lat=object_obs["Dec_deg"].to_numpy(),
+            lon=object_obs["RA_deg"].to_numpy(zero_copy_only=False),
+            lat=object_obs["Dec_deg"].to_numpy(zero_copy_only=False),
             origin=Origin.from_kwargs(
                 code=np.full(len(object_obs), "X05", dtype="object")
             ),
@@ -214,8 +214,8 @@ def od_observations_to_ades_file(
         obsTime=od_observations.coordinates.time,
         ra=od_observations.coordinates.lon,
         dec=od_observations.coordinates.lat,
-        rmsRA=od_observations.coordinates.covariance.sigmas[:, 1] * 3600,
-        rmsDec=od_observations.coordinates.covariance.sigmas[:, 2] * 3600,
+        rmsRA=od_observations.coordinates.covariance.sigmas[:, 1],
+        rmsDec=od_observations.coordinates.covariance.sigmas[:, 2],
         mag=od_observations.photometry.mag,
         rmsMag=od_observations.photometry.mag_sigma,
         band=od_observations.photometry.filter,
