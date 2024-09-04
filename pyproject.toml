@@ -6,13 +6,13 @@ authors = [
     {name = "Kathleen Kiker", email = "kathleen@b612foundation.orgm"},
 ]
 dependencies = [
-    "numpy",
     "matplotlib",
     "adam_core",
     "adam_assist",
     "sorcha",
     "jax==0.4.17",
     "jaxlib==0.4.17",
+    "numpy>=1.24.4",
 ]
 requires-python = ">=3.11"
 readme = "README.md"
