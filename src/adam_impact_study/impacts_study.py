@@ -10,6 +10,7 @@ from adam_core.propagator.adam_assist import ASSISTPropagator
 from adam_impact_study.conversions import (
     impactor_file_to_adam_orbit,
     od_observations_to_ades_file,
+    od_observations_to_fo_input,
 )
 from adam_impact_study.fo_od import run_fo_od
 from adam_impact_study.sorcha_utils import run_sorcha
@@ -138,7 +139,8 @@ def run_impact_study_fo(
 
             fo_file_name = f"{fo_input_file_base}_{obj}_{day}.csv"
             fo_output_folder = f"{fo_output_file_base}_{obj}_{day}"
-            od_observations_to_ades_file(filtered_obs, f"{RESULT_DIR}/{fo_file_name}")
+            od_observations_to_fo_input(filtered_obs, f"{RESULT_DIR}/{fo_file_name}")
+            #od_observations_to_ades_file(filtered_obs, f"{RESULT_DIR}/{fo_file_name}")
 
             try:
                 # Run find_orb to compute orbits

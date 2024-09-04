@@ -2,8 +2,8 @@ import json
 from typing import Dict, Optional, Tuple
 
 import numpy as np
-import pandas as pd
 import pyarrow as pa
+import pyarrow.compute as pc
 import quivr as qv
 from adam_core.coordinates import (
     CartesianCoordinates,
@@ -53,25 +53,27 @@ def impactor_file_to_adam_orbit(impactor_file: str) -> Orbits:
     orbit : `~adam_core.orbits.orbits.Orbits`
         ADAM Orbit object created from the input data.
     """
-    impactor_df = pd.read_csv(impactor_file, float_precision="round_trip")
+    impactor_table = pa.csv.read_csv(impactor_file)
     keplerian_coords = KeplerianCoordinates.from_kwargs(
-        a=impactor_df["a_au"],
-        e=impactor_df["e"],
-        i=impactor_df["i_deg"],
-        raan=impactor_df["node_deg"],
-        ap=impactor_df["argperi_deg"],
-        M=impactor_df["M_deg"],
-        time=Timestamp.from_mjd(impactor_df["epoch_mjd"].values, scale="tdb"),
+        a=impactor_table["a_au"].to_numpy(),
+        e=impactor_table["e"].to_numpy(),
+        i=impactor_table["i_deg"].to_numpy(),
+        raan=impactor_table["node_deg"].to_numpy(),
+        ap=impactor_table["argperi_deg"].to_numpy(),
+        M=impactor_table["M_deg"].to_numpy(),
+        time=Timestamp.from_mjd(impactor_table["epoch_mjd"].to_numpy(), scale="tdb"),
         origin=Origin.from_kwargs(
-            code=np.full(len(impactor_df), "SUN", dtype="object")
+            code=np.full(len(impactor_table), "SUN", dtype="object")
         ),
         frame="ecliptic",
     )
+
     orbit = Orbits.from_kwargs(
-        orbit_id=impactor_df["ObjID"],
-        object_id=impactor_df["ObjID"],
+        orbit_id=impactor_table["ObjID"].to_numpy(),
+        object_id=impactor_table["ObjID"].to_numpy(),
         coordinates=keplerian_coords.to_cartesian(),
     )
+
     return orbit
 
 
@@ -91,31 +93,31 @@ def sorcha_output_to_od_observations(sorcha_output_file: str) -> Optional[Observ
         Returns None if the input file is empty.
     """
 
-    sorcha_observations_df = pd.read_csv(
-        sorcha_output_file, float_precision="round_trip"
+    sorcha_observations_table = pa.csv.read_csv(sorcha_output_file)
+    sort_indices = pc.sort_indices(
+        sorcha_observations_table, 
+        sort_keys=[("ObjID", "ascending"), ("fieldMJD_TAI", "ascending")]
     )
-    sorcha_observations_df = sorcha_observations_df.sort_values(
-        by=["ObjID", "fieldMJD_TAI"], ignore_index=True
-    )
+    sorcha_observations_table = sorcha_observations_table.take(sort_indices)
     od_observations = None
 
-    object_ids = sorcha_observations_df["ObjID"].unique()
+    object_ids = pc.unique(sorcha_observations_table['ObjID']).to_numpy()
 
     for obj in object_ids:
-        object_obs = sorcha_observations_df[sorcha_observations_df["ObjID"] == obj]
+        object_obs = sorcha_observations_table.filter(pc.equal(sorcha_observations_table['ObjID'], obj)) 
         times = Timestamp.from_mjd(object_obs["fieldMJD_TAI"].values, scale="tai")
         times = times.rescale("utc")
         sigmas = np.full((len(object_obs), 6), np.nan)
-        sigmas[:, 1] = object_obs["astrometricSigma_deg"]
-        sigmas[:, 2] = object_obs["astrometricSigma_deg"]
+        sigmas[:, 1] = object_obs["astrometricSigma_deg"].to_numpy()
+        sigmas[:, 2] = object_obs["astrometricSigma_deg"].to_numpy()
         photometry = Photometry.from_kwargs(
-            mag=object_obs["trailedSourceMag"],
-            mag_sigma=object_obs["trailedSourceMagSigma"],
-            filter=object_obs["optFilter"],
+            mag=object_obs["trailedSourceMag"].to_numpy(),
+            mag_sigma=object_obs["trailedSourceMagSigma"].to_numpy(),
+            filter=object_obs["optFilter"].to_numpy(),
         )
         coordinates = SphericalCoordinates.from_kwargs(
-            lon=object_obs["RA_deg"],
-            lat=object_obs["Dec_deg"],
+            lon=object_obs["RA_deg"].to_numpy(),
+            lat=object_obs["Dec_deg"].to_numpy(),
             origin=Origin.from_kwargs(
                 code=np.full(len(object_obs), "X05", dtype="object")
             ),
@@ -145,6 +147,46 @@ def sorcha_output_to_od_observations(sorcha_output_file: str) -> Optional[Observ
             od_observations = qv.concatenate([od_observations, od_observation])
 
     return od_observations
+
+
+def od_observations_to_fo_input(
+    od_observations: Observations, fo_file_name: str
+) -> str:
+    """
+    Convert an Observations object into a Find_Orb input file.
+
+    Parameters
+    ----------
+    od_observations : qv.Table
+        Observations object containing observations to be converted.
+
+    fo_file_name : str
+        Name of the Find_Orb input file to be created.
+
+    object_id : str
+        Object ID of orbit connected to observations.
+
+    Returns
+    -------
+    fo_file_name : str
+        Path to the generated Find_Orb input file.
+    """
+    with open(fo_file_name, "w") as w:
+        w.write("trkSub|stn|obsTime|ra|dec|rmsRA|rmsDec\n")  # |mag|rmsMag|band
+        for obs in od_observations:
+            sigmas = obs.coordinates.covariance.sigmas
+            time_utc = obs.coordinates.time
+            time = time_utc.to_astropy()
+            w.write(
+                f"{obs.object_id[0]}|X05|{time.isot[0]}|{obs.coordinates.lon[0]}|"
+                f"{obs.coordinates.lat[0]}|"
+                f"{format(sigmas[0][1]*3600, '.5f')}|"
+                f"{format(sigmas[0][2]*3600, '.5f')}|"
+                f"{obs.photometry.mag[0]}|"
+                f"{obs.photometry.mag_sigma[0]}|"
+                f"{obs.photometry.filter[0]}\n"
+            )
+    return fo_file_name
 
 
 def od_observations_to_ades_file(
