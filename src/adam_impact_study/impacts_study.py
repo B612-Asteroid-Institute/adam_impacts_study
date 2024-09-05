@@ -1,6 +1,6 @@
+import os
 from typing import Optional
 
-import os
 import numpy as np
 import pandas as pd
 import pyarrow.compute as pc
@@ -11,7 +11,6 @@ from adam_core.propagator.adam_assist import ASSISTPropagator
 from adam_impact_study.conversions import (
     impactor_file_to_adam_orbit,
     od_observations_to_ades_file,
-    od_observations_to_fo_input,
 )
 from adam_impact_study.fo_od import run_fo_od
 from adam_impact_study.sorcha_utils import run_sorcha

@@ -61,7 +61,9 @@ def impactor_file_to_adam_orbit(impactor_file: str) -> Orbits:
         raan=impactor_table["node_deg"].to_numpy(zero_copy_only=False),
         ap=impactor_table["argperi_deg"].to_numpy(zero_copy_only=False),
         M=impactor_table["M_deg"].to_numpy(zero_copy_only=False),
-        time=Timestamp.from_mjd(impactor_table["epoch_mjd"].to_numpy(zero_copy_only=False), scale="tdb"),
+        time=Timestamp.from_mjd(
+            impactor_table["epoch_mjd"].to_numpy(zero_copy_only=False), scale="tdb"
+        ),
         origin=Origin.from_kwargs(
             code=np.full(len(impactor_table), "SUN", dtype="object")
         ),
@@ -95,24 +97,32 @@ def sorcha_output_to_od_observations(sorcha_output_file: str) -> Optional[Observ
 
     sorcha_observations_table = pa.csv.read_csv(sorcha_output_file)
     sort_indices = pc.sort_indices(
-        sorcha_observations_table, 
-        sort_keys=[("ObjID", "ascending"), ("fieldMJD_TAI", "ascending")]
+        sorcha_observations_table,
+        sort_keys=[("ObjID", "ascending"), ("fieldMJD_TAI", "ascending")],
     )
     sorcha_observations_table = sorcha_observations_table.take(sort_indices)
     od_observations = None
 
-    object_ids = pc.unique(sorcha_observations_table['ObjID']).to_numpy(zero_copy_only=False)
+    object_ids = pc.unique(sorcha_observations_table["ObjID"]).to_numpy(
+        zero_copy_only=False
+    )
 
     for obj in object_ids:
-        object_obs = sorcha_observations_table.filter(pc.equal(sorcha_observations_table['ObjID'], obj)) 
-        times = Timestamp.from_mjd(object_obs["fieldMJD_TAI"].to_numpy(zero_copy_only=False), scale="tai")
+        object_obs = sorcha_observations_table.filter(
+            pc.equal(sorcha_observations_table["ObjID"], obj)
+        )
+        times = Timestamp.from_mjd(
+            object_obs["fieldMJD_TAI"].to_numpy(zero_copy_only=False), scale="tai"
+        )
         times = times.rescale("utc")
         sigmas = np.full((len(object_obs), 6), np.nan)
         sigmas[:, 1] = object_obs["astrometricSigma_deg"].to_numpy(zero_copy_only=False)
         sigmas[:, 2] = object_obs["astrometricSigma_deg"].to_numpy(zero_copy_only=False)
         photometry = Photometry.from_kwargs(
             mag=object_obs["trailedSourceMag"].to_numpy(zero_copy_only=False),
-            mag_sigma=object_obs["trailedSourceMagSigma"].to_numpy(zero_copy_only=False),
+            mag_sigma=object_obs["trailedSourceMagSigma"].to_numpy(
+                zero_copy_only=False
+            ),
             filter=object_obs["optFilter"].to_numpy(),
         )
         coordinates = SphericalCoordinates.from_kwargs(
@@ -149,46 +159,6 @@ def sorcha_output_to_od_observations(sorcha_output_file: str) -> Optional[Observ
     return od_observations
 
 
-def od_observations_to_fo_input(
-    od_observations: Observations, fo_file_name: str
-) -> str:
-    """
-    Convert an Observations object into a Find_Orb input file.
-
-    Parameters
-    ----------
-    od_observations : qv.Table
-        Observations object containing observations to be converted.
-
-    fo_file_name : str
-        Name of the Find_Orb input file to be created.
-
-    object_id : str
-        Object ID of orbit connected to observations.
-
-    Returns
-    -------
-    fo_file_name : str
-        Path to the generated Find_Orb input file.
-    """
-    with open(fo_file_name, "w") as w:
-        w.write("trkSub|stn|obsTime|ra|dec|rmsRA|rmsDec\n")  # |mag|rmsMag|band
-        for obs in od_observations:
-            sigmas = obs.coordinates.covariance.sigmas
-            time_utc = obs.coordinates.time
-            time = time_utc.to_astropy()
-            w.write(
-                f"{obs.object_id[0]}|X05|{time.isot[0]}|{obs.coordinates.lon[0]}|"
-                f"{obs.coordinates.lat[0]}|"
-                f"{format(sigmas[0][1]*3600, '.5f')}|"
-                f"{format(sigmas[0][2]*3600, '.5f')}|"
-                f"{obs.photometry.mag[0]}|"
-                f"{obs.photometry.mag_sigma[0]}|"
-                f"{obs.photometry.filter[0]}\n"
-            )
-    return fo_file_name
-
-
 def od_observations_to_ades_file(
     od_observations: Observations, ades_file_name: str
 ) -> str:
@@ -208,7 +178,6 @@ def od_observations_to_ades_file(
     ades_file_name : str
         Path to the generated ADES file.
     """
-
     ades_obs = ADESObservations.from_kwargs(
         trkSub=od_observations.object_id,
         obsTime=od_observations.coordinates.time,
@@ -227,14 +196,14 @@ def od_observations_to_ades_file(
     obs_contexts = {
         "X05": ObsContext(
             observatory=ObservatoryObsContext(
-            mpcCode="X05", name="Vera C. Rubin Observatory - LSST"
-        ),
+                mpcCode="X05", name="Vera C. Rubin Observatory - LSST"
+            ),
             submitter=SubmitterObsContext(name="N/A", institution="N/A"),
             observers=["N/A"],
             measurers=["N/A"],
             telescope=TelescopeObsContext(
-            name="LSST Camera", design="Reflector", detector="CCD", aperture=8.4
-        )
+                name="LSST Camera", design="Reflector", detector="CCD", aperture=8.4
+            ),
         )
     }
 
