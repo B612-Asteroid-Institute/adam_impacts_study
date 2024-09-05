@@ -1,10 +1,12 @@
 import os
 import subprocess
+from typing import Optional
 
 import pandas as pd
 import quivr as qv
+from adam_core.orbits import Orbits
 
-from adam_impact_study.conversions import sorcha_output_to_df
+from adam_impact_study.conversions import Observations, sorcha_output_to_od_observations
 
 
 class SorchaPhysicalParameters(qv.Table):
@@ -51,23 +53,15 @@ class SorchaObservations(qv.Table):
     Obj_Sun_LTC_km = qv.Float64Column()
 
 
-# Generate sorcha orbit files from a dataframe
-def generate_sorcha_orbits(impactors_df, sorcha_orbits_file):
+def generate_sorcha_orbits(adam_orbits: Orbits, sorcha_orbits_file: str) -> None:
     """
     Generate a Sorcha orbit file from a DataFrame of impactor data.
 
     Parameters
     ----------
-    impactors_df : pandas.DataFrame
-        DataFrame containing orbital parameters for impactors with columns:
-        - "ObjID": Object ID
-        - "a_au": Semi-major axis (au)
-        - "e": Eccentricity
-        - "i_deg": Inclination (degrees)
-        - "node_deg": Longitude of the ascending node (degrees)
-        - "argperi_deg": Argument of periapsis (degrees)
-        - "M_deg": Mean anomaly (degrees)
-        - "epoch_mjd": Epoch in Modified Julian Date (TDB)
+    adam_orbits : `~adam_core.orbits.orbits.Orbits`
+        ADAM Orbits object containing orbital parameters for the impactors.
+
     sorcha_orbits_file : str
         Path to the file where the Sorcha orbit data will be saved.
 
@@ -76,25 +70,27 @@ def generate_sorcha_orbits(impactors_df, sorcha_orbits_file):
     None
         The function writes the Sorcha orbit data to a file.
     """
+    coord_kep = adam_orbits.coordinates.to_keplerian()
     sorcha_df = pd.DataFrame(
         {
-            "ObjID": impactors_df["ObjID"],
-            "FORMAT": ["KEP"] * len(impactors_df),  # Use 'KEP' for all rows
-            "a": impactors_df["a_au"],
-            "e": impactors_df["e"],
-            "inc": impactors_df["i_deg"],
-            "node": impactors_df["node_deg"],
-            "argPeri": impactors_df["argperi_deg"],
-            "ma": impactors_df["M_deg"],
-            "epochMJD_TDB": impactors_df["epoch_mjd"],
+            "ObjID": adam_orbits.object_id,
+            "FORMAT": ["KEP"] * len(adam_orbits),
+            "a": coord_kep.a,
+            "e": coord_kep.e,
+            "inc": coord_kep.i,
+            "node": coord_kep.raan,
+            "argPeri": coord_kep.ap,
+            "ma": coord_kep.M,
+            "epochMJD_TDB": coord_kep.time.mjd(),
         }
     )
     sorcha_df.to_csv(sorcha_orbits_file, index=False, sep=" ")
     return
 
 
-# Generate physical params files from a dataframe
-def generate_sorcha_physical_params(sorcha_physical_params_file, physical_params_df):
+def generate_sorcha_physical_params(
+    sorcha_physical_params_file: str, physical_params_df: pd.DataFrame
+) -> None:
     """
     Generate a Sorcha physical parameters file from a DataFrame of physical parameters.
 
@@ -115,23 +111,23 @@ def generate_sorcha_physical_params(sorcha_physical_params_file, physical_params
 
 
 def run_sorcha(
-    impactor_df,
-    sorcha_config_file,
-    sorcha_orbits_file,
-    sorcha_physical_params_file,
-    sorcha_output_file,
-    physical_params_df,
-    pointing_file,
-    sorcha_output_name,
-    RESULT_DIR,
-):
+    adam_orbits: Orbits,
+    sorcha_config_file: str,
+    sorcha_orbits_file: str,
+    sorcha_physical_params_file: str,
+    sorcha_output_file: str,
+    physical_params_df: pd.DataFrame,
+    pointing_file: str,
+    sorcha_output_name: str,
+    RESULT_DIR: str,
+) -> Optional[Observations]:
     """
     Run the Sorcha software to generate observational data based on input orbital and physical parameters.
 
     Parameters
     ----------
-    impactor_df : pandas.DataFrame
-        DataFrame containing orbital parameters for the impactors.
+    adam_orbits : Orbits
+        ADAM Orbits object containing orbital parameters for the impactors.
     sorcha_config_file : str
         Path to the Sorcha configuration file.
     sorcha_orbits_file : str
@@ -140,7 +136,7 @@ def run_sorcha(
         Path to the file where the Sorcha physical parameters data will be saved.
     sorcha_output_file : str
         Name of the Sorcha output file.
-    physical_params_df : pandas.DataFrame
+    physical_params_df : pd.DataFrame
         DataFrame containing physical parameters for the impactors.
     pointing_file : str
         Path to the file containing pointing data.
@@ -151,11 +147,12 @@ def run_sorcha(
 
     Returns
     -------
-    sorcha_observations_df : pandas.DataFrame
-        DataFrame containing the Sorcha-generated observations.
+    sorcha_observations : Observations (qv.Table)
+        Observations object containing the Sorcha observations.
+        Returns None if the input file is empty.
     """
     # Generate the sorcha input files
-    generate_sorcha_orbits(impactor_df, sorcha_orbits_file)
+    generate_sorcha_orbits(adam_orbits, sorcha_orbits_file)
     generate_sorcha_physical_params(sorcha_physical_params_file, physical_params_df)
 
     # Run Sorcha
@@ -169,7 +166,6 @@ def run_sorcha(
     subprocess.run(sorcha_command_string, shell=True)
 
     # Read the sorcha output
-    sorcha_observations_df = sorcha_output_to_df(
-        f"{RESULT_DIR}/{sorcha_output_name}/{sorcha_output_file}"
-    )
-    return sorcha_observations_df
+    sorcha_output_file = f"{RESULT_DIR}/{sorcha_output_name}/{sorcha_output_file}"
+    od_observations = sorcha_output_to_od_observations(sorcha_output_file)
+    return od_observations

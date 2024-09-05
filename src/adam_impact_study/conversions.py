@@ -1,5 +1,10 @@
+import json
+from typing import Dict, Optional, Tuple
+
 import numpy as np
-import pandas as pd
+import pyarrow as pa
+import pyarrow.compute as pc
+import quivr as qv
 from adam_core.coordinates import (
     CartesianCoordinates,
     CoordinateCovariances,
@@ -7,147 +12,122 @@ from adam_core.coordinates import (
     Origin,
     SphericalCoordinates,
 )
+from adam_core.observations import (
+    ADES_to_string,
+    ADESObservations,
+    ObsContext,
+    ObservatoryObsContext,
+    SubmitterObsContext,
+    TelescopeObsContext,
+)
 from adam_core.observers import Observers
-from adam_core.orbit_determination import OrbitDeterminationObservations
 from adam_core.orbits import Orbits
 from adam_core.time import Timestamp
 
 
-def impactor_to_adam_orbit(impactor_df):
+class Photometry(qv.Table):
+    mag = qv.Float64Column()
+    mag_sigma = qv.Float64Column(nullable=True)
+    filter = qv.LargeStringColumn()
+
+
+class Observations(qv.Table):
+    obs_id = qv.LargeStringColumn()
+    object_id = qv.LargeStringColumn()
+    coordinates = SphericalCoordinates.as_column()
+    observers = Observers.as_column()
+    photometry = Photometry.as_column(nullable=True)
+
+
+def impactor_file_to_adam_orbit(impactor_file: str) -> Orbits:
     """
-    Convert a DataFrame of impactor data into an ADAM Orbit object.
+    Generate an ADAM Orbit object from an impactor data file.
 
     Parameters
     ----------
-    impactor_df : pandas.DataFrame
-        DataFrame containing impactor data with columns:
-        - "a_au": Semi-major axis (au)
-        - "e": Eccentricity
-        - "i_deg": Inclination (degrees)
-        - "node_deg": Longitude of the ascending node (degrees)
-        - "argperi_deg": Argument of periapsis (degrees)
-        - "M_deg": Mean anomaly (degrees)
-        - "epoch_mjd": Epoch in Modified Julian Date (MJD)
-        - "ObjID": Object ID
+    impactor_file : str
+        Path to the impactor data file.
 
     Returns
     -------
     orbit : `~adam_core.orbits.orbits.Orbits`
         ADAM Orbit object created from the input data.
     """
+    impactor_table = pa.csv.read_csv(impactor_file)
     keplerian_coords = KeplerianCoordinates.from_kwargs(
-        a=impactor_df["a_au"],
-        e=impactor_df["e"],
-        i=impactor_df["i_deg"],
-        raan=impactor_df["node_deg"],
-        ap=impactor_df["argperi_deg"],
-        M=impactor_df["M_deg"],
-        time=Timestamp.from_mjd(impactor_df["epoch_mjd"].values, scale="tdb"),
+        a=impactor_table["a_au"].to_numpy(zero_copy_only=False),
+        e=impactor_table["e"].to_numpy(zero_copy_only=False),
+        i=impactor_table["i_deg"].to_numpy(zero_copy_only=False),
+        raan=impactor_table["node_deg"].to_numpy(zero_copy_only=False),
+        ap=impactor_table["argperi_deg"].to_numpy(zero_copy_only=False),
+        M=impactor_table["M_deg"].to_numpy(zero_copy_only=False),
+        time=Timestamp.from_mjd(
+            impactor_table["epoch_mjd"].to_numpy(zero_copy_only=False), scale="tdb"
+        ),
         origin=Origin.from_kwargs(
-            code=np.full(len(impactor_df), "SUN", dtype="object")
+            code=np.full(len(impactor_table), "SUN", dtype="object")
         ),
         frame="ecliptic",
     )
+
     orbit = Orbits.from_kwargs(
-        orbit_id=impactor_df["ObjID"],
-        object_id=impactor_df["ObjID"],
+        orbit_id=impactor_table["ObjID"].to_numpy(zero_copy_only=False),
+        object_id=impactor_table["ObjID"].to_numpy(zero_copy_only=False),
         coordinates=keplerian_coords.to_cartesian(),
     )
+
     return orbit
 
 
-def sorcha_output_to_df(sorcha_output_file):
+def sorcha_output_to_od_observations(sorcha_output_file: str) -> Optional[Observations]:
     """
-    Generate a DataFrame from a Sorcha output file.
+    Convert Sorcha observations output files to Observations type.
 
     Parameters
     ----------
     sorcha_output_file : str
-        Path to the Sorcha output CSV file.
+        Path to the Sorcha output file.
 
     Returns
     -------
-    sorcha_output_df : pandas.DataFrame
-        DataFrame containing the Sorcha output data, sorted by Object ID
-        and observation time (fieldMJD_TAI).
+    od_observations : qv.Table
+        Observations object continaining the Sorcha observations.
+        Returns None if the input file is empty.
     """
-    sorcha_output_df = pd.read_csv(sorcha_output_file, float_precision="round_trip")
-    # sort by object id
-    sorcha_output_df = sorcha_output_df.sort_values(
-        by=["ObjID", "fieldMJD_TAI"], ignore_index=True
+
+    sorcha_observations_table = pa.csv.read_csv(sorcha_output_file)
+    sort_indices = pc.sort_indices(
+        sorcha_observations_table,
+        sort_keys=[("ObjID", "ascending"), ("fieldMJD_TAI", "ascending")],
     )
-    return sorcha_output_df
+    sorcha_observations_table = sorcha_observations_table.take(sort_indices)
+    od_observations = None
 
-
-def adam_orbit_from_sorcha_input(sorcha_orbits_file):
-    """
-    Convert orbits in sorcha format to an ADAM Orbit object.
-
-    Parameters
-    ----------
-    sorcha_orbits_file : str
-        Path to the Sorcha orbits file.
-
-    Returns
-    -------
-    orbit : `~adam_core.orbits.orbits.Orbits`
-        ADAM Orbit object created from the Sorcha orbit data.
-    """
-    sorcha_orbits_df = pd.read_csv(sorcha_orbits_file, sep=" ")
-    keplerian_coords = KeplerianCoordinates.from_kwargs(
-        a=sorcha_orbits_df["a"],
-        e=sorcha_orbits_df["e"],
-        i=sorcha_orbits_df["inc"],
-        raan=sorcha_orbits_df["node"],
-        ap=sorcha_orbits_df["argPeri"],
-        M=sorcha_orbits_df["ma"],
-        time=Timestamp.from_mjd(sorcha_orbits_df["epochMJD_TDB"].values, scale="tdb"),
-        origin=Origin.from_kwargs(
-            code=np.full(len(sorcha_orbits_df), "SUN", dtype="object")
-        ),
-        frame="ecliptic",
+    object_ids = pc.unique(sorcha_observations_table["ObjID"]).to_numpy(
+        zero_copy_only=False
     )
-    orbit = Orbits.from_kwargs(
-        orbit_id=sorcha_orbits_df["ObjID"],
-        object_id=sorcha_orbits_df["ObjID"],
-        coordinates=keplerian_coords.to_cartesian(),
-    )
-    return orbit
-
-
-def sorcha_output_to_od_observations(sorcha_observations_df):
-    """
-    Convert a Sorcha observations DataFrame to OrbitDeterminationObservations.
-
-    Parameters
-    ----------
-    sorcha_observations_df : pandas.DataFrame
-        DataFrame containing Sorcha observations with relevant columns:
-        - "ObjID": Object ID
-        - "fieldMJD_TAI": Observation time in MJD (TAI)
-        - "RA_deg": Right Ascension in degrees
-        - "Dec_deg": Declination in degrees
-        - "astrometricSigma_deg": Astrometric uncertainty in degrees
-
-    Returns
-    -------
-    od_observations : dict
-        Dictionary of OrbitDeterminationObservations objects, keyed by Object ID.
-    """
-    od_observations = {}
-
-    object_ids = sorcha_observations_df["ObjID"].unique()
 
     for obj in object_ids:
-        object_obs = sorcha_observations_df[sorcha_observations_df["ObjID"] == obj]
-        times = Timestamp.from_mjd(object_obs["fieldMJD_TAI"].values, scale="tai")
+        object_obs = sorcha_observations_table.filter(
+            pc.equal(sorcha_observations_table["ObjID"], obj)
+        )
+        times = Timestamp.from_mjd(
+            object_obs["fieldMJD_TAI"].to_numpy(zero_copy_only=False), scale="tai"
+        )
         times = times.rescale("utc")
         sigmas = np.full((len(object_obs), 6), np.nan)
-        sigmas[:, 1] = object_obs["astrometricSigma_deg"]
-        sigmas[:, 2] = object_obs["astrometricSigma_deg"]
+        sigmas[:, 1] = object_obs["astrometricSigma_deg"].to_numpy(zero_copy_only=False)
+        sigmas[:, 2] = object_obs["astrometricSigma_deg"].to_numpy(zero_copy_only=False)
+        photometry = Photometry.from_kwargs(
+            mag=object_obs["trailedSourceMag"].to_numpy(zero_copy_only=False),
+            mag_sigma=object_obs["trailedSourceMagSigma"].to_numpy(
+                zero_copy_only=False
+            ),
+            filter=object_obs["optFilter"].to_numpy(),
+        )
         coordinates = SphericalCoordinates.from_kwargs(
-            lon=object_obs["RA_deg"],
-            lat=object_obs["Dec_deg"],
+            lon=object_obs["RA_deg"].to_numpy(zero_copy_only=False),
+            lat=object_obs["Dec_deg"].to_numpy(zero_copy_only=False),
             origin=Origin.from_kwargs(
                 code=np.full(len(object_obs), "X05", dtype="object")
             ),
@@ -162,75 +142,246 @@ def sorcha_output_to_od_observations(sorcha_observations_df):
                 ("origin.code", "ascending"),
             ]
         )
-        od_observations[obj] = OrbitDeterminationObservations.from_kwargs(
-            id=[f"{obj}_{i}" for i in range(len(object_obs))],
+
+        od_observation = Observations.from_kwargs(
+            obs_id=[f"{obj}_{i}" for i in range(len(object_obs))],
+            object_id=pa.repeat(obj, len(object_obs)),
             coordinates=coordinates_sorted,
             observers=Observers.from_code("X05", coordinates_sorted.time),
+            photometry=photometry,
         )
+
+        if od_observations is None:
+            od_observations = od_observation
+        else:
+            od_observations = qv.concatenate([od_observations, od_observation])
 
     return od_observations
 
 
-def sorcha_df_to_fo_input(sorcha_df, fo_file_name):
+def od_observations_to_ades_file(
+    od_observations: Observations, ades_file_name: str
+) -> str:
     """
-    Convert a Sorcha DataFrame to a Find_Orb input file.
+    Convert an Observations object into an ADES file.
 
     Parameters
     ----------
-    sorcha_df : pandas.DataFrame
-        DataFrame containing Sorcha data with relevant columns:
-        - "ObjID": Object ID
-        - "fieldMJD_TAI": Observation time in MJD (TAI)
-        - "RA_deg": Right Ascension in degrees
-        - "Dec_deg": Declination in degrees
-        - "astrometricSigma_deg": Astrometric uncertainty in degrees
-        - "trailedSourceMag": Trailed source magnitude
-        - "trailedSourceMagSigma": Uncertainty in trailed source magnitude
-        - "optFilter": Optical filter used
+    od_observations : qv.Table
+        Observations object containing observations to be converted.
 
-    fo_file_name : str
-        Name of the Find_Orb input file to be created.
+    ades_file_name : str
+        Name of the ADES file to be created.
 
     Returns
     -------
-    fo_file_name : str
-        Path to the generated Find_Orb input file.
+    ades_file_name : str
+        Path to the generated ADES file.
     """
-    with open(fo_file_name, "w") as w:
-        w.write("trkSub|stn|obsTime|ra|dec|rmsRA|rmsDec|mag|rmsMag|band\n")
-        for index, row in sorcha_df.iterrows():
-            time_tai = Timestamp.from_mjd([row["fieldMJD_TAI"]], scale="tai")
-            time_utc = time_tai.rescale("utc")
-            time = time_utc.to_astropy()
-            w.write(
-                f"{row['ObjID']}|X05|{time.isot[0]}|{row['RA_deg']}|"
-                f"{row['Dec_deg']}|"
-                f"{float(row['astrometricSigma_deg'])*3600}|"
-                f"{float(row['astrometricSigma_deg'])*3600}|"
-                f"{row['trailedSourceMag']}|"
-                f"{row['trailedSourceMagSigma']}|"
-                f"{row['optFilter']}\n"
-            )
-    return fo_file_name
+    ades_obs = ADESObservations.from_kwargs(
+        trkSub=od_observations.object_id,
+        obsTime=od_observations.coordinates.time,
+        ra=od_observations.coordinates.lon,
+        dec=od_observations.coordinates.lat,
+        rmsRA=od_observations.coordinates.covariance.sigmas[:, 1],
+        rmsDec=od_observations.coordinates.covariance.sigmas[:, 2],
+        mag=od_observations.photometry.mag,
+        rmsMag=od_observations.photometry.mag_sigma,
+        band=od_observations.photometry.filter,
+        stn=pa.repeat("X05", len(od_observations)),
+        mode=pa.repeat("NA", len(od_observations)),
+        astCat=pa.repeat("NA", len(od_observations)),
+    )
+
+    obs_contexts = {
+        "X05": ObsContext(
+            observatory=ObservatoryObsContext(
+                mpcCode="X05", name="Vera C. Rubin Observatory - LSST"
+            ),
+            submitter=SubmitterObsContext(name="N/A", institution="N/A"),
+            observers=["N/A"],
+            measurers=["N/A"],
+            telescope=TelescopeObsContext(
+                name="LSST Camera", design="Reflector", detector="CCD", aperture=8.4
+            ),
+        )
+    }
+
+    ades_string = ADES_to_string(ades_obs, obs_contexts)
+
+    # Write the ADES string to a file
+    with open(ades_file_name, "w") as w:
+        w.write(ades_string)
+
+    return ades_file_name
 
 
-def fo_to_adam_orbit_cov(elements_dict, covar_dict):
+def read_fo_output(fo_output_dir: str) -> Tuple[Dict[str, dict], Dict[str, dict]]:
+    """
+    Read the find_orb output files from the specified directory into dictionaries
+    containing orbital elements and covariances.
+
+    Parameters
+    ----------
+    fo_output_dir : str
+        Directory path where find_orb output files (e.g., total.json and covar.json) are located.
+
+    Returns
+    -------
+        elements_dict : dict
+        Dictionary containing orbital elements for each object,
+        keyed by object ID, and with elements:
+        - "central body" (center of the coordinate system)
+        - "frame" (coordinate frame)
+        - "reference" (source of the elements)
+        - "epoch_iso" (epoch in ISO format)
+        - "epoch" (epoch in Julian date)
+        - "P" (orbital period)
+        - "P sigma" (uncertainty in orbital period)
+        - "M" (mean anomaly)
+        - "M sigma" (uncertainty in mean anomaly)
+        - "n" (mean motion)
+        - "n sigma" (uncertainty in mean motion)
+        - "a" (semi-major axis)
+        - "a sigma" (uncertainty in semi-major axis)
+        - "e" (eccentricity)
+        - "e sigma" (uncertainty in eccentricity)
+        - "q" (perihelion distance)
+        - "q sigma" (uncertainty in perihelion distance)
+        - "Q" (aphelion distance)
+        - "Q sigma" (uncertainty in aphelion distance)
+        - "i" (inclination)
+        - "i sigma" (uncertainty in inclination)
+        - "arg_per" (argument of perihelion)
+        - "arg_per sigma" (uncertainty in argument of perihelion)
+        - "asc_node" (ascending node)
+        - "asc_node sigma" (uncertainty in ascending node)
+        - "Tp" (time of perihelion passage)
+        - "Tp sigma" (uncertainty in time of perihelion passage)
+        - "Tp_iso" (time of perihelion passage in ISO format)
+        - "H" (absolute magnitude)
+        - "G" (slope parameter)
+        - "rms_residual" (root mean square of residuals)
+        - "weighted_rms_residual" (weighted root mean square of residuals)
+        - "n_resids" (number of residuals)
+        - "U" (uncertainty parameter)
+        - "p_NEO" (NEO probability)
+        - "MOIDs" (minimum orbit intersection distances)
+    covar_json : dict
+        Dictionary containing the covariance data from the JSON file.
+        Includes the following keys:
+        - "covar" (covariance matrix, in cartesian coordinates)
+        - "state_vect" (state vector, in cartesian coordinates)
+        - "epoch" (epoch in Julian date)
+    """
+    covar_dict = read_fo_covariance(f"{fo_output_dir}/covar.json")
+    elements_dict = read_fo_orbits(f"{fo_output_dir}/total.json")
+    return elements_dict, covar_dict
+
+
+def read_fo_covariance(covar_file: str) -> Dict[str, dict]:
+    """
+    Read the find_orb covariance JSON file into a dictionary.
+
+    Parameters
+    ----------
+    covar_file : str
+        Path to the find_orb covariance JSON file (covar.json).
+
+    Returns
+    -------
+    covar_json : dict
+        Dictionary containing the covariance data from the JSON file.
+        Includes the following keys:
+        - "covar" (covariance matrix, in cartesian coordinates)
+        - "state_vect" (state vector, in cartesian coordinates)
+        - "epoch" (epoch in Julian date)
+    """
+    with open(covar_file, "r") as f:
+        covar_json = json.load(f)
+    return covar_json
+
+
+def read_fo_orbits(input_file: str) -> Dict[str, dict]:
+    """
+    Read the find_orb total.json file into a dictionary of orbital elements.
+
+    Parameters
+    ----------
+    input_file : str
+        Path to the find_orb total.json file.
+
+    Returns
+    -------
+    elements_dict : dict
+        Dictionary containing orbital elements for each object,
+        keyed by object ID, and with elements:
+        - "central body" (center of the coordinate system)
+        - "frame" (coordinate frame)
+        - "reference" (source of the elements)
+        - "epoch_iso" (epoch in ISO format)
+        - "epoch" (epoch in Julian date)
+        - "P" (orbital period)
+        - "P sigma" (uncertainty in orbital period)
+        - "M" (mean anomaly)
+        - "M sigma" (uncertainty in mean anomaly)
+        - "n" (mean motion)
+        - "n sigma" (uncertainty in mean motion)
+        - "a" (semi-major axis)
+        - "a sigma" (uncertainty in semi-major axis)
+        - "e" (eccentricity)
+        - "e sigma" (uncertainty in eccentricity)
+        - "q" (perihelion distance)
+        - "q sigma" (uncertainty in perihelion distance)
+        - "Q" (aphelion distance)
+        - "Q sigma" (uncertainty in aphelion distance)
+        - "i" (inclination)
+        - "i sigma" (uncertainty in inclination)
+        - "arg_per" (argument of perihelion)
+        - "arg_per sigma" (uncertainty in argument of perihelion)
+        - "asc_node" (ascending node)
+        - "asc_node sigma" (uncertainty in ascending node)
+        - "Tp" (time of perihelion passage)
+        - "Tp sigma" (uncertainty in time of perihelion passage)
+        - "Tp_iso" (time of perihelion passage in ISO format)
+        - "H" (absolute magnitude)
+        - "G" (slope parameter)
+        - "rms_residual" (root mean square of residuals)
+        - "weighted_rms_residual" (weighted root mean square of residuals)
+        - "n_resids" (number of residuals)
+        - "U" (uncertainty parameter)
+        - "p_NEO" (NEO probability)
+        - "MOIDs" (minimum orbit intersection distances)
+    """
+
+    with open(input_file, "r") as f:
+        total_json = json.load(f)
+    objects = total_json.get("objects", {})
+    elements_dict = {}
+    for object_id, object_data in objects.items():
+        elements = object_data.get("elements", {})
+        elements_dict[object_id] = elements
+    return elements_dict
+
+
+def fo_to_adam_orbit_cov(fo_output_folder: str) -> Orbits:
     """
     Convert Find_Orb output to ADAM Orbit objects, including covariance.
 
     Parameters
     ----------
-    elements_dict : dict
-        Dictionary containing orbital elements for each object, keyed by Object ID.
-    covar_dict : dict
-        Dictionary containing covariance matrices and state vectors for each object.
+    fo_output_folder : str
+        Path to the folder containing Find_Orb output files.
 
     Returns
     -------
-    orbits_dict : dict
-        Dictionary of ADAM Orbit objects, keyed by Object ID.
+    orbits : `~adam_core.orbits.orbits.Orbits`
+        ADAM Orbit object created from the Find_Orb output data.
     """
-    orbits_dict = {}
+
+    elements_dict, covar_dict = read_fo_output(fo_output_folder)
+
+    orbits = None
     for object_id, elements in elements_dict.items():
 
         covar_matrix = np.array([covar_dict["covar"]])
@@ -251,10 +402,14 @@ def fo_to_adam_orbit_cov(elements_dict, covar_dict):
             frame="ecliptic",
             covariance=covariances_cartesian,
         )
-        orbits = Orbits.from_kwargs(
-            object_id=[object_id],
+        orbit = Orbits.from_kwargs(
             orbit_id=[object_id],
+            object_id=[object_id],
             coordinates=cartesian_coordinates,
         )
-        orbits_dict[object_id] = orbits
-    return orbits_dict
+        if orbits is None:
+            orbits = orbit
+        else:
+            orbits = qv.concatenate([orbits, orbit])
+
+    return orbits
