@@ -228,10 +228,51 @@ def read_fo_output(fo_output_dir: str) -> Tuple[Dict[str, dict], Dict[str, dict]
 
     Returns
     -------
-    elements_dict : dict
-        Dictionary containing orbital elements for each object.
-    covar_dict : dict
-        Dictionary containing covariance matrices for each object.
+        elements_dict : dict
+        Dictionary containing orbital elements for each object,
+        keyed by object ID, and with elements:
+        - "central body" (center of the coordinate system)
+        - "frame" (coordinate frame)
+        - "reference" (source of the elements)
+        - "epoch_iso" (epoch in ISO format)
+        - "epoch" (epoch in Julian date)
+        - "P" (orbital period)
+        - "P sigma" (uncertainty in orbital period)
+        - "M" (mean anomaly)
+        - "M sigma" (uncertainty in mean anomaly)
+        - "n" (mean motion)
+        - "n sigma" (uncertainty in mean motion)
+        - "a" (semi-major axis)
+        - "a sigma" (uncertainty in semi-major axis)
+        - "e" (eccentricity)
+        - "e sigma" (uncertainty in eccentricity)
+        - "q" (perihelion distance)
+        - "q sigma" (uncertainty in perihelion distance)
+        - "Q" (aphelion distance)
+        - "Q sigma" (uncertainty in aphelion distance)
+        - "i" (inclination)
+        - "i sigma" (uncertainty in inclination)
+        - "arg_per" (argument of perihelion)
+        - "arg_per sigma" (uncertainty in argument of perihelion)
+        - "asc_node" (ascending node)
+        - "asc_node sigma" (uncertainty in ascending node)
+        - "Tp" (time of perihelion passage)
+        - "Tp sigma" (uncertainty in time of perihelion passage)
+        - "Tp_iso" (time of perihelion passage in ISO format)
+        - "H" (absolute magnitude)
+        - "G" (slope parameter)
+        - "rms_residual" (root mean square of residuals)
+        - "weighted_rms_residual" (weighted root mean square of residuals)
+        - "n_resids" (number of residuals)
+        - "U" (uncertainty parameter)
+        - "p_NEO" (NEO probability)
+        - "MOIDs" (minimum orbit intersection distances)
+    covar_json : dict
+        Dictionary containing the covariance data from the JSON file.
+        Includes the following keys:
+        - "covar" (covariance matrix, in cartesian coordinates)
+        - "state_vect" (state vector, in cartesian coordinates)
+        - "epoch" (epoch in Julian date)
     """
     covar_dict = read_fo_covariance(f"{fo_output_dir}/covar.json")
     elements_dict = read_fo_orbits(f"{fo_output_dir}/total.json")
@@ -251,6 +292,10 @@ def read_fo_covariance(covar_file: str) -> Dict[str, dict]:
     -------
     covar_json : dict
         Dictionary containing the covariance data from the JSON file.
+        Includes the following keys:
+        - "covar" (covariance matrix, in cartesian coordinates)
+        - "state_vect" (state vector, in cartesian coordinates)
+        - "epoch" (epoch in Julian date)
     """
     with open(covar_file, "r") as f:
         covar_json = json.load(f)
@@ -269,8 +314,46 @@ def read_fo_orbits(input_file: str) -> Dict[str, dict]:
     Returns
     -------
     elements_dict : dict
-        Dictionary containing orbital elements for each object.
+        Dictionary containing orbital elements for each object,
+        keyed by object ID, and with elements:
+        - "central body" (center of the coordinate system)
+        - "frame" (coordinate frame)
+        - "reference" (source of the elements)
+        - "epoch_iso" (epoch in ISO format)
+        - "epoch" (epoch in Julian date)
+        - "P" (orbital period)
+        - "P sigma" (uncertainty in orbital period)
+        - "M" (mean anomaly)
+        - "M sigma" (uncertainty in mean anomaly)
+        - "n" (mean motion)
+        - "n sigma" (uncertainty in mean motion)
+        - "a" (semi-major axis)
+        - "a sigma" (uncertainty in semi-major axis)
+        - "e" (eccentricity)
+        - "e sigma" (uncertainty in eccentricity)
+        - "q" (perihelion distance)
+        - "q sigma" (uncertainty in perihelion distance)
+        - "Q" (aphelion distance)
+        - "Q sigma" (uncertainty in aphelion distance)
+        - "i" (inclination)
+        - "i sigma" (uncertainty in inclination)
+        - "arg_per" (argument of perihelion)
+        - "arg_per sigma" (uncertainty in argument of perihelion)
+        - "asc_node" (ascending node)
+        - "asc_node sigma" (uncertainty in ascending node)
+        - "Tp" (time of perihelion passage)
+        - "Tp sigma" (uncertainty in time of perihelion passage)
+        - "Tp_iso" (time of perihelion passage in ISO format)
+        - "H" (absolute magnitude)
+        - "G" (slope parameter)
+        - "rms_residual" (root mean square of residuals)
+        - "weighted_rms_residual" (weighted root mean square of residuals)
+        - "n_resids" (number of residuals)
+        - "U" (uncertainty parameter)
+        - "p_NEO" (NEO probability)
+        - "MOIDs" (minimum orbit intersection distances)
     """
+
     with open(input_file, "r") as f:
         total_json = json.load(f)
     objects = total_json.get("objects", {})
