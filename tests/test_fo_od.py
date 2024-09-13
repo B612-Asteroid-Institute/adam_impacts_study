@@ -14,7 +14,7 @@ def test_run_fo_od(mock_subprocess_run, tmpdir):
     RUN_DIR = tmpdir.mkdir("RUN_DIR")
     RESULT_DIR = tmpdir.mkdir("RESULT_DIR")
 
-    #Create mock input files
+    # Create mock input files
     input_file_path = RESULT_DIR.join(fo_input_file)
     input_file_path.write("Dummy input content")
 
@@ -176,7 +176,7 @@ def test_run_fo_od(mock_subprocess_run, tmpdir):
     assert os.path.exists(f"{FO_DIR}/{fo_output_folder}/covar.json")
 
     assert isinstance(result, Orbits)
-    assert result.orbit_id.as_py() == "Test_1001"
+    assert result.orbit_id[0].as_py() == "Test_1001"
     assert result.coordinates.time.mjd()[0].as_py() - 60490.342573 < 1e-6
     assert result.coordinates.x[0].as_py() - 2.40431779633740117 < 1e-13
     assert result.coordinates.y[0].as_py() - -2.0586498601048886 < 1e-13
