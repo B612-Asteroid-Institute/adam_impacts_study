@@ -1,8 +1,16 @@
 import pytest
+from unittest.mock import patch
+import pandas as pd
 from adam_core.propagator.adam_assist import ASSISTPropagator
 
 from adam_impact_study.conversions import impactor_file_to_adam_orbit
 from adam_core.propagator.adam_assist import download_jpl_ephemeris_files
+from adam_impact_study.impacts_study import run_impact_study_fo
+from adam_impact_study.conversions import Observations, Photometry
+from adam_core.orbits import Orbits
+from adam_core.coordinates import CartesianCoordinates, SphericalCoordinates, Origin
+from adam_core.observers import Observers
+from adam_core.time import Timestamp
 
 
 @pytest.fixture
@@ -40,3 +48,86 @@ def test_for_impact_dates(impactors_file_mock):
         )
 
 
+@patch("adam_impact_study.impacts_study.run_fo_od")
+@patch("adam_impact_study.impacts_study.run_sorcha")
+def test_run_impact_study_fo(mock_run_sorcha, mock_run_fo_od, tmpdir):
+    impactors_file = tmpdir.join("impactors.csv")
+    sorcha_config_file = tmpdir.join("sorcha_config.txt")
+    sorcha_orbits_file = tmpdir.join("sorcha_orbits.txt")
+    sorcha_physical_params_file = tmpdir.join("sorcha_physical_params.txt")
+    sorcha_output_file = tmpdir.join("sorcha_output.txt")
+    pointing_file = tmpdir.join("pointing_file.txt")
+    
+    sorcha_physical_params_string = "15.88 1.72 0.48 -0.11 -0.12 -0.12 0.15"
+    sorcha_output_name = "sorcha_output"
+    fo_input_file_base = "fo_input"
+    fo_output_file_base = "fo_output"
+    FO_DIR = tmpdir.mkdir("FO_DIR")
+    RUN_DIR = tmpdir.mkdir("RUN_DIR")
+    RESULT_DIR = tmpdir.mkdir("RESULT_DIR")
+
+    csv_data = """ObjID,q_au,e,i_deg,argperi_deg,node_deg,tp_mjd,epoch_mjd,H_mag,a_au,M_deg
+I00001,0.9125315468414172,0.3841166640887326,2.1597232256169803,42.129078921761604,100.19335181650827,61804.80697714385,61741.401768986136,24.999606842888358,1.481662993026473,325.34987099452826"""
+    impactors_file = tmpdir.join("Impactors.csv")
+    impactors_file.write(csv_data)
+
+    # Mock behavior of run_sorcha and run_fo_od
+    mock_run_sorcha.return_value = Observations.from_kwargs(
+        obs_id=["obs1", "obs2", "obs3", "obs4", "obs5"],
+        object_id=["Test_1001", "Test_1001", "Test_1001", "Test_1002", "Test_1002"],
+        coordinates=SphericalCoordinates.from_kwargs(
+            lon=[180.0, 181.0, 182.0, 183.0, 184.0],
+            lat=[0.0, 1.0, 2.0, 3.0, 4.0],
+            time=Timestamp.from_mjd([60001, 60002, 60003, 60005, 60006], scale="utc"),
+            origin=Origin.from_kwargs(code=["X05", "X05", "X05", "X05", "X05"]),
+            frame="equatorial",
+        ),
+        observers=Observers.from_code(
+            "X05", Timestamp.from_mjd([60001, 60002, 60003, 60005, 60006], scale="utc")
+        ),
+        photometry=Photometry.from_kwargs(
+            mag=[21.0, 22.0, 23.0, 24.0, 25.0],
+            mag_sigma=[0.1, 0.2, 0.3, 0.4, 0.5],
+            filter=["i", "r", "z", "r", "i"],
+        ),
+    )
+
+    cartesian_coords = CartesianCoordinates.from_kwargs(
+        x=[0.1],
+        y=[0.2],
+        z=[-0.3],
+        vx=[-0.01],
+        vy=[0.02],
+        vz=[0.03],
+        time=Timestamp.from_mjd([59000], scale="tdb"),
+        origin=Origin.from_kwargs(code=["SUN"]),
+        frame="ecliptic",
+    )
+    orbits = Orbits.from_kwargs(
+        orbit_id=["Object1"], object_id=["Object1"], coordinates=cartesian_coords
+    )
+
+    mock_run_fo_od.return_value = orbits
+
+    # Call the function with the mocked inputs
+    try:
+        run_impact_study_fo(
+            str(impactors_file),
+            str(sorcha_config_file),
+            str(sorcha_orbits_file),
+            str(sorcha_physical_params_file),
+            str(sorcha_output_file),
+            sorcha_physical_params_string,
+            str(pointing_file),
+            sorcha_output_name,
+            fo_input_file_base,
+            fo_output_file_base,
+            str(FO_DIR),
+            str(RUN_DIR),
+            str(RESULT_DIR)
+        )
+    except Exception as e:
+        pytest.fail(f"run_impact_study_fo raised an exception: {e}")
+
+    mock_run_sorcha.assert_called_once()
+    mock_run_fo_od.assert_called()  # Ensure run_fo_od was called
