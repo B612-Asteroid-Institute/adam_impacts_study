@@ -1,15 +1,20 @@
-import pytest
 import os
-import pyarrow as pa
+from unittest.mock import patch
+
 import numpy as np
 import pandas as pd
-from unittest.mock import patch
-from adam_core.coordinates import Origin
-from adam_core.time import Timestamp
+import pyarrow as pa
+import pytest
+from adam_core.coordinates import CartesianCoordinates, KeplerianCoordinates, Origin
 from adam_core.orbits import Orbits
-from adam_impact_study.sorcha_utils import generate_sorcha_orbits
-from adam_core.coordinates import CartesianCoordinates, KeplerianCoordinates
-from adam_impact_study.sorcha_utils import generate_sorcha_physical_params, run_sorcha
+from adam_core.time import Timestamp
+
+from adam_impact_study.sorcha_utils import (
+    generate_sorcha_orbits,
+    generate_sorcha_physical_params,
+    run_sorcha,
+)
+
 
 @pytest.fixture
 def mock_orbits():
@@ -22,12 +27,10 @@ def mock_orbits():
         vz=[0.03],
         time=Timestamp.from_mjd([59000], scale="tdb"),
         origin=Origin.from_kwargs(code=["SUN"]),
-        frame="ecliptic"
+        frame="ecliptic",
     )
     orbits = Orbits.from_kwargs(
-        orbit_id=["Object1"],
-        object_id=["Object1"],
-        coordinates=cartesian_coords
+        orbit_id=["Object1"], object_id=["Object1"], coordinates=cartesian_coords
     )
     return orbits
 
@@ -35,27 +38,30 @@ def mock_orbits():
 def test_generate_sorcha_orbits(mock_orbits, tmpdir):
     sorcha_orbits_file = tmpdir.join("sorcha_orbits.csv")
     generate_sorcha_orbits(mock_orbits, sorcha_orbits_file)
-    impactor_table = pa.csv.read_csv(sorcha_orbits_file, parse_options=pa.csv.ParseOptions(delimiter=" "))
+    impactor_table = pa.csv.read_csv(
+        sorcha_orbits_file, parse_options=pa.csv.ParseOptions(delimiter=" ")
+    )
     print(impactor_table)
 
     assert len(impactor_table) == 1
-    assert impactor_table['ObjID'][0].as_py() == "Object1"
+    assert impactor_table["ObjID"][0].as_py() == "Object1"
 
     keplerian_coords = KeplerianCoordinates.from_kwargs(
-        a=impactor_table['a'].to_numpy(zero_copy_only=False),
-        e=impactor_table['e'].to_numpy(zero_copy_only=False),
-        i=impactor_table['inc'].to_numpy(zero_copy_only=False),
-        raan=impactor_table['node'].to_numpy(zero_copy_only=False),
-        ap=impactor_table['argPeri'].to_numpy(zero_copy_only=False),
-        M=impactor_table['ma'].to_numpy(zero_copy_only=False),
+        a=impactor_table["a"].to_numpy(zero_copy_only=False),
+        e=impactor_table["e"].to_numpy(zero_copy_only=False),
+        i=impactor_table["inc"].to_numpy(zero_copy_only=False),
+        raan=impactor_table["node"].to_numpy(zero_copy_only=False),
+        ap=impactor_table["argPeri"].to_numpy(zero_copy_only=False),
+        M=impactor_table["ma"].to_numpy(zero_copy_only=False),
         time=Timestamp.from_mjd(
-            impactor_table['epochMJD_TDB'].to_numpy(zero_copy_only=False), 
-            scale="tdb"
+            impactor_table["epochMJD_TDB"].to_numpy(zero_copy_only=False), scale="tdb"
         ),
-        origin=Origin.from_kwargs(code=np.full(len(impactor_table), "SUN", dtype="object")),
-        frame="ecliptic"
+        origin=Origin.from_kwargs(
+            code=np.full(len(impactor_table), "SUN", dtype="object")
+        ),
+        frame="ecliptic",
     )
-    
+
     cartesian_coords = keplerian_coords.to_cartesian()
 
     assert (cartesian_coords.x[0].as_py() - 0.1) < 1e-10
@@ -76,15 +82,20 @@ def mock_physical_params_df():
         "i-r": [-0.11, -0.12, -0.13],
         "z-r": [-0.11, -0.12, -0.13],
         "y-r": [-0.11, -0.12, -0.13],
-        "GS": [0.15, 0.16, 0.17]
+        "GS": [0.15, 0.16, 0.17],
     }
     return pd.DataFrame(data)
 
+
 def test_generate_sorcha_physical_params(tmpdir, mock_physical_params_df):
     sorcha_physical_params_file = os.path.join(tmpdir, "physical_params.txt")
-    generate_sorcha_physical_params(sorcha_physical_params_file, mock_physical_params_df)
+    generate_sorcha_physical_params(
+        sorcha_physical_params_file, mock_physical_params_df
+    )
     assert os.path.exists(sorcha_physical_params_file)
-    read_table = pa.csv.read_csv(sorcha_physical_params_file, parse_options=pa.csv.ParseOptions(delimiter=" "))
+    read_table = pa.csv.read_csv(
+        sorcha_physical_params_file, parse_options=pa.csv.ParseOptions(delimiter=" ")
+    )
     expected_table = pa.Table.from_pandas(mock_physical_params_df)
     assert expected_table.equals(read_table)
 
@@ -100,15 +111,27 @@ def test_run_sorcha(mock_subprocess_run, tmpdir, mock_orbits, mock_physical_para
     sorcha_output_dir = output_dir.join("sorcha_output")
     os.makedirs(sorcha_output_dir, exist_ok=True)
     sorcha_output_file = sorcha_output_dir.join("output_file.txt")
-    
+
     # Write dummy content to simulate the expected output from sorcha
     with open(sorcha_output_file, "w") as f:
-        f.write("ObjID,fieldMJD_TAI,fieldRA_deg,fieldDec_deg,RA_deg,Dec_deg,astrometricSigma_deg,optFilter,trailedSourceMag,trailedSourceMagSigma,fiveSigmaDepth_mag,phase_deg\n")
-        f.write("Test_1001,60001.12345678912,340.1234567,-7.1234567,341.1234567,-8.1234567,1.12e-05,i,21.123,0.123,22.123,18.12345678912345\n")
-        f.write("Test_1001,60002.12345678912,341.1234567,-6.1234567,342.1234567,-7.1234567,2.12e-05,r,21.123,0.123,23.123,19.12345678912345\n")
-        f.write("Test_1001,60003.12345678912,342.1234567,-5.1234567,343.1234567,-6.1234567,3.12e-05,z,21.123,0.123,24.123,20.12345678912345\n")
-        f.write("Test_1002,60005.12345678912,344.1234567,-4.1234567,345.1234567,-5.1234567,8.12e-06,r,22.123,0.123,24.123,20.12345678912345\n")
-        f.write("Test_1002,60006.12345678912,345.1234567,-3.1234567,346.1234567,-4.1234567,9.12e-06,i,23.123,0.123,25.123,21.12345678912345\n")
+        f.write(
+            "ObjID,fieldMJD_TAI,fieldRA_deg,fieldDec_deg,RA_deg,Dec_deg,astrometricSigma_deg,optFilter,trailedSourceMag,trailedSourceMagSigma,fiveSigmaDepth_mag,phase_deg\n"
+        )
+        f.write(
+            "Test_1001,60001.12345678912,340.1234567,-7.1234567,341.1234567,-8.1234567,1.12e-05,i,21.123,0.123,22.123,18.12345678912345\n"
+        )
+        f.write(
+            "Test_1001,60002.12345678912,341.1234567,-6.1234567,342.1234567,-7.1234567,2.12e-05,r,21.123,0.123,23.123,19.12345678912345\n"
+        )
+        f.write(
+            "Test_1001,60003.12345678912,342.1234567,-5.1234567,343.1234567,-6.1234567,3.12e-05,z,21.123,0.123,24.123,20.12345678912345\n"
+        )
+        f.write(
+            "Test_1002,60005.12345678912,344.1234567,-4.1234567,345.1234567,-5.1234567,8.12e-06,r,22.123,0.123,24.123,20.12345678912345\n"
+        )
+        f.write(
+            "Test_1002,60006.12345678912,345.1234567,-3.1234567,346.1234567,-4.1234567,9.12e-06,i,23.123,0.123,25.123,21.12345678912345\n"
+        )
 
     # Call run_sorcha (assuming it's part of your sorcha_utils and not patched)
     run_sorcha(
@@ -120,9 +143,9 @@ def test_run_sorcha(mock_subprocess_run, tmpdir, mock_orbits, mock_physical_para
         mock_physical_params_df,
         pointing_file,
         "sorcha_output",
-        output_dir
+        output_dir,
     )
-    
+
     # Check that subprocess.run was called with the correct command
     expected_command = f"sorcha run -c {config_file} -p {physical_params_file} -ob {orbits_file} -pd {pointing_file} -o {output_dir}/sorcha_output -t sorcha_output -f"
     mock_subprocess_run.assert_called_once_with(expected_command, shell=True)

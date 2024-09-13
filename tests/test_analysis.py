@@ -1,7 +1,10 @@
 import os
+
+import pytest
+
 from adam_impact_study.analysis import plot_ip_over_time
 from adam_impact_study.impacts_study import ImpactStudyResults
-import pytest
+
 
 @pytest.fixture
 def impact_study_results():
@@ -16,6 +19,7 @@ def impact_study_results():
     )
 
     return impact_result
+
 
 def test_plot_ip_over_time(impact_study_results, tmpdir):
     tmpdir_path = tmpdir.mkdir("plots")
