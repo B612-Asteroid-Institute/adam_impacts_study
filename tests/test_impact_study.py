@@ -2,6 +2,7 @@ import pytest
 from adam_core.propagator.adam_assist import ASSISTPropagator
 
 from adam_impact_study.conversions import impactor_file_to_adam_orbit
+from adam_core.propagator.adam_assist import download_jpl_ephemeris_files
 
 
 @pytest.fixture
@@ -24,6 +25,7 @@ I00009,0.46573276386416124,0.38332295394222854,12.525649549276613,197.2295904835
 
 
 def test_for_impact_dates(impactors_file_mock):
+    download_jpl_ephemeris_files()
     propagator = ASSISTPropagator()
     initial_orbit_objects = impactor_file_to_adam_orbit(impactors_file_mock)
     for obj_id in initial_orbit_objects:
@@ -36,3 +38,5 @@ def test_for_impact_dates(impactors_file_mock):
             )
             < 1
         )
+
+
