@@ -23,4 +23,4 @@ def test_plot_ip_over_time(impact_study_results, tmpdir):
     plot_ip_over_time(impact_study_results)
     object_ids = impact_study_results.object_id.unique()
     for obj_id in object_ids:
-        assert os.path.exists(f"IP_{obj_id}.png"), f"Plot for object {obj_id} was not created"
+        assert os.path.exists(f"IP_{obj_id}.png")

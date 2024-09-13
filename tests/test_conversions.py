@@ -18,7 +18,7 @@ def mock_impactor_file(tmpdir):
     file_path = tmpdir.join("impactor_file.csv")
     impactor_data = """ObjID,q_au,e,i_deg,argperi_deg,node_deg,tp_mjd,epoch_mjd,H_mag,a_au,M_deg
 Test_1001,0.1111111111111111,0.1111111111111111,10.123456789123456,110.12345678912345,210.12345678912345,65001.123456789123,59001.123456789123,24.123456789123456,1.1234567891234567,10.123456789123456
-Test_1002,0.2222222222222222,0.2222222222222222,20.123456789123456,120.12345678912345,220.12345678912345,65002.123456789123,59002.123456789123,24.123456789123456,1.2234567891234567,20.123456789123456
+Test_1002,0.2222222222222222,0.2222222222222222,20.123456789123456,120.12345678912345,220.12345678912345,65002.123456789123,59002.123456789123,25.123456789123456,2.1234567891234567,20.123456789123456
 """
     file_path.write(impactor_data)
     return str(file_path)
@@ -26,20 +26,32 @@ Test_1002,0.2222222222222222,0.2222222222222222,20.123456789123456,120.123456789
 
 def test_impactor_file_to_adam_orbit(mock_impactor_file):
     orbits = impactor_file_to_adam_orbit(mock_impactor_file)
+
     assert isinstance(orbits, Orbits)
     assert len(orbits) == 2
     assert orbits.orbit_id[0].as_py() == "Test_1001"
     assert orbits.orbit_id[1].as_py() == "Test_1002"
-    #use adam_core to convert back to keplerian
+    
+    #Conver back to keplerian and check the values
     coords_kep = orbits.coordinates.to_keplerian()
-    assert(coords_kep.a[0].as_py() == 1.1234567891234567)
-    print(orbits.coordinates.time.mjd())
-    #add more asserts to check the other values
+    assert (coords_kep.a[0].as_py() - 1.1234567891234567) < 1e-13
+    assert (coords_kep.a[1].as_py() - 2.1234567891234567) < 1e-13
+    assert (coords_kep.e[0].as_py() - 0.1111111111111111) < 1e-13
+    assert (coords_kep.e[1].as_py() - 0.2222222222222222) < 1e-13
+    assert (coords_kep.i[0].as_py() - 10.123456789123456) < 1e-13
+    assert (coords_kep.i[1].as_py() - 20.123456789123456) < 1e-13
+    assert (coords_kep.raan[0].as_py() - 210.12345678912345) < 1e-13
+    assert (coords_kep.raan[1].as_py() - 220.12345678912345) < 1e-13
+    assert (coords_kep.ap[0].as_py() - 110.12345678912345) < 1e-13
+    assert (coords_kep.ap[1].as_py() - 120.12345678912345) < 1e-13
+    assert (coords_kep.M[0].as_py() - 10.123456789123456) < 1e-13
+    assert (coords_kep.M[1].as_py() - 20.123456789123456) < 1e-13
+    assert coords_kep.time.mjd()[0].as_py() == 59001.123456789123
+    assert coords_kep.time.mjd()[1].as_py() == 59002.123456789123
 
 
 @pytest.fixture
 def mock_sorcha_output_file(tmpdir):
-    # Create a mock CSV file with Sorcha observations data
     file_path = tmpdir.join("sorcha_output.csv")
     sorcha_data = """ObjID,fieldMJD_TAI,fieldRA_deg,fieldDec_deg,RA_deg,Dec_deg,astrometricSigma_deg,optFilter,trailedSourceMag,trailedSourceMagSigma,fiveSigmaDepth_mag,phase_deg
 Test_1001,60001.12345678912,340.1234567,-7.1234567,341.1234567,-8.1234567,1.12e-05,i,21.123,0.123,22.123,18.12345678912345
@@ -53,19 +65,20 @@ Test_1002,60006.12345678912,345.1234567,-3.1234567,346.1234567,-4.1234567,9.12e-
 
 
 def test_sorcha_output_to_od_observations(mock_sorcha_output_file):
-    # Run the function
     observations = sorcha_output_to_od_observations(mock_sorcha_output_file)
-
-    # Validate the output is an Observations object
     assert observations is not None
     assert len(observations) == 5
-    assert observations.object_id[0].as_py() == "Test_1001"
-    assert observations.object_id[3].as_py() == "Test_1002"
+    assert observations.object_id.to_pylist() == ["Test_1001", "Test_1001", "Test_1001", "Test_1002", "Test_1002"]
+    assert observations.coordinates.lon.to_pylist() == [341.1234567, 342.1234567, 343.1234567, 345.1234567, 346.1234567]
+    assert observations.coordinates.lat.to_pylist() == [-8.1234567, -7.1234567, -6.1234567, -5.1234567, -4.1234567]
+    #Rescale times to TAI
+    times = Timestamp.from_mjd(observations.coordinates.time.mjd(), scale="utc")
+    times_tai= times.rescale("tai")
+    assert times_tai.mjd().to_pylist() == [60001.12345678912, 60002.12345678912, 60003.12345678912, 60005.12345678912, 60006.12345678912]
 
 
 @pytest.fixture
 def mock_observations():
-    # Mock the Observations object for ADES file conversion
     return Observations.from_kwargs(
         obs_id=["obs1", "obs2", "obs3", "obs4", "obs5"],
         object_id=["Test_1001", "Test_1001", "Test_1001", "Test_1002", "Test_1002"],
@@ -93,10 +106,15 @@ def test_od_observations_to_ades_file(mock_observations, tmpdir):
         contents = file.read()
         assert "Vera C. Rubin Observatory" in contents
         print(contents)
-        assert "Test_1001" in contents
-        assert "Test_1002" in contents
+        assert "trkSub|obsTime|ra|dec|mag|rmsMag|band|stn|mode|astCat" in contents
+        assert "Test_1001|2023-02-26T00:00:00.000Z|180.00000000|0.00000000|21.00|0.10|i|X05|NA|NA" in contents
+        assert "Test_1001|2023-02-27T00:00:00.000Z|181.00000000|1.00000000|22.00|0.20|r|X05|NA|NA" in contents
+        assert "Test_1001|2023-02-28T00:00:00.000Z|182.00000000|2.00000000|23.00|0.30|z|X05|NA|NA" in contents
+        assert "Test_1002|2023-03-02T00:00:00.000Z|183.00000000|3.00000000|24.00|0.40|r|X05|NA|NA" in contents
+        assert "Test_1002|2023-03-03T00:00:00.000Z|184.00000000|4.00000000|25.00|0.50|i|X05|NA|NA" in contents
 
 
+#KK2D fix this data and add more asseerts to the test
 @pytest.fixture
 def mock_fo_output_files(tmpdir):
     total_file = tmpdir.join("total.json")
@@ -134,7 +152,6 @@ def test_read_fo_output(mock_fo_output_files, tmpdir):
     elements, covariances = read_fo_output(tmpdir)
     assert elements is not None
     assert covariances is not None
-    
 
 
 def test_fo_to_adam_orbit_cov(mock_fo_output_files, tmpdir):
@@ -142,3 +159,5 @@ def test_fo_to_adam_orbit_cov(mock_fo_output_files, tmpdir):
     assert isinstance(orbits, Orbits)
     assert orbits is not None
     assert orbits.orbit_id[0].as_py() == "Test_1001"
+    assert len(orbits) == 1
+    

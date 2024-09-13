@@ -9,50 +9,6 @@ from adam_core.orbits import Orbits
 from adam_impact_study.conversions import Observations, sorcha_output_to_od_observations
 
 
-class SorchaPhysicalParameters(qv.Table):
-
-    ObjID = qv.LargeStringColumn()
-    H_r = qv.Float64Column()
-    ur = qv.Float64Column()
-    gr = qv.Float64Column()
-    ir = qv.Float64Column()
-    zr = qv.Float64Column()
-    yr = qv.Float64Column()
-    GS = qv.Float64Column()
-
-
-class SorchaOrbits(qv.Table):
-
-    ObjID = qv.LargeStringColumn()
-    FORMAT = qv.StringColumn()
-    a = qv.Float64Column()
-    e = qv.Float64Column()
-    inc = qv.Float64Column()
-    node = qv.Float64Column()
-    argPeri = qv.Float64Column()
-    ma = qv.Float64Column()
-    epochMJD_TDB = qv.Float64Column()
-
-
-class SorchaObservations(qv.Table):
-
-    ObjID = qv.LargeStringColumn()
-    fieldMJD_TAI = qv.Float64Column()
-    fieldRA_deg = qv.Float64Column()
-    fieldDec_deg = qv.Float64Column()
-    RA_deg = qv.Float64Column()
-    Dec_deg = qv.Float64Column()
-    astrometricSigma_deg = qv.Float64Column()
-    optFilter = qv.StringColumn()
-    trailedSourceMag = qv.Float64Column()
-    trailedSourceMagSigma = qv.Float64Column()
-    fiveSigmaDepth_mag = qv.Float64Column()
-    phase_deg = qv.Float64Column()
-    Range_LTC_km = qv.Float64Column()
-    RangeRate_LTC_km_s = qv.Float64Column()
-    Obj_Sun_LTC_km = qv.Float64Column()
-
-
 def generate_sorcha_orbits(adam_orbits: Orbits, sorcha_orbits_file: str) -> None:
     """
     Generate a Sorcha orbit file from a DataFrame of impactor data.
