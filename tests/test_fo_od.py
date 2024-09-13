@@ -1,15 +1,13 @@
 import os
-import shutil
-import pytest
 from unittest.mock import patch
-from adam_impact_study.fo_od import run_fo_od
+
 from adam_core.orbits import Orbits
 
+from adam_impact_study.fo_od import run_fo_od
+
+
 @patch("subprocess.run")
-def test_run_fo_od(
-    mock_subprocess_run, 
-    tmpdir
-):
+def test_run_fo_od(mock_subprocess_run, tmpdir):
     # Setup file paths
     fo_input_file = "input_file.txt"
     fo_output_folder = "output_folder"
@@ -21,7 +19,7 @@ def test_run_fo_od(
     input_file_path = RESULT_DIR.join(fo_input_file)
     input_file_path.write("Dummy input content")
 
-        #Create mock output files
+    # Create mock output files
     output_folder_path = FO_DIR.join(fo_output_folder)
     output_folder_path.mkdir()
 
@@ -31,7 +29,7 @@ def test_run_fo_od(
     covar_file_path = FO_DIR.join(fo_output_folder).join("covar.json")
     covar_result_path = RESULT_DIR.join(fo_output_folder).join("covar.json")
     print(covar_file_path)
-    covar_file_text = '''{
+    covar_file_text = """{
         "covar": [
             [
                 4.16121327342e-12,
@@ -91,15 +89,15 @@ def test_run_fo_od(
             2.1947140448603267e-07
         ],
         "epoch": 2460490.842573
-    }'''
+    }"""
     covar_file_path.write(covar_file_text)
     covar_result_path.write(covar_file_text)
     total_json_file_path = FO_DIR.join(fo_output_folder).join("total.json")
     total_json_result_path = RESULT_DIR.join(fo_output_folder).join("total.json")
-    total_json_text = '''{"num": 1,
+    total_json_text = """{"num": 1,
   "ids":
   [
-    "Test_1001" 
+    "Test_1001"
   ],
   "objects":
   {
@@ -146,14 +144,14 @@ def test_run_fo_od(
           "Jupiter" : 0.237747,
           "Saturn" : 5.066341,
           "Uranus" : 14.993002,
-          "Neptune" : 25.227115 
+          "Neptune" : 25.227115
         }
       },
       "observations":
       {}
     }
     }
-    }'''
+    }"""
     total_json_file_path.write(total_json_text)
     total_json_result_path.write(total_json_text)
 
@@ -163,7 +161,7 @@ def test_run_fo_od(
         fo_output_folder=str(fo_output_folder),
         FO_DIR=str(FO_DIR),
         RUN_DIR=str(RUN_DIR),
-        RESULT_DIR=str(RESULT_DIR)
+        RESULT_DIR=str(RESULT_DIR),
     )
 
     assert os.path.exists(f"{FO_DIR}/{fo_input_file}")
@@ -176,8 +174,8 @@ def test_run_fo_od(
     )
     mock_subprocess_run.assert_called_once_with(expected_command, shell=True)
 
-    #open covar_file_path
-    with open(covar_file_path, 'r') as f:
+    # open covar_file_path
+    with open(covar_file_path, "r") as f:
         covar_content = f.read()
         print(covar_content)
 
@@ -186,7 +184,7 @@ def test_run_fo_od(
 
     # Assert result is Orbits class
     assert isinstance(result, Orbits)
-    #assert result.orbit_id == "Test_1001"
+    # assert result.orbit_id == "Test_1001"
     assert result.coordinates.time.mjd()[0].as_py() - 60490.342573 < 1e-6
     assert result.coordinates.x[0].as_py() - 2.40431779633740117 < 1e-13
     assert result.coordinates.y[0].as_py() - -2.0586498601048886 < 1e-13
@@ -194,4 +192,6 @@ def test_run_fo_od(
     assert result.coordinates.vx[0].as_py() - 0.00508148904172802708 < 1e-13
     assert result.coordinates.vy[0].as_py() - -0.00632766941087369462 < 1e-13
     assert result.coordinates.vz[0].as_py() - 2.1947140448603267e-07 < 1e-13
-    assert result.coordinates.covariance.values[0][0].as_py() - 4.16121327342e-12 < 1e-13
+    assert (
+        result.coordinates.covariance.values[0][0].as_py() - 4.16121327342e-12 < 1e-13
+    )

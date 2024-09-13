@@ -167,63 +167,67 @@ def mock_fo_output_files(tmpdir):
     total_file = tmpdir.join("total.json")
     covar_file = tmpdir.join("covar.json")
 
-    total_data = {"num": 1,
-  "ids":
-  [
-    "Test_1001" 
-  ],
-  "objects":
-  {
-    "Test_1001":
-    {
-      "object": "Test_1001",
-      "packed": "Test_1001",
-      "created": 2460558.23098,
-      "created iso": "2024-09-04T17:32:36Z",
-      "Find_Orb_version": 2460533.50000,
-      "Find_Orb_version_iso": "2024-08-11T00:00:00Z",
-      "elements":
-      {
-        "central body": "Sun",
-        "frame": "J2000 ecliptic",
-        "reference": "Find_Orb",
-        "epoch_iso": "2024-09-29T00:00:00Z",
-        "epoch":  2460582.50000000,
-        "P": 1394.9253892736097, "P sigma": 0.00253,
-        "M":  77.3353733269255, "M sigma": 0.00015,
-        "n":   0.2580783192909, "n sigma": 4.68e-7,
-        "a":   2.4432525915365, "a sigma": 2.95e-6,
-        "e":   0.9842422700762, "e sigma": 3.12e-7,
-        "q":   0.0385001144730, "q sigma": 7.83e-7,
-        "Q":   4.8480050685999, "Q sigma": 5.57e-6,
-        "i": 179.9930186752411, "i sigma": 0.00006,
-        "arg_per":  189.7896453405323, "arg_per sigma":  0.031,
-        "asc_node": 321.7381294352738, "asc_node sigma": 0.031,
-        "Tp": 2460282.84145627, "Tp sigma": 0.000342,
-        "Tp_iso": "2023-12-04T08:11:41.821Z",
-        "H":  16.06,
-        "G":   0.15,
-        "rms_residual": 0.033146,
-        "weighted_rms_residual": 0.9631,
-        "n_resids": 102,
-        "U": 2.9896,
-        "p_NEO": 100.0000,
-        "MOIDs":
-        {
-          "Mercury" : 0.038916,
-          "Venus" : 0.022080,
-          "Earth" : 0.000009,
-          "Mars" : 0.041731,
-          "Jupiter" : 0.237747,
-          "Saturn" : 5.066341,
-          "Uranus" : 14.993002,
-          "Neptune" : 25.227115 
-        }
-      },
-      "observations":
-      {}
-    }
-    }
+    total_data = {
+        "num": 1,
+        "ids": ["Test_1001"],
+        "objects": {
+            "Test_1001": {
+                "object": "Test_1001",
+                "packed": "Test_1001",
+                "created": 2460558.23098,
+                "created iso": "2024-09-04T17:32:36Z",
+                "Find_Orb_version": 2460533.50000,
+                "Find_Orb_version_iso": "2024-08-11T00:00:00Z",
+                "elements": {
+                    "central body": "Sun",
+                    "frame": "J2000 ecliptic",
+                    "reference": "Find_Orb",
+                    "epoch_iso": "2024-09-29T00:00:00Z",
+                    "epoch": 2460582.50000000,
+                    "P": 1394.9253892736097,
+                    "P sigma": 0.00253,
+                    "M": 77.3353733269255,
+                    "M sigma": 0.00015,
+                    "n": 0.2580783192909,
+                    "n sigma": 4.68e-7,
+                    "a": 2.4432525915365,
+                    "a sigma": 2.95e-6,
+                    "e": 0.9842422700762,
+                    "e sigma": 3.12e-7,
+                    "q": 0.0385001144730,
+                    "q sigma": 7.83e-7,
+                    "Q": 4.8480050685999,
+                    "Q sigma": 5.57e-6,
+                    "i": 179.9930186752411,
+                    "i sigma": 0.00006,
+                    "arg_per": 189.7896453405323,
+                    "arg_per sigma": 0.031,
+                    "asc_node": 321.7381294352738,
+                    "asc_node sigma": 0.031,
+                    "Tp": 2460282.84145627,
+                    "Tp sigma": 0.000342,
+                    "Tp_iso": "2023-12-04T08:11:41.821Z",
+                    "H": 16.06,
+                    "G": 0.15,
+                    "rms_residual": 0.033146,
+                    "weighted_rms_residual": 0.9631,
+                    "n_resids": 102,
+                    "U": 2.9896,
+                    "p_NEO": 100.0000,
+                    "MOIDs": {
+                        "Mercury": 0.038916,
+                        "Venus": 0.022080,
+                        "Earth": 0.000009,
+                        "Mars": 0.041731,
+                        "Jupiter": 0.237747,
+                        "Saturn": 5.066341,
+                        "Uranus": 14.993002,
+                        "Neptune": 25.227115,
+                    },
+                },
+                "observations": {},
+            }
+        },
     }
 
     covar_data = {
@@ -234,7 +238,7 @@ def mock_fo_output_files(tmpdir):
                 -2.30283659349e-16,
                 -2.71788684422e-14,
                 -1.04967286688e-14,
-                1.23426143706e-18
+                1.23426143706e-18,
             ],
             [
                 -2.09134780573e-12,
@@ -242,7 +246,7 @@ def mock_fo_output_files(tmpdir):
                 3.56294827847e-17,
                 1.35942552795e-14,
                 5.18898046367e-15,
-                6.94693054473e-19
+                6.94693054473e-19,
             ],
             [
                 -2.30283659349e-16,
@@ -250,7 +254,7 @@ def mock_fo_output_files(tmpdir):
                 5.18082512922e-15,
                 4.41513579676e-18,
                 -1.11430144937e-18,
-                -9.37068796782e-17
+                -9.37068796782e-17,
             ],
             [
                 -2.71788684422e-14,
@@ -258,7 +262,7 @@ def mock_fo_output_files(tmpdir):
                 4.41513579676e-18,
                 2.08874755856e-16,
                 3.6370326027e-17,
-                -8.68973770791e-20
+                -8.68973770791e-20,
             ],
             [
                 -1.04967286688e-14,
@@ -266,7 +270,7 @@ def mock_fo_output_files(tmpdir):
                 -1.11430144937e-18,
                 3.6370326027e-17,
                 6.53394971075e-17,
-                2.33681396804e-20
+                2.33681396804e-20,
             ],
             [
                 1.23426143706e-18,
@@ -274,8 +278,8 @@ def mock_fo_output_files(tmpdir):
                 -9.37068796782e-17,
                 -8.68973770791e-20,
                 2.33681396804e-20,
-                2.54650689185e-18
-            ]
+                2.54650689185e-18,
+            ],
         ],
         "state_vect": [
             2.40431779633740117,
@@ -283,9 +287,9 @@ def mock_fo_output_files(tmpdir):
             1.56463294002342372e-05,
             0.00508148904172802708,
             -0.00632766941087369462,
-            2.1947140448603267e-07
+            2.1947140448603267e-07,
         ],
-        "epoch": 2460490.842573
+        "epoch": 2460490.842573,
     }
 
     total_file.write(json.dumps(total_data))
@@ -313,4 +317,6 @@ def test_fo_to_adam_orbit_cov(mock_fo_output_files, tmpdir):
     assert orbits.coordinates.vy[0].as_py() == -0.00632766941087369462
     assert orbits.coordinates.vz[0].as_py() == 2.1947140448603267e-07
     assert orbits.coordinates.time.mjd()[0].as_py() - 60490.342573 < 1e-6
-    assert orbits.coordinates.covariance.values[0][0].as_py() - 4.16121327342e-12 < 1e-13
+    assert (
+        orbits.coordinates.covariance.values[0][0].as_py() - 4.16121327342e-12 < 1e-13
+    )
