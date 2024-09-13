@@ -8,14 +8,13 @@ from adam_impact_study.fo_od import run_fo_od
 
 @patch("subprocess.run")
 def test_run_fo_od(mock_subprocess_run, tmpdir):
-    # Setup file paths
     fo_input_file = "input_file.txt"
     fo_output_folder = "output_folder"
     FO_DIR = tmpdir.mkdir("FO_DIR")
     RUN_DIR = tmpdir.mkdir("RUN_DIR")
     RESULT_DIR = tmpdir.mkdir("RESULT_DIR")
 
-    # Create a dummy input file in RESULT_DIR to simulate the input
+    #Create mock input files
     input_file_path = RESULT_DIR.join(fo_input_file)
     input_file_path.write("Dummy input content")
 
@@ -166,7 +165,7 @@ def test_run_fo_od(mock_subprocess_run, tmpdir):
 
     assert os.path.exists(f"{FO_DIR}/{fo_input_file}")
 
-    # Verify that the correct find_orb command was passed to subprocess.run
+    # Verify that correct find_orb command was run
     expected_command = (
         f"cd {FO_DIR}; ./fo {fo_input_file} "
         f"-O {fo_output_folder}; cp -r {fo_output_folder} "
@@ -174,17 +173,10 @@ def test_run_fo_od(mock_subprocess_run, tmpdir):
     )
     mock_subprocess_run.assert_called_once_with(expected_command, shell=True)
 
-    # open covar_file_path
-    with open(covar_file_path, "r") as f:
-        covar_content = f.read()
-        print(covar_content)
-
-    print(f"{FO_DIR}/{fo_output_folder}/covar.json")
     assert os.path.exists(f"{FO_DIR}/{fo_output_folder}/covar.json")
 
-    # Assert result is Orbits class
     assert isinstance(result, Orbits)
-    # assert result.orbit_id == "Test_1001"
+    assert result.orbit_id.as_py() == "Test_1001"
     assert result.coordinates.time.mjd()[0].as_py() - 60490.342573 < 1e-6
     assert result.coordinates.x[0].as_py() - 2.40431779633740117 < 1e-13
     assert result.coordinates.y[0].as_py() - -2.0586498601048886 < 1e-13

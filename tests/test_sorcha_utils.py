@@ -112,7 +112,7 @@ def test_run_sorcha(mock_subprocess_run, tmpdir, mock_orbits, mock_physical_para
     os.makedirs(sorcha_output_dir, exist_ok=True)
     sorcha_output_file = sorcha_output_dir.join("output_file.txt")
 
-    # Write dummy content to simulate the expected output from sorcha
+    # Write dummy file to simulate sorcha output
     with open(sorcha_output_file, "w") as f:
         f.write(
             "ObjID,fieldMJD_TAI,fieldRA_deg,fieldDec_deg,RA_deg,Dec_deg,astrometricSigma_deg,optFilter,trailedSourceMag,trailedSourceMagSigma,fiveSigmaDepth_mag,phase_deg\n"
@@ -133,7 +133,6 @@ def test_run_sorcha(mock_subprocess_run, tmpdir, mock_orbits, mock_physical_para
             "Test_1002,60006.12345678912,345.1234567,-3.1234567,346.1234567,-4.1234567,9.12e-06,i,23.123,0.123,25.123,21.12345678912345\n"
         )
 
-    # Call run_sorcha (assuming it's part of your sorcha_utils and not patched)
     run_sorcha(
         mock_orbits,
         config_file,

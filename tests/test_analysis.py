@@ -8,7 +8,6 @@ from adam_impact_study.impacts_study import ImpactStudyResults
 
 @pytest.fixture
 def impact_study_results():
-    # Create sample data using quiver's Table class
     object_ids = ["obj1", "obj1", "obj1", "obj2", "obj2", "obj2"]
     days = [1.0, 2.0, 3.0, 1.0, 2.0, 3.0]
     impact_probabilities = [0.01, 0.02, 0.03, 0.04, 0.05, 0.06]

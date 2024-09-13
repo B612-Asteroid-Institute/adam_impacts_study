@@ -37,7 +37,7 @@ def test_impactor_file_to_adam_orbit(mock_impactor_file):
     assert orbits.orbit_id[0].as_py() == "Test_1001"
     assert orbits.orbit_id[1].as_py() == "Test_1002"
 
-    # Conver back to keplerian and check the values
+    # Convert back to keplerian and check the values
     coords_kep = orbits.coordinates.to_keplerian()
     assert (coords_kep.a[0].as_py() - 1.1234567891234567) < 1e-13
     assert (coords_kep.a[1].as_py() - 2.1234567891234567) < 1e-13
