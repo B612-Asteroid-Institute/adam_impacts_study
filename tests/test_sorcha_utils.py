@@ -41,7 +41,6 @@ def test_generate_sorcha_orbits(mock_orbits, tmpdir):
     impactor_table = pa.csv.read_csv(
         sorcha_orbits_file, parse_options=pa.csv.ParseOptions(delimiter=" ")
     )
-    print(impactor_table)
 
     assert len(impactor_table) == 1
     assert impactor_table["ObjID"][0].as_py() == "Object1"

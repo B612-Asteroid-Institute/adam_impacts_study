@@ -27,7 +27,6 @@ def test_run_fo_od(mock_subprocess_run, tmpdir):
 
     covar_file_path = FO_DIR.join(fo_output_folder).join("covar.json")
     covar_result_path = RESULT_DIR.join(fo_output_folder).join("covar.json")
-    print(covar_file_path)
     covar_file_text = """{
         "covar": [
             [

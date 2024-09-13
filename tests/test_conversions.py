@@ -138,7 +138,6 @@ def test_od_observations_to_ades_file(mock_observations, tmpdir):
     with open(output_file, "r") as file:
         contents = file.read()
         assert "Vera C. Rubin Observatory" in contents
-        print(contents)
         assert "trkSub|obsTime|ra|dec|mag|rmsMag|band|stn|mode|astCat" in contents
         assert (
             "Test_1001|2023-02-26T00:00:00.000Z|180.00000000|0.00000000|21.00|0.10|i|X05|NA|NA"
