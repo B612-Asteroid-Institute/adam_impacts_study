@@ -3,7 +3,6 @@ import subprocess
 from typing import Optional
 
 import pandas as pd
-import quivr as qv
 from adam_core.orbits import Orbits
 
 from adam_impact_study.conversions import Observations, sorcha_output_to_od_observations
