@@ -36,6 +36,7 @@ def run_impact_study_fo(
     FO_DIR: str,
     RUN_DIR: str,
     RESULT_DIR: str,
+    chunk_size: Optional[int] = 1,
 ) -> Optional[ImpactStudyResults]:
     """
     Run an impact study using the given impactors and configuration files.
@@ -128,13 +129,28 @@ def run_impact_study_fo(
     impact_results = None
     for obj in object_ids:
         print("Object ID: ", obj)
+
+        initial_orbit = adam_orbit_objects.apply_mask(
+            pc.equal(adam_orbit_objects.object_id, obj_id)
+        )
+        impact_date = initial_orbit.coordinates.time.add_days(30)
+
         od_obs = od_observations.apply_mask(pc.equal(od_observations.object_id, obj))
-        days = od_obs.coordinates.time.days.to_numpy()
-        unique_days = np.unique(days)
-        for day in unique_days:
+
+        min_mjd = pc.min(od_obs.coordinates.time.mjd())
+        mask = pc.equal(od_obs.coordinates.time.mjd(), min_mjd)
+        first_obs = od_obs.apply_mask(mask).coordinates.time
+
+        # initialize time to first observation
+        day = first_obs
+
+        while day.mjd()[0].as_py() < impact_date.mjd()[0].as_py():
             print("Day: ", day)
+            day = day.add_days(chunk_size)
             filtered_obs = od_obs.apply_mask(
-                pc.less_equal(od_obs.coordinates.time.days.to_numpy(), day)
+                pc.less_equal(
+                    od_obs.coordinates.time.days.to_numpy(), day.mjd()[0].as_py()
+                )
             )
             print("Filtered Observations: ", filtered_obs)
             print("Filtered Days: ", filtered_obs.coordinates.time.days.to_numpy())
@@ -161,6 +177,7 @@ def run_impact_study_fo(
 
             if fo_orbit is not None and len(fo_orbit) > 0:
                 time = adam_orbit_objects.select("object_id", obj).coordinates.time[0]
+                print(f"Time: {time}")
                 orbit = fo_orbit
                 try:
                     # Propagate orbits and calculate impact probabilities
@@ -171,6 +188,9 @@ def run_impact_study_fo(
                     print(f"Propagated orbit elements: {result.coordinates.values}")
                     results, impacts = calculate_impacts(
                         result, 60, propagator, num_samples=10000
+                    )
+                    result.to_parquet(
+                        f"{RESULT_DIR}/propagated_orbit_{obj}_{day}.parquet"
                     )
                     print(f"Impacts: {impacts}")
                     ip = calculate_impact_probabilities(results, impacts)

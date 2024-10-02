@@ -13,7 +13,27 @@ from adam_impact_study.sorcha_utils import (
     generate_sorcha_orbits,
     generate_sorcha_physical_params,
     run_sorcha,
+    write_config_file_timeframe,
 )
+
+
+def test_write_config_file_timeframe(tmpdir):
+    impact_date = 59580.0
+    config_file = tmpdir.join("config.txt")
+    written_file = write_config_file_timeframe(impact_date, config_file)
+
+    with open(written_file, "r") as f:
+        content = f.read()
+
+    assert os.path.exists(written_file)
+
+    pointing_command = (
+        f"SELECT observationId, observationStartMJD as observationStartMJD_TAI, visitTime, visitExposureTime, filter, "
+        f"seeingFwhmGeom as seeingFwhmGeom_arcsec, seeingFwhmEff as seeingFwhmEff_arcsec, fiveSigmaDepth as fieldFiveSigmaDepth_mag , "
+        f"fieldRA as fieldRA_deg, fieldDec as fieldDec_deg, rotSkyPos as fieldRotSkyPos_deg FROM observations "
+        f"WHERE observationStartMJD < {impact_date} ORDER BY observationId"
+    )
+    assert pointing_command in content
 
 
 @pytest.fixture
