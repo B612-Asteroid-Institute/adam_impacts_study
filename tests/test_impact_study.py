@@ -97,7 +97,7 @@ I00001,0.9125315468414172,0.3841166640887326,2.1597232256169803,42.1290789217616
         cumulative_probability=[1 / 3, 2 / 3, 0.0],
     )
 
-    mock_calculate_impacts.return_value = []
+    mock_calculate_impacts.return_value = [None, None]
 
     mock_run_sorcha.return_value = Observations.from_kwargs(
         obs_id=["obs1", "obs2", "obs3", "obs4", "obs5"],

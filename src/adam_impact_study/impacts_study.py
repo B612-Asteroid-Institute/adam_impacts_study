@@ -142,14 +142,15 @@ def run_impact_study_fo(
         first_obs = od_obs.apply_mask(mask).coordinates.time
 
         # initialize time to first observation
-        day = first_obs
+        day_count = first_obs
 
-        while day.mjd()[0].as_py() < impact_date.mjd()[0].as_py():
+        while day_count.mjd()[0].as_py() < impact_date.mjd()[0].as_py():
+            day_count = day_count.add_days(chunk_size)
+            day = day_count.mjd()[0].as_py()
             print("Day: ", day)
-            day = day.add_days(chunk_size)
             filtered_obs = od_obs.apply_mask(
                 pc.less_equal(
-                    od_obs.coordinates.time.days.to_numpy(), day.mjd()[0].as_py()
+                    od_obs.coordinates.time.days.to_numpy(), day
                 )
             )
             print("Filtered Observations: ", filtered_obs)
@@ -177,7 +178,7 @@ def run_impact_study_fo(
 
             if fo_orbit is not None and len(fo_orbit) > 0:
                 time = adam_orbit_objects.select("object_id", obj).coordinates.time[0]
-                print(f"Time: {time}")
+                print(f"Time: {time.mjd()}")
                 orbit = fo_orbit
                 try:
                     # Propagate orbits and calculate impact probabilities
@@ -186,6 +187,10 @@ def run_impact_study_fo(
                     )
                     print(f"Propagated orbit: {result}")
                     print(f"Propagated orbit elements: {result.coordinates.values}")
+                except Exception as e:
+                    print(f"Error propagating orbits for {obj}: {e}")
+                    continue
+                try:
                     results, impacts = calculate_impacts(
                         result, 60, propagator, num_samples=10000
                     )
