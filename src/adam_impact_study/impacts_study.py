@@ -149,9 +149,7 @@ def run_impact_study_fo(
             day = day_count.mjd()[0].as_py()
             print("Day: ", day)
             filtered_obs = od_obs.apply_mask(
-                pc.less_equal(
-                    od_obs.coordinates.time.days.to_numpy(), day
-                )
+                pc.less_equal(od_obs.coordinates.time.days.to_numpy(), day)
             )
             print("Filtered Observations: ", filtered_obs)
             print("Filtered Days: ", filtered_obs.coordinates.time.days.to_numpy())
