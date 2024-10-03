@@ -9,6 +9,21 @@ from adam_impact_study.conversions import Observations, sorcha_output_to_od_obse
 
 
 def write_config_file_timeframe(impact_date, config_file):
+    """
+    Write a Sorcha configuration file for a given impact date.
+
+    Parameters
+    ----------
+    impact_date : float
+        Impact date in MJD.
+    config_file : str
+        Path to the file where the Sorcha configuration data will be saved.
+
+    Returns
+    -------
+    config_file : str
+        Path to the file where the Sorcha configuration data was saved.
+    """
     pointing_command = f"SELECT observationId, observationStartMJD as observationStartMJD_TAI, visitTime, visitExposureTime, filter, seeingFwhmGeom as seeingFwhmGeom_arcsec, seeingFwhmEff as seeingFwhmEff_arcsec, fiveSigmaDepth as fieldFiveSigmaDepth_mag , fieldRA as fieldRA_deg, fieldDec as fieldDec_deg, rotSkyPos as fieldRotSkyPos_deg FROM observations WHERE observationStartMJD < {impact_date} ORDER BY observationId"
     config_text = f"""
 [Sorcha Configuration File]
