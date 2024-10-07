@@ -29,6 +29,7 @@ def run_impact_study_all(
     FO_DIR: str,
     RUN_DIR: str,
     RESULT_DIR: str,
+    chunk_size: Optional[int] = 1,
 )-> Optional[ImpactStudyResults]:
     """
     Run an impact study for all impactors in the input file.
@@ -49,6 +50,8 @@ def run_impact_study_all(
         Directory path where the script is being run.
     RESULT_DIR : str
         Directory where the results will be stored.
+    chunk_size : int, optional
+        Number of days to propagate orbits at a time.
 
     Returns
     -------
@@ -60,13 +63,14 @@ def run_impact_study_all(
     os.makedirs(f"{RESULT_DIR}", exist_ok=True)
 
     impactor_orbits = impactor_file_to_adam_orbit(impactors_file)
-
+    print("Impactor Orbits: ", impactor_orbits)
     object_ids = impactor_orbits.object_id.unique()
+    print("Object IDs: ", object_ids)
 
     impact_results = None
 
     for obj_id in object_ids:
-        impactor_orbit = impactor_orbits[impactor_orbits.object_id == obj_id]
+        impactor_orbit = impactor_orbits.apply_mask(pc.equal(impactor_orbits.object_id, obj_id))
         impact_result = run_impact_study_fo(
             impactor_orbit,
             propagator,
