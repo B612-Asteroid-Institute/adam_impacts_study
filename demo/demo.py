@@ -5,7 +5,7 @@ from adam_impact_study.impacts_study import run_impact_study_all
 
 # Define the run name and directories
 RUN_NAME = "Impact_Study_Demo"
-RESULT_DIR = "results_newsorch"
+RESULT_DIR = "results"
 RUN_DIR = os.getcwd()
 FO_DIR = "../find_orb/find_orb"
 
