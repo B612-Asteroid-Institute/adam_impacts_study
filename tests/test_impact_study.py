@@ -17,7 +17,7 @@ from adam_impact_study.conversions import (
     Photometry,
     impactor_file_to_adam_orbit,
 )
-from adam_impact_study.impacts_study import run_impact_study_fo
+from adam_impact_study.impacts_study import run_impact_study_all
 
 
 @pytest.fixture
@@ -69,16 +69,10 @@ def test_run_impact_study_fo(
     tmpdir,
 ):
     impactors_file = tmpdir.join("impactors.csv")
-    sorcha_config_file = tmpdir.join("sorcha_config.txt")
-    sorcha_orbits_file = tmpdir.join("sorcha_orbits.txt")
-    sorcha_physical_params_file = tmpdir.join("sorcha_physical_params.txt")
-    sorcha_output_file = tmpdir.join("sorcha_output.txt")
     pointing_file = tmpdir.join("pointing_file.txt")
 
     sorcha_physical_params_string = "15.88 1.72 0.48 -0.11 -0.12 -0.12 0.15"
-    sorcha_output_name = "sorcha_output"
-    fo_input_file_base = "fo_input"
-    fo_output_file_base = "fo_output"
+    RUN_NAME = "Impact_Study_Test"
     FO_DIR = tmpdir.mkdir("FO_DIR")
     RUN_DIR = tmpdir.mkdir("RUN_DIR")
     RESULT_DIR = tmpdir.mkdir("RESULT_DIR")
@@ -138,17 +132,11 @@ I00001,0.9125315468414172,0.3841166640887326,2.1597232256169803,42.1290789217616
 
     # Call the function with the mocked inputs
     try:
-        run_impact_study_fo(
+        run_impact_study_all(
             str(impactors_file),
-            str(sorcha_config_file),
-            str(sorcha_orbits_file),
-            str(sorcha_physical_params_file),
-            str(sorcha_output_file),
             sorcha_physical_params_string,
             str(pointing_file),
-            sorcha_output_name,
-            fo_input_file_base,
-            fo_output_file_base,
+            str(RUN_NAME),
             str(FO_DIR),
             str(RUN_DIR),
             str(RESULT_DIR),
