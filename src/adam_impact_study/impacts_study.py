@@ -30,7 +30,7 @@ def run_impact_study_all(
     RUN_DIR: str,
     RESULT_DIR: str,
     chunk_size: Optional[int] = 1,
-)-> Optional[ImpactStudyResults]:
+) -> Optional[ImpactStudyResults]:
     """
     Run an impact study for all impactors in the input file.
 
@@ -70,7 +70,9 @@ def run_impact_study_all(
     impact_results = None
 
     for obj_id in object_ids:
-        impactor_orbit = impactor_orbits.apply_mask(pc.equal(impactor_orbits.object_id, obj_id))
+        impactor_orbit = impactor_orbits.apply_mask(
+            pc.equal(impactor_orbits.object_id, obj_id)
+        )
         impact_result = run_impact_study_fo(
             impactor_orbit,
             propagator,
@@ -166,7 +168,9 @@ def run_impact_study_fo(
     fo_output_file_base = f"fo_output_{RUN_NAME}_{obj_id}"
 
     impact_date = impactor_orbit.coordinates.time.add_days(30)
-    sorcha_config_file = write_config_file_timeframe(impact_date.mjd()[0], sorcha_config_file_name)
+    sorcha_config_file = write_config_file_timeframe(
+        impact_date.mjd()[0], sorcha_config_file_name
+    )
 
     # Run Sorcha to generate observational data
     od_observations = run_sorcha(
