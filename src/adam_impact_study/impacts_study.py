@@ -159,9 +159,9 @@ def run_impact_study_fo(
 
     print("Object ID: ", obj_id)
 
-    sorcha_config_file_name = f"data/sorcha_config_{RUN_NAME}_{obj_id}.ini"
-    sorcha_orbits_file = f"data/sorcha_input_{RUN_NAME}_{obj_id}.csv"
-    sorcha_physical_params_file = f"data/sorcha_params_{RUN_NAME}_{obj_id}.csv"
+    sorcha_config_file_name = f"sorcha_config_{RUN_NAME}_{obj_id}.ini"
+    sorcha_orbits_file = f"sorcha_input_{RUN_NAME}_{obj_id}.csv"
+    sorcha_physical_params_file = f"sorcha_params_{RUN_NAME}_{obj_id}.csv"
     sorcha_output_name = f"sorcha_output_{RUN_NAME}_{obj_id}"
     sorcha_output_file = f"{sorcha_output_name}.csv"
     fo_input_file_base = f"fo_input_{RUN_NAME}_{obj_id}"
