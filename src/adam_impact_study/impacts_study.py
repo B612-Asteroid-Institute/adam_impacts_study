@@ -198,7 +198,7 @@ def run_impact_study_fo(
     # Initialize time to first observation
     day_count = first_obs
 
-    print ("Impact Date: ", impact_date)
+    print("Impact Date: ", impact_date)
 
     while day_count.mjd()[0].as_py() < impact_date.mjd()[0].as_py():
         day_count = day_count.add_days(chunk_size)
