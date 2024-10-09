@@ -1,16 +1,23 @@
-import pytest
 from unittest.mock import patch
-import pandas as pd
-from adam_core.propagator.adam_assist import ASSISTPropagator
 
-from adam_impact_study.conversions import impactor_file_to_adam_orbit
-from adam_core.propagator.adam_assist import download_jpl_ephemeris_files
-from adam_impact_study.impacts_study import run_impact_study_fo
-from adam_impact_study.conversions import Observations, Photometry
-from adam_core.orbits import Orbits
-from adam_core.coordinates import CartesianCoordinates, SphericalCoordinates, Origin
+import pandas as pd
+import pytest
+from adam_core.coordinates import CartesianCoordinates, Origin, SphericalCoordinates
+from adam_core.dynamics.impacts import ImpactProbabilities
 from adam_core.observers import Observers
+from adam_core.orbits import Orbits
+from adam_core.propagator.adam_assist import (
+    ASSISTPropagator,
+    download_jpl_ephemeris_files,
+)
 from adam_core.time import Timestamp
+
+from adam_impact_study.conversions import (
+    Observations,
+    Photometry,
+    impactor_file_to_adam_orbit,
+)
+from adam_impact_study.impacts_study import run_impact_study_all
 
 
 @pytest.fixture
@@ -48,30 +55,44 @@ def test_for_impact_dates(impactors_file_mock):
         )
 
 
+@patch("adam_impact_study.impacts_study.calculate_impact_probabilities")
+@patch("adam_impact_study.impacts_study.calculate_impacts")
+@patch("adam_impact_study.impacts_study.ASSISTPropagator")
 @patch("adam_impact_study.impacts_study.run_fo_od")
 @patch("adam_impact_study.impacts_study.run_sorcha")
-def test_run_impact_study_fo(mock_run_sorcha, mock_run_fo_od, tmpdir):
+def test_run_impact_study_fo(
+    mock_run_sorcha,
+    mock_run_fo_od,
+    mock_propagator,
+    mock_calculate_impacts,
+    mock_calculate_impact_probabilities,
+    tmpdir,
+):
     impactors_file = tmpdir.join("impactors.csv")
-    sorcha_config_file = tmpdir.join("sorcha_config.txt")
-    sorcha_orbits_file = tmpdir.join("sorcha_orbits.txt")
-    sorcha_physical_params_file = tmpdir.join("sorcha_physical_params.txt")
-    sorcha_output_file = tmpdir.join("sorcha_output.txt")
     pointing_file = tmpdir.join("pointing_file.txt")
-    
+
     sorcha_physical_params_string = "15.88 1.72 0.48 -0.11 -0.12 -0.12 0.15"
-    sorcha_output_name = "sorcha_output"
-    fo_input_file_base = "fo_input"
-    fo_output_file_base = "fo_output"
+    RUN_NAME = "Impact_Study_Test"
     FO_DIR = tmpdir.mkdir("FO_DIR")
     RUN_DIR = tmpdir.mkdir("RUN_DIR")
     RESULT_DIR = tmpdir.mkdir("RESULT_DIR")
 
     csv_data = """ObjID,q_au,e,i_deg,argperi_deg,node_deg,tp_mjd,epoch_mjd,H_mag,a_au,M_deg
+I00000,0.9346171379884184,0.3895326794095313,7.566861357949266,38.66627303305196,179.34855525994243,66264.30470146648,66202.91220580554,24.931599051023323,1.5309863549852576,328.05797964887734
 I00001,0.9125315468414172,0.3841166640887326,2.1597232256169803,42.129078921761604,100.19335181650827,61804.80697714385,61741.401768986136,24.999606842888358,1.481662993026473,325.34987099452826"""
     impactors_file = tmpdir.join("Impactors.csv")
     impactors_file.write(csv_data)
 
-    # Mock behavior of run_sorcha and run_fo_od
+    # Mock returns
+    mock_calculate_impact_probabilities.return_value = ImpactProbabilities.from_kwargs(
+        orbit_id=["1", "2", "3"],
+        impacts=[1, 2, 0],
+        variants=[3, 3, 3],
+        cumulative_probability=[1 / 3, 2 / 3, 0.0],
+    )
+
+    mock_calculate_impacts.return_value = [None, None]
+
     mock_run_sorcha.return_value = Observations.from_kwargs(
         obs_id=["obs1", "obs2", "obs3", "obs4", "obs5"],
         object_id=["Test_1001", "Test_1001", "Test_1001", "Test_1002", "Test_1002"],
@@ -93,13 +114,13 @@ I00001,0.9125315468414172,0.3841166640887326,2.1597232256169803,42.1290789217616
     )
 
     cartesian_coords = CartesianCoordinates.from_kwargs(
-        x=[0.1],
-        y=[0.2],
-        z=[-0.3],
-        vx=[-0.01],
-        vy=[0.02],
-        vz=[0.03],
-        time=Timestamp.from_mjd([59000], scale="tdb"),
+        x=[2.7003],
+        y=[-0.45319],
+        z=[0.065459],
+        vx=[0.00013123],
+        vy=[0.0015833],
+        vz=[-0.0000083965],
+        time=Timestamp.from_mjd([60200.0], scale="tdb"),
         origin=Origin.from_kwargs(code=["SUN"]),
         frame="ecliptic",
     )
@@ -111,23 +132,18 @@ I00001,0.9125315468414172,0.3841166640887326,2.1597232256169803,42.1290789217616
 
     # Call the function with the mocked inputs
     try:
-        run_impact_study_fo(
+        run_impact_study_all(
             str(impactors_file),
-            str(sorcha_config_file),
-            str(sorcha_orbits_file),
-            str(sorcha_physical_params_file),
-            str(sorcha_output_file),
             sorcha_physical_params_string,
             str(pointing_file),
-            sorcha_output_name,
-            fo_input_file_base,
-            fo_output_file_base,
+            str(RUN_NAME),
             str(FO_DIR),
             str(RUN_DIR),
-            str(RESULT_DIR)
+            str(RESULT_DIR),
         )
     except Exception as e:
         pytest.fail(f"run_impact_study_fo raised an exception: {e}")
 
-    mock_run_sorcha.assert_called_once()
-    mock_run_fo_od.assert_called()  # Ensure run_fo_od was called
+    mock_run_sorcha.assert_called()
+    mock_run_fo_od.assert_called()
+    mock_calculate_impact_probabilities.assert_called()
