@@ -210,7 +210,7 @@ def run_impact_study_fo(
         print("Filtered Observations: ", filtered_obs)
         print("Filtered Days: ", filtered_obs.coordinates.time.days.to_numpy())
 
-        fo_file_name = f"{fo_input_file_base}_{obj_id}_{day}.csv"
+        fo_file_name = f"{fo_input_file_base}_{day}.csv"
         fo_output_folder = f"{fo_output_file_base}_{obj_id}_{day}"
         od_observations_to_ades_file(filtered_obs, f"{RESULT_DIR}/{fo_file_name}")
 
