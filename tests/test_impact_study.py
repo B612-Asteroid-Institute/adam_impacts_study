@@ -83,6 +83,8 @@ I00001,0.9125315468414172,0.3841166640887326,2.1597232256169803,42.1290789217616
     impactors_file = tmpdir.join("Impactors.csv")
     impactors_file.write(csv_data)
 
+    run_config_file = tmpdir.join("run_config.json")
+
     # Mock returns
     mock_calculate_impact_probabilities.return_value = ImpactProbabilities.from_kwargs(
         orbit_id=["1", "2", "3"],
@@ -134,7 +136,7 @@ I00001,0.9125315468414172,0.3841166640887326,2.1597232256169803,42.1290789217616
     try:
         run_impact_study_all(
             str(impactors_file),
-            sorcha_physical_params_string,
+            str(run_config_file),
             str(pointing_file),
             str(RUN_NAME),
             str(FO_DIR),

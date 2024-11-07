@@ -12,14 +12,14 @@ FO_DIR = "../find_orb/find_orb"
 # Define the input files
 impactors_file = "data/10_impactors.csv"
 pointing_file = "data/baseline_v2.0_1yr.db"
-chunk_size = 1
+chunk_size = 15
 
-physical_params_string = "15.88 1.72 0.48 -0.11 -0.12 -0.12 0.15"
+run_config_file = "impact_run_config.json"
 
 # Run the impact study
 impact_study_results = run_impact_study_all(
     impactors_file,
-    physical_params_string,
+    run_config_file,
     pointing_file,
     RUN_NAME,
     FO_DIR,

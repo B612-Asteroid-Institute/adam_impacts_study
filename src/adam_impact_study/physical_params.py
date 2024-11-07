@@ -2,10 +2,7 @@ import quivr as qv
 import numpy as np
 import pyarrow as pa
 import os
-import yaml
-
-import unittest
-from unittest.mock import patch
+import json
 
 class ImpactStudyConfig(qv.Table):
     C_albedo_min = qv.Float64Column(default=0.03)
@@ -122,54 +119,77 @@ def determine_ast_class(percent_C, percent_S):
 def calculate_H(diameter, albedo):
     return 15.618 - 5 * np.log10(diameter) - 2.5 * np.log10(albedo)
     
-def read_config_file(config_file):
-    with open(config_file, "r") as f:
-        config_str = f.read()
-    return ImpactStudyConfig.from_kwargs(
-
-    )
-    
 def load_config(file_path: str) -> ImpactStudyConfig:
+    print(file_path)
     with open(file_path, "r") as file:
-        config_data = yaml.safe_load(file)
-    config = ImpactStudyConfig(**config_data)
+        config_data = json.load(file)
+    config = ImpactStudyConfig.from_kwargs(
+        C_albedo_min=[config_data.get("C_albedo_min", 0.03)],
+        C_albedo_max=[config_data.get("C_albedo_max", 0.09)],
+        S_albedo_min=[config_data.get("S_albedo_min", 0.10)],
+        S_albedo_max=[config_data.get("S_albedo_max", 0.22)],
+        percent_C=[config_data.get("percent_C", 0.5)],
+        percent_S=[config_data.get("percent_S", 0.5)],
+        min_diam=[config_data.get("min_diam", 0.001)],
+        max_diam=[config_data.get("max_diam", 100)],
+        n_asteroids=[config_data.get("n_asteroids", 1000)],
+        u_r_C=[config_data.get("u_r_C", 1.786)],
+        g_r_C=[config_data.get("g_r_C", 0.474)],
+        i_r_C=[config_data.get("i_r_C", -0.119)],
+        z_r_C=[config_data.get("z_r_C", -0.126)],
+        y_r_C=[config_data.get("y_r_C", -0.131)],
+        u_r_S=[config_data.get("u_r_S", 2.182)],
+        g_r_S=[config_data.get("g_r_S", 0.65)],
+        i_r_S=[config_data.get("i_r_S", -0.2)],
+        z_r_S=[config_data.get("z_r_S", -0.146)],
+        y_r_S=[config_data.get("y_r_S", -0.151)]
+    )
     return config
 
 
-def create_physical_params(config_file):
+def create_physical_params_single(config_file, obj_id):
     config = load_config(config_file)
-    phys_params = PhotometricProperties.empty()
-    for ast in range(config.n_asteroids):
-        ast_class = determine_ast_class()
-        d = select_asteroid_size(config.min_diam, config.max_diam)
+
+    ast_class = determine_ast_class(
+        config.percent_C.to_numpy()[0],
+        config.percent_S.to_numpy()[0]
+    )
+    d = select_asteroid_size(
+        config.min_diam.to_numpy()[0],
+        config.max_diam.to_numpy()[0]
+    )
         
-        if ast_class == "C":
-            albedo = select_albedo_from_range(config.C_albedo_min, config.C_albedo_max)
-            H = calculate_H(d, albedo)
-            phy_param = PhotometricProperties.from_kwargs(
-                H_mf=[H],
-                u_mf=[config.u_r_C],
-                g_mf=[config.g_r_C],
-                r_mf=[config.i_r_C],
-                i_mf=[config.z_r_C],
-                z_mf=[config.y_r_C],
-                GS=[0.15],
-                ObjID=[str(ast)],
-            )
-        elif ast_class == "S":
-            albedo = select_albedo_from_range(config.S_albedo_min, config.S_albedo_max)
-            H = calculate_H(d, albedo)
-            phy_param = PhotometricProperties.from_kwargs(
-                H_mf=[H],
-                u_mf=[config.u_r_S],
-                g_mf=[config.g_r_S],
-                r_mf=[config.i_r_S],
-                i_mf=[config.z_r_S],
-                z_mf=[config.y_r_S],
-                GS=[0.15],
-                ObjID=[str(ast)],
-            )
-        
-        phys_params = qv.concatenate([phys_params, phy_param])
+    if ast_class == "C":
+        albedo = select_albedo_from_range(
+            config.C_albedo_min.to_numpy()[0],
+            config.C_albedo_max.to_numpy()[0]
+        )
+        H = calculate_H(d, albedo)
+        phys_params = PhotometricProperties.from_kwargs(
+            H_mf=[H],
+            u_mf=[config.u_r_C.to_numpy()[0]],
+            g_mf=[config.g_r_C.to_numpy()[0]],
+            r_mf=[config.i_r_C.to_numpy()[0]],
+            i_mf=[config.z_r_C.to_numpy()[0]],
+            z_mf=[config.y_r_C.to_numpy()[0]],
+            GS=[0.15],
+            ObjID=[str(obj_id)],
+        )
+    elif ast_class == "S":
+        albedo = select_albedo_from_range(
+            config.S_albedo_min.to_numpy()[0],
+            config.S_albedo_max.to_numpy()[0]
+        )
+        H = calculate_H(d, albedo)
+        phys_params = PhotometricProperties.from_kwargs(
+            H_mf=[H],
+            u_mf=[config.u_r_S.to_numpy()[0]],
+            g_mf=[config.g_r_S.to_numpy()[0]],
+            r_mf=[config.i_r_S.to_numpy()[0]],
+            i_mf=[config.z_r_S.to_numpy()[0]],
+            z_mf=[config.y_r_S.to_numpy()[0]],
+            GS=[0.15],
+            ObjID=[str(obj_id)],
+        )
 
     return phys_params

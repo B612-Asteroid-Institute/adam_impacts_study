@@ -8,10 +8,8 @@ from adam_core.dynamics.impacts import calculate_impact_probabilities, calculate
 from adam_core.propagator.adam_assist import ASSISTPropagator
 
 from adam_impact_study.physical_params import (
-    create_physical_params,
+    create_physical_params_single,
     photometric_properties_to_sorcha_table,
-    phys_params,
-    physical_params_df,
     write_phys_params_file,
 )
 
@@ -31,7 +29,7 @@ class ImpactStudyResults(qv.Table):
 
 def run_impact_study_all(
     impactors_file: str,
-    sorcha_physical_params_string: str,
+    run_config_file: str,
     pointing_file: str,
     RUN_NAME: str,
     FO_DIR: str,
@@ -84,7 +82,7 @@ def run_impact_study_all(
         impact_result = run_impact_study_fo(
             impactor_orbit,
             propagator,
-            sorcha_physical_params_string,
+            run_config_file,
             pointing_file,
             RUN_NAME,
             FO_DIR,
@@ -154,7 +152,7 @@ def run_impact_study_fo(
     fo_input_file_base = f"fo_input_{RUN_NAME}_{obj_id}"
     fo_output_file_base = f"fo_output_{RUN_NAME}_{obj_id}"
 
-    phys_params = create_physical_params(run_config_file)
+    phys_params = create_physical_params_single(run_config_file, obj_id)
     phys_para_file_str = photometric_properties_to_sorcha_table(phys_params, "r")
     write_phys_params_file(phys_para_file_str, sorcha_physical_params_file)
 
