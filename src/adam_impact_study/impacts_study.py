@@ -7,6 +7,14 @@ import quivr as qv
 from adam_core.dynamics.impacts import calculate_impact_probabilities, calculate_impacts
 from adam_core.propagator.adam_assist import ASSISTPropagator
 
+from adam_impact_study.physical_params import (
+    create_physical_params,
+    photometric_properties_to_sorcha_table,
+    phys_params,
+    physical_params_df,
+    write_phys_params_file,
+)
+
 from adam_impact_study.conversions import (
     impactor_file_to_adam_orbit,
     od_observations_to_ades_file,
@@ -96,7 +104,7 @@ def run_impact_study_all(
 def run_impact_study_fo(
     impactor_orbit: qv.Table,
     propagator: ASSISTPropagator,
-    sorcha_physical_params_string: str,
+    run_config_file: str,
     pointing_file: str,
     RUN_NAME: str,
     FO_DIR: str,
@@ -135,29 +143,7 @@ def run_impact_study_fo(
         Table containing the results of the impact study with columns 'object_id',
         'day', and 'impact_probability'. If no impacts were found, returns None.
     """
-
-    # Prepare physical parameters DataFrame
-    physical_params_list = [
-        float(param) for param in sorcha_physical_params_string.split()
-    ]
-    data = []
-    for obj_id in impactor_orbit.object_id:
-        data.append(
-            {
-                "ObjID": str(obj_id),
-                "H_r": physical_params_list[0],
-                "u-r": physical_params_list[1],
-                "g-r": physical_params_list[2],
-                "i-r": physical_params_list[3],
-                "z-r": physical_params_list[4],
-                "y-r": physical_params_list[5],
-                "GS": physical_params_list[6],
-            }
-        )
-    physical_params_df = pd.DataFrame(data)
-
     obj_id = impactor_orbit.object_id[0]
-
     print("Object ID: ", obj_id)
 
     sorcha_config_file_name = f"sorcha_config_{RUN_NAME}_{obj_id}.ini"
@@ -167,6 +153,10 @@ def run_impact_study_fo(
     sorcha_output_file = f"{sorcha_output_name}.csv"
     fo_input_file_base = f"fo_input_{RUN_NAME}_{obj_id}"
     fo_output_file_base = f"fo_output_{RUN_NAME}_{obj_id}"
+
+    phys_params = create_physical_params(run_config_file)
+    phys_para_file_str = photometric_properties_to_sorcha_table(phys_params, "r")
+    write_phys_params_file(phys_para_file_str, sorcha_physical_params_file)
 
     impact_date = impactor_orbit.coordinates.time.add_days(30)
     sorcha_config_file = write_config_file_timeframe(
@@ -180,7 +170,6 @@ def run_impact_study_fo(
         sorcha_orbits_file,
         sorcha_physical_params_file,
         sorcha_output_file,
-        physical_params_df,
         pointing_file,
         sorcha_output_name,
         RESULT_DIR,
