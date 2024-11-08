@@ -71,7 +71,6 @@ def test_run_impact_study_fo(
     impactors_file = tmpdir.join("impactors.csv")
     pointing_file = tmpdir.join("pointing_file.txt")
 
-    sorcha_physical_params_string = "15.88 1.72 0.48 -0.11 -0.12 -0.12 0.15"
     RUN_NAME = "Impact_Study_Test"
     FO_DIR = tmpdir.mkdir("FO_DIR")
     RUN_DIR = tmpdir.mkdir("RUN_DIR")
@@ -83,7 +82,31 @@ I00001,0.9125315468414172,0.3841166640887326,2.1597232256169803,42.1290789217616
     impactors_file = tmpdir.join("Impactors.csv")
     impactors_file.write(csv_data)
 
+    config_data = """
+{
+  "C_albedo_min": 0.03,
+  "C_albedo_max": 0.09,
+  "S_albedo_min": 0.10,
+  "S_albedo_max": 0.22,
+  "percent_C": 0.5,
+  "percent_S": 0.5,
+  "min_diam": 0.001,
+  "max_diam": 100,
+  "n_asteroids": 1000,
+  "u_r_C": 1.786,
+  "g_r_C": 0.474,
+  "i_r_C": -0.119,
+  "z_r_C": -0.126,
+  "y_r_C": -0.131,
+  "u_r_S": 2.182,
+  "g_r_S": 0.65,
+  "i_r_S": -0.2,
+  "z_r_S": -0.146,
+  "y_r_S": -0.151
+}
+"""
     run_config_file = tmpdir.join("run_config.json")
+    run_config_file.write(config_data)
 
     # Mock returns
     mock_calculate_impact_probabilities.return_value = ImpactProbabilities.from_kwargs(
