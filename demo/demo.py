@@ -12,7 +12,7 @@ FO_DIR = "../find_orb/find_orb"
 # Define the input files
 impactors_file = "data/10_impactors.csv"
 pointing_file = "data/baseline_v2.0_1yr.db"
-chunk_size = 15
+chunk_size = 1
 
 run_config_file = "impact_run_config.json"
 

@@ -7,17 +7,16 @@ import quivr as qv
 from adam_core.dynamics.impacts import calculate_impact_probabilities, calculate_impacts
 from adam_core.propagator.adam_assist import ASSISTPropagator
 
-from adam_impact_study.physical_params import (
-    create_physical_params_single,
-    photometric_properties_to_sorcha_table,
-    write_phys_params_file,
-)
-
 from adam_impact_study.conversions import (
     impactor_file_to_adam_orbit,
     od_observations_to_ades_file,
 )
 from adam_impact_study.fo_od import run_fo_od
+from adam_impact_study.physical_params import (
+    create_physical_params_single,
+    photometric_properties_to_sorcha_table,
+    write_phys_params_file,
+)
 from adam_impact_study.sorcha_utils import run_sorcha, write_config_file_timeframe
 
 
