@@ -33,7 +33,6 @@ class PhotometricProperties(qv.Table):
     H_mf = qv.Float64Column(default=0.0)
     u_mf = qv.Float64Column(default=0.0)
     g_mf = qv.Float64Column(default=0.0)
-    r_mf = qv.Float64Column(default=0.0)
     i_mf = qv.Float64Column(default=0.0)
     z_mf = qv.Float64Column(default=0.0)
     y_mf = qv.Float64Column(default=0.0)
@@ -279,9 +278,9 @@ def create_physical_params_single(
             H_mf=[H],
             u_mf=[config.u_r_C.to_numpy()[0]],
             g_mf=[config.g_r_C.to_numpy()[0]],
-            r_mf=[config.i_r_C.to_numpy()[0]],
-            i_mf=[config.z_r_C.to_numpy()[0]],
-            z_mf=[config.y_r_C.to_numpy()[0]],
+            i_mf=[config.i_r_C.to_numpy()[0]],
+            z_mf=[config.z_r_C.to_numpy()[0]],
+            y_mf=[config.y_r_C.to_numpy()[0]],
             GS=[0.15],
             ObjID=[obj_id],
         )
@@ -294,9 +293,9 @@ def create_physical_params_single(
             H_mf=[H],
             u_mf=[config.u_r_S.to_numpy()[0]],
             g_mf=[config.g_r_S.to_numpy()[0]],
-            r_mf=[config.i_r_S.to_numpy()[0]],
-            i_mf=[config.z_r_S.to_numpy()[0]],
-            z_mf=[config.y_r_S.to_numpy()[0]],
+            i_mf=[config.i_r_S.to_numpy()[0]],
+            z_mf=[config.z_r_S.to_numpy()[0]],
+            y_mf=[config.y_r_S.to_numpy()[0]],
             GS=[0.15],
             ObjID=[obj_id],
         )
