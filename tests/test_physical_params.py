@@ -18,12 +18,20 @@ def test_select_size():
     assert dist <= max_diam
 
 
-@patch("adam_impact_study.physical_params.rng")
+@patch("numpy.random.default_rng")
 def test_determine_ast_class_returns_C(mock_rng):
-    mock_rng.random.return_value = 0.1  # Assuming f_C > 0.1
-    assert determine_ast_class() == "C"
+    mock_rng.return_value.random.return_value = 0.1  # Simulating a random value less than percent_C
+    percent_C = 0.5
+    percent_S = 0.5
+    assert determine_ast_class(percent_C, percent_S) == "C"
 
-@patch("adam_impact_study.physical_params.rng")
+@patch("numpy.random.default_rng")
 def test_determine_ast_class_returns_S(mock_rng):
-    mock_rng.random.return_value = 0.9  # Assuming f_C < 0.9
-    assert determine_ast_class() == "S"
+    mock_rng.return_value.random.return_value = 0.9  # Simulating a random value greater than percent_C
+    percent_C = 0.5
+    percent_S = 0.5
+    assert determine_ast_class(percent_C, percent_S) == "S"
+    
+    percent_C = 0.5
+    percent_S = 0.5
+    assert determine_ast_class(percent_C, percent_S) == "S"
