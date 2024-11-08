@@ -1,6 +1,5 @@
 import json
 import os
-from typing import Union
 
 import numpy as np
 import pyarrow as pa
