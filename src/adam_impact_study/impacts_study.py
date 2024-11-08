@@ -1,7 +1,6 @@
 import os
 from typing import Optional
 
-import pandas as pd
 import pyarrow.compute as pc
 import quivr as qv
 from adam_core.dynamics.impacts import calculate_impact_probabilities, calculate_impacts
