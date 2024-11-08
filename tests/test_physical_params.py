@@ -1,7 +1,9 @@
-from adam_impact_study.physical_params import select_albedo_from_range, select_asteroid_size, determine_ast_class, create_physical_params_single, PhotometricProperties
-from unittest.mock import patch
 import json
 import pytest
+
+from unittest.mock import patch
+from adam_impact_study.physical_params import select_albedo_from_range, select_asteroid_size, determine_ast_class, create_physical_params_single, PhotometricProperties
+
 
 def test_select_albedo_from_range():
     albedo_min = 0.1
