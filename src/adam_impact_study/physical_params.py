@@ -148,16 +148,16 @@ def select_asteroid_size(min_diam: float, max_diam: float, seed: int = 13612) ->
     Parameters
     ----------
     min_diam : float
-        Minimum asteroid diameter.
+        Minimum asteroid diameter, in kilometers.
     max_diam : float
-        Maximum asteroid diameter.
+        Maximum asteroid diameter, in kilometers.
     seed : int, optional
         Seed for the random number generator.
 
     Returns
     -------
     diam : float
-        Asteroid diameter
+        Asteroid diameter, in kilometers. 
     """
     rng = np.random.default_rng(seed)
     return rng.uniform(min_diam, max_diam)
@@ -191,7 +191,7 @@ def calculate_H(diameter: float, albedo: float) -> float:
     Parameters
     ----------
     diameter : float
-        Asteroid diameter.
+        Asteroid diameter, in kilometers.
     albedo : float
         Asteroid albedo.
 
@@ -226,8 +226,8 @@ def load_config(file_path: str) -> ImpactStudyConfig:
         S_albedo_max=[config_data.get("S_albedo_max", 0.22)],
         percent_C=[config_data.get("percent_C", 0.5)],
         percent_S=[config_data.get("percent_S", 0.5)],
-        min_diam=[config_data.get("min_diam", 0.001)],
-        max_diam=[config_data.get("max_diam", 100)],
+        min_diam=[config_data.get("min_diam", 0.01)],
+        max_diam=[config_data.get("max_diam", 1)],
         n_asteroids=[config_data.get("n_asteroids", 1000)],
         u_r_C=[config_data.get("u_r_C", 1.786)],
         g_r_C=[config_data.get("g_r_C", 0.474)],
