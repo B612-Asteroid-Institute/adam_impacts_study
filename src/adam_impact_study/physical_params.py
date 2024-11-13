@@ -276,11 +276,11 @@ def create_physical_params_single(
         H = calculate_H(d, albedo)
         phys_params = PhotometricProperties.from_kwargs(
             H_mf=[H],
-            u_mf=[config.u_r_C.to_numpy()[0]],
-            g_mf=[config.g_r_C.to_numpy()[0]],
-            i_mf=[config.i_r_C.to_numpy()[0]],
-            z_mf=[config.z_r_C.to_numpy()[0]],
-            y_mf=[config.y_r_C.to_numpy()[0]],
+            u_mf=config.u_r_C,
+            g_mf=config.g_r_C,
+            i_mf=config.i_r_C,
+            z_mf=config.z_r_C,
+            y_mf=config.y_r_C,
             GS=[0.15],
             ObjID=[obj_id],
         )
