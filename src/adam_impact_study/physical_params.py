@@ -157,7 +157,7 @@ def select_asteroid_size(min_diam: float, max_diam: float, seed: int = 13612) ->
     Returns
     -------
     diam : float
-        Asteroid diameter, in kilometers. 
+        Asteroid diameter, in kilometers.
     """
     rng = np.random.default_rng(seed)
     return rng.uniform(min_diam, max_diam)
