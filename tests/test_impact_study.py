@@ -6,10 +6,7 @@ from adam_core.coordinates import CartesianCoordinates, Origin, SphericalCoordin
 from adam_core.dynamics.impacts import ImpactProbabilities
 from adam_core.observers import Observers
 from adam_core.orbits import Orbits
-from adam_core.propagator.adam_assist import (
-    ASSISTPropagator,
-    download_jpl_ephemeris_files,
-)
+from adam_core.propagator.adam_assist import ASSISTPropagator
 from adam_core.time import Timestamp
 
 from adam_impact_study.conversions import (
@@ -40,7 +37,6 @@ I00009,0.46573276386416124,0.38332295394222854,12.525649549276613,197.2295904835
 
 
 def test_for_impact_dates(impactors_file_mock):
-    download_jpl_ephemeris_files()
     propagator = ASSISTPropagator()
     initial_orbit_objects = impactor_file_to_adam_orbit(impactors_file_mock)
     for obj_id in initial_orbit_objects:
