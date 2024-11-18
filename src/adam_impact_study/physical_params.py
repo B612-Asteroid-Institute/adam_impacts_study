@@ -3,6 +3,7 @@ import os
 
 import numpy as np
 import pyarrow as pa
+import pyarrow.compute as pc
 import quivr as qv
 
 
@@ -221,14 +222,14 @@ def load_config(file_path: str, run_id: str = None) -> ImpactorConfig:
         config_data = json.load(file)
 
     S_type = ImpactorConfig.from_kwargs(
-        config_id="S_type_{run_id}",
+        config_id=f"S_type_{run_id}",
         ast_class="S",
         albedo_min=config_data.get("S_albedo_min", 0.10),
         albedo_max=config_data.get("S_albedo_max", 0.22),
         albedo_distribution="uniform",
         percentage=config_data.get("percent_S", 0.5),
-        min_diam=config_data.get("min_diam", 0.001),
-        max_diam=config_data.get("max_diam", 100),
+        min_diam=config_data.get("min_diam", 0.01),
+        max_diam=config_data.get("max_diam", 1),
         u_r=config_data.get("u_r_S", 2.182),
         g_r=config_data.get("g_r_S", 0.65),
         i_r=config_data.get("i_r_S", -0.2),
@@ -237,14 +238,14 @@ def load_config(file_path: str, run_id: str = None) -> ImpactorConfig:
     )
 
     C_type = ImpactorConfig.from_kwargs(
-        config_id="C_type_{run_id}",
+        config_id=f"C_type_{run_id}",
         ast_class="C",
         albedo_min=config_data.get("C_albedo_min", 0.03),
         albedo_max=config_data.get("C_albedo_max", 0.09),
         albedo_distribution="uniform",
         percentage=config_data.get("percent_C", 0.5),
-        min_diam=config_data.get("min_diam", 0.001),
-        max_diam=config_data.get("max_diam", 100),
+        min_diam=config_data.get("min_diam", 0.01),
+        max_diam=config_data.get("max_diam", 1),
         u_r=config_data.get("u_r_C", 1.786),
         g_r=config_data.get("g_r_C", 0.474),
         i_r=config_data.get("i_r_C", -0.119),
@@ -276,14 +277,16 @@ def create_physical_params_single(
         Physical parameters of the impactor.
     """
     config = load_config(config_file)
-    ast_class = determine_ast_class(
-        config.percent_C.to_numpy()[0], config.percent_S.to_numpy()[0]
-    )
-    d = select_asteroid_size(
-        config.min_diam.to_numpy()[0], config.max_diam.to_numpy()[0]
-    )
+    C_config = config.apply_mask(pc.equal(config.ast_class, "C"))
+    S_config = config.apply_mask(pc.equal(config.ast_class, "S"))
+
+    ast_class = determine_ast_class(C_config.percentage[0], S_config.percentage[0])
 
     if ast_class == "C":
+        config = C_config
+        d = select_asteroid_size(
+            config.min_diam.to_numpy()[0], config.max_diam.to_numpy()[0]
+        )
         albedo = select_albedo_from_range(
             config.C_albedo_min.to_numpy()[0], config.C_albedo_max.to_numpy()[0]
         )
@@ -299,6 +302,10 @@ def create_physical_params_single(
             ObjID=[obj_id],
         )
     elif ast_class == "S":
+        S_config = config
+        d = select_asteroid_size(
+            S_config.min_diam.to_numpy()[0], S_config.max_diam.to_numpy()[0]
+        )
         albedo = select_albedo_from_range(
             config.S_albedo_min.to_numpy()[0], config.S_albedo_max.to_numpy()[0]
         )
