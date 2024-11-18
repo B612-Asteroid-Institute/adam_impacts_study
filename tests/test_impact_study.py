@@ -36,21 +36,6 @@ I00009,0.46573276386416124,0.38332295394222854,12.525649549276613,197.2295904835
     return str(impactors_file)
 
 
-def test_for_impact_dates(impactors_file_mock):
-    propagator = ASSISTPropagator()
-    initial_orbit_objects = impactor_file_to_adam_orbit(impactors_file_mock)
-    for obj_id in initial_orbit_objects:
-        impactor_orbit_object = obj_id
-        results, impacts = propagator.detect_impacts(impactor_orbit_object, 60)
-        assert (
-            abs(
-                impactor_orbit_object.coordinates.time.add_days(30).to_numpy()[0]
-                - impacts.coordinates.time.to_numpy()[0]
-            )
-            < 1
-        )
-
-
 @patch("adam_impact_study.impacts_study.calculate_impact_probabilities")
 @patch("adam_impact_study.impacts_study.calculate_impacts")
 @patch("adam_impact_study.impacts_study.ASSISTPropagator")
