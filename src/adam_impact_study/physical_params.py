@@ -6,37 +6,32 @@ import pyarrow as pa
 import quivr as qv
 
 
-class ImpactStudyConfig(qv.Table):
-    C_albedo_min = qv.Float64Column(default=0.03)
-    C_albedo_max = qv.Float64Column(default=0.09)
-    S_albedo_min = qv.Float64Column(default=0.10)
-    S_albedo_max = qv.Float64Column(default=0.22)
-    percent_C = qv.Float64Column(default=0.5)
-    percent_S = qv.Float64Column(default=0.5)
-    min_diam = qv.Float64Column(default=0.001)
-    max_diam = qv.Float64Column(default=100)
-    n_asteroids = qv.Int64Column(default=1000)
-    u_r_C = qv.Float64Column(default=1.786)
-    g_r_C = qv.Float64Column(default=0.474)
-    i_r_C = qv.Float64Column(default=-0.119)
-    z_r_C = qv.Float64Column(default=-0.126)
-    y_r_C = qv.Float64Column(default=-0.131)
-    u_r_S = qv.Float64Column(default=2.182)
-    g_r_S = qv.Float64Column(default=0.65)
-    i_r_S = qv.Float64Column(default=-0.2)
-    z_r_S = qv.Float64Column(default=-0.146)
-    y_r_S = qv.Float64Column(default=-0.151)
+class ImpactorConfig(qv.Table):
+    config_id = qv.LargeStringColumn()
+    ast_class = qv.LargeStringColumn()
+    albedo_min = qv.Float64Column()
+    albedo_max = qv.Float64Column()
+    albedo_distribution = qv.LargeStringColumn()
+    percentage = qv.Float64Column()
+    min_diam = qv.Float64Column()
+    max_diam = qv.Float64Column()
+    u_r = qv.Float64Column()
+    g_r = qv.Float64Column()
+    i_r = qv.Float64Column()
+    z_r = qv.Float64Column()
+    y_r = qv.Float64Column()
 
 
 class PhotometricProperties(qv.Table):
     ObjID = qv.LargeStringColumn()
-    H_mf = qv.Float64Column(default=0.0)
-    u_mf = qv.Float64Column(default=0.0)
-    g_mf = qv.Float64Column(default=0.0)
-    i_mf = qv.Float64Column(default=0.0)
-    z_mf = qv.Float64Column(default=0.0)
-    y_mf = qv.Float64Column(default=0.0)
-    GS = qv.Float64Column(default=0.15)
+    H_mf = qv.Float64Column()
+    u_mf = qv.Float64Column()
+    g_mf = qv.Float64Column()
+    i_mf = qv.Float64Column()
+    z_mf = qv.Float64Column()
+    y_mf = qv.Float64Column()
+    GS = qv.Float64Column()
+
 
 
 def photometric_properties_to_sorcha_table(
@@ -203,7 +198,7 @@ def calculate_H(diameter: float, albedo: float) -> float:
     return 15.618 - 5 * np.log10(diameter) - 2.5 * np.log10(albedo)
 
 
-def load_config(file_path: str) -> ImpactStudyConfig:
+def load_config(file_path: str, run_id: str = None) -> ImpactorConfig:
     """
     Load the impact study configuration from a file.
 
@@ -211,35 +206,55 @@ def load_config(file_path: str) -> ImpactStudyConfig:
     ----------
     file_path : str
         Path to the configuration file.
+    run_id : str, optional
+        User-defined run ID. If not provided, the run ID will be extracted from the file name.
 
     Returns
     -------
-    config : `~adam_impact_study.physical_params.ImpactStudyConfig`
+    config : `~adam_impact_study.physical_params.ImpactorConfig`
         Configuration object.
     """
+
+    if run_id is None:
+        run_id = os.path.basename(file_path).split(".")[0]
+
     with open(file_path, "r") as file:
         config_data = json.load(file)
-    config = ImpactStudyConfig.from_kwargs(
-        C_albedo_min=[config_data.get("C_albedo_min", 0.03)],
-        C_albedo_max=[config_data.get("C_albedo_max", 0.09)],
-        S_albedo_min=[config_data.get("S_albedo_min", 0.10)],
-        S_albedo_max=[config_data.get("S_albedo_max", 0.22)],
-        percent_C=[config_data.get("percent_C", 0.5)],
-        percent_S=[config_data.get("percent_S", 0.5)],
-        min_diam=[config_data.get("min_diam", 0.01)],
-        max_diam=[config_data.get("max_diam", 1)],
-        n_asteroids=[config_data.get("n_asteroids", 1000)],
-        u_r_C=[config_data.get("u_r_C", 1.786)],
-        g_r_C=[config_data.get("g_r_C", 0.474)],
-        i_r_C=[config_data.get("i_r_C", -0.119)],
-        z_r_C=[config_data.get("z_r_C", -0.126)],
-        y_r_C=[config_data.get("y_r_C", -0.131)],
-        u_r_S=[config_data.get("u_r_S", 2.182)],
-        g_r_S=[config_data.get("g_r_S", 0.65)],
-        i_r_S=[config_data.get("i_r_S", -0.2)],
-        z_r_S=[config_data.get("z_r_S", -0.146)],
-        y_r_S=[config_data.get("y_r_S", -0.151)],
+
+    S_type = ImpactorConfig.from_kwargs(
+        config_id="S_type_{run_id}",
+        ast_class="S",
+        albedo_min=config_data.get("S_albedo_min", 0.10),
+        albedo_max=config_data.get("S_albedo_max", 0.22),
+        albedo_distribution="uniform",
+        percentage=config_data.get("percent_S", 0.5),
+        min_diam=config_data.get("min_diam", 0.001),
+        max_diam=config_data.get("max_diam", 100),
+        u_r=config_data.get("u_r_S", 2.182),
+        g_r=config_data.get("g_r_S", 0.65),
+        i_r=config_data.get("i_r_S", -0.2),
+        z_r=config_data.get("z_r_S", -0.146),
+        y_r=config_data.get("y_r_S", -0.151),
     )
+
+    C_type = ImpactorConfig.from_kwargs(
+        config_id="C_type_{run_id}",
+        ast_class="C",
+        albedo_min=config_data.get("C_albedo_min", 0.03),
+        albedo_max=config_data.get("C_albedo_max", 0.09),
+        albedo_distribution="uniform",
+        percentage=config_data.get("percent_C", 0.5),
+        min_diam=config_data.get("min_diam", 0.001),
+        max_diam=config_data.get("max_diam", 100),
+        u_r=config_data.get("u_r_C", 1.786),
+        g_r=config_data.get("g_r_C", 0.474),
+        i_r=config_data.get("i_r_C", -0.119),
+        z_r=config_data.get("z_r_C", -0.126),
+        y_r=config_data.get("y_r_C", -0.131),
+    )
+
+    config = qv.concatenate([S_type, C_type])
+
     return config
 
 
