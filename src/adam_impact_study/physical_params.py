@@ -281,7 +281,7 @@ def create_physical_params_single(
     S_config = config.apply_mask(pc.equal(config.ast_class, "S"))
 
     ast_class = determine_ast_class(
-        C_config.percentage.to_numpy()[0], S_config.percentage.to_nupy()[0]
+        C_config.percentage.to_numpy()[0], S_config.percentage.to_numpy()[0]
     )
 
     if ast_class == "C":
