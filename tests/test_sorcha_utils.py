@@ -158,7 +158,6 @@ def test_run_sorcha(mock_subprocess_run, tmpdir, mock_orbits, mock_physical_para
         orbits_file,
         physical_params_file,
         "output_file.txt",
-        mock_physical_params_df,
         pointing_file,
         "sorcha_output",
         output_dir,

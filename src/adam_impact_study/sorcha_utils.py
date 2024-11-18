@@ -148,7 +148,6 @@ def run_sorcha(
     sorcha_orbits_file: str,
     sorcha_physical_params_file: str,
     sorcha_output_file: str,
-    physical_params_df: pd.DataFrame,
     pointing_file: str,
     sorcha_output_name: str,
     RESULT_DIR: str,
@@ -186,7 +185,6 @@ def run_sorcha(
 
     generate_sorcha_orbits(adam_orbits, sorcha_orbits_file)
     print(f"Generated Sorcha orbits file: {sorcha_orbits_file}")
-    generate_sorcha_physical_params(sorcha_physical_params_file, physical_params_df)
 
     # Run Sorcha
     sorcha_command_string = (

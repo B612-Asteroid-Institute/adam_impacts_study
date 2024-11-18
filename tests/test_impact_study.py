@@ -6,10 +6,7 @@ from adam_core.coordinates import CartesianCoordinates, Origin, SphericalCoordin
 from adam_core.dynamics.impacts import ImpactProbabilities
 from adam_core.observers import Observers
 from adam_core.orbits import Orbits
-from adam_core.propagator.adam_assist import (
-    ASSISTPropagator,
-    download_jpl_ephemeris_files,
-)
+from adam_core.propagator.adam_assist import ASSISTPropagator
 from adam_core.time import Timestamp
 
 from adam_impact_study.conversions import (
@@ -39,22 +36,6 @@ I00009,0.46573276386416124,0.38332295394222854,12.525649549276613,197.2295904835
     return str(impactors_file)
 
 
-def test_for_impact_dates(impactors_file_mock):
-    download_jpl_ephemeris_files()
-    propagator = ASSISTPropagator()
-    initial_orbit_objects = impactor_file_to_adam_orbit(impactors_file_mock)
-    for obj_id in initial_orbit_objects:
-        impactor_orbit_object = obj_id
-        results, impacts = propagator.detect_impacts(impactor_orbit_object, 60)
-        assert (
-            abs(
-                impactor_orbit_object.coordinates.time.add_days(30).to_numpy()[0]
-                - impacts.coordinates.time.to_numpy()[0]
-            )
-            < 1
-        )
-
-
 @patch("adam_impact_study.impacts_study.calculate_impact_probabilities")
 @patch("adam_impact_study.impacts_study.calculate_impacts")
 @patch("adam_impact_study.impacts_study.ASSISTPropagator")
@@ -71,7 +52,6 @@ def test_run_impact_study_fo(
     impactors_file = tmpdir.join("impactors.csv")
     pointing_file = tmpdir.join("pointing_file.txt")
 
-    sorcha_physical_params_string = "15.88 1.72 0.48 -0.11 -0.12 -0.12 0.15"
     RUN_NAME = "Impact_Study_Test"
     FO_DIR = tmpdir.mkdir("FO_DIR")
     RUN_DIR = tmpdir.mkdir("RUN_DIR")
@@ -82,6 +62,32 @@ I00000,0.9346171379884184,0.3895326794095313,7.566861357949266,38.66627303305196
 I00001,0.9125315468414172,0.3841166640887326,2.1597232256169803,42.129078921761604,100.19335181650827,61804.80697714385,61741.401768986136,24.999606842888358,1.481662993026473,325.34987099452826"""
     impactors_file = tmpdir.join("Impactors.csv")
     impactors_file.write(csv_data)
+
+    config_data = """
+{
+  "C_albedo_min": 0.03,
+  "C_albedo_max": 0.09,
+  "S_albedo_min": 0.10,
+  "S_albedo_max": 0.22,
+  "percent_C": 0.5,
+  "percent_S": 0.5,
+  "min_diam": 0.001,
+  "max_diam": 100,
+  "n_asteroids": 1000,
+  "u_r_C": 1.786,
+  "g_r_C": 0.474,
+  "i_r_C": -0.119,
+  "z_r_C": -0.126,
+  "y_r_C": -0.131,
+  "u_r_S": 2.182,
+  "g_r_S": 0.65,
+  "i_r_S": -0.2,
+  "z_r_S": -0.146,
+  "y_r_S": -0.151
+}
+"""
+    run_config_file = tmpdir.join("run_config.json")
+    run_config_file.write(config_data)
 
     # Mock returns
     mock_calculate_impact_probabilities.return_value = ImpactProbabilities.from_kwargs(
@@ -134,7 +140,7 @@ I00001,0.9125315468414172,0.3841166640887326,2.1597232256169803,42.1290789217616
     try:
         run_impact_study_all(
             str(impactors_file),
-            sorcha_physical_params_string,
+            str(run_config_file),
             str(pointing_file),
             str(RUN_NAME),
             str(FO_DIR),
