@@ -286,40 +286,24 @@ def create_physical_params_single(
 
     if ast_class == "C":
         config = C_config
-        d = select_asteroid_size(
-            config.min_diam.to_numpy()[0], config.max_diam.to_numpy()[0]
-        )
-        albedo = select_albedo_from_range(
-            config.C_albedo_min.to_numpy()[0], config.C_albedo_max.to_numpy()[0]
-        )
-        H = calculate_H(d, albedo)
-        phys_params = PhotometricProperties.from_kwargs(
-            H_mf=[H],
-            u_mf=config.u_r_C,
-            g_mf=config.g_r_C,
-            i_mf=config.i_r_C,
-            z_mf=config.z_r_C,
-            y_mf=config.y_r_C,
-            GS=[0.15],
-            ObjID=[obj_id],
-        )
     elif ast_class == "S":
         S_config = config
-        d = select_asteroid_size(
-            S_config.min_diam.to_numpy()[0], S_config.max_diam.to_numpy()[0]
-        )
-        albedo = select_albedo_from_range(
-            config.S_albedo_min.to_numpy()[0], config.S_albedo_max.to_numpy()[0]
-        )
-        H = calculate_H(d, albedo)
-        phys_params = PhotometricProperties.from_kwargs(
-            H_mf=[H],
-            u_mf=config.u_r_S,
-            g_mf=config.g_r_S,
-            i_mf=config.i_r_S,
-            z_mf=config.z_r_S,
-            y_mf=config.y_r_S,
-            GS=[0.15],
-            ObjID=[obj_id],
-        )
+    d = select_asteroid_size(
+        config.min_diam.to_numpy()[0], config.max_diam.to_numpy()[0]
+    )
+    albedo = select_albedo_from_range(
+        config.albedo_min.to_numpy()[0], config.albedo_max.to_numpy()[0]
+    )
+    H = calculate_H(d, albedo)
+    phys_params = PhotometricProperties.from_kwargs(
+        H_mf=[H],
+        u_mf=config.u_r,
+        g_mf=config.g_r,
+        i_mf=config.i_r,
+        z_mf=config.z_r,
+        y_mf=config.y_r,
+        GS=[0.15],
+        ObjID=[obj_id],
+    )
+
     return phys_params
