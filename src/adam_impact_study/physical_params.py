@@ -251,7 +251,7 @@ def load_config(file_path: str, run_id: str = None) -> ImpactorConfig:
         i_r=[config_data.get("i_r_C", -0.119)],
         z_r=[config_data.get("z_r_C", -0.126)],
         y_r=[config_data.get("y_r_C", -0.131)],
-)
+    )
 
     config = qv.concatenate([S_type, C_type])
 
