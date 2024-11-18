@@ -222,36 +222,36 @@ def load_config(file_path: str, run_id: str = None) -> ImpactorConfig:
         config_data = json.load(file)
 
     S_type = ImpactorConfig.from_kwargs(
-        config_id=f"S_type_{run_id}",
-        ast_class="S",
-        albedo_min=config_data.get("S_albedo_min", 0.10),
-        albedo_max=config_data.get("S_albedo_max", 0.22),
-        albedo_distribution="uniform",
-        percentage=config_data.get("percent_S", 0.5),
-        min_diam=config_data.get("min_diam", 0.01),
-        max_diam=config_data.get("max_diam", 1),
-        u_r=config_data.get("u_r_S", 2.182),
-        g_r=config_data.get("g_r_S", 0.65),
-        i_r=config_data.get("i_r_S", -0.2),
-        z_r=config_data.get("z_r_S", -0.146),
-        y_r=config_data.get("y_r_S", -0.151),
+        config_id=[f"S_type_{run_id}"],
+        ast_class=["S"],
+        albedo_min=[config_data.get("S_albedo_min", 0.10)],
+        albedo_max=[config_data.get("S_albedo_max", 0.22)],
+        albedo_distribution=["uniform"],
+        percentage=[config_data.get("percent_S", 0.5)],
+        min_diam=[config_data.get("min_diam", 0.01)],
+        max_diam=[config_data.get("max_diam", 1)],
+        u_r=[config_data.get("u_r_S", 2.182)],
+        g_r=[config_data.get("g_r_S", 0.65)],
+        i_r=[config_data.get("i_r_S", -0.2)],
+        z_r=[config_data.get("z_r_S", -0.146)],
+        y_r=[config_data.get("y_r_S", -0.151)],
     )
 
     C_type = ImpactorConfig.from_kwargs(
-        config_id=f"C_type_{run_id}",
-        ast_class="C",
-        albedo_min=config_data.get("C_albedo_min", 0.03),
-        albedo_max=config_data.get("C_albedo_max", 0.09),
-        albedo_distribution="uniform",
-        percentage=config_data.get("percent_C", 0.5),
-        min_diam=config_data.get("min_diam", 0.01),
-        max_diam=config_data.get("max_diam", 1),
-        u_r=config_data.get("u_r_C", 1.786),
-        g_r=config_data.get("g_r_C", 0.474),
-        i_r=config_data.get("i_r_C", -0.119),
-        z_r=config_data.get("z_r_C", -0.126),
-        y_r=config_data.get("y_r_C", -0.131),
-    )
+        config_id=[f"C_type_{run_id}"],
+        ast_class=["C"],
+        albedo_min=[config_data.get("C_albedo_min", 0.03)],
+        albedo_max=[config_data.get("C_albedo_max", 0.09)],
+        albedo_distribution=["uniform"],
+        percentage=[config_data.get("percent_C", 0.5)],
+        min_diam=[config_data.get("min_diam", 0.01)],
+        max_diam=[config_data.get("max_diam", 1)],
+        u_r=[config_data.get("u_r_C", 1.786)],
+        g_r=[config_data.get("g_r_C", 0.474)],
+        i_r=[config_data.get("i_r_C", -0.119)],
+        z_r=[config_data.get("z_r_C", -0.126)],
+        y_r=[config_data.get("y_r_C", -0.131)],
+)
 
     config = qv.concatenate([S_type, C_type])
 
