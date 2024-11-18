@@ -287,7 +287,8 @@ def create_physical_params_single(
     if ast_class == "C":
         config = C_config
     elif ast_class == "S":
-        S_config = config
+        config = S_config
+
     d = select_asteroid_size(
         config.min_diam.to_numpy()[0], config.max_diam.to_numpy()[0]
     )
