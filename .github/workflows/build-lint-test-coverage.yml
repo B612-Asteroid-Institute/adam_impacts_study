@@ -33,10 +33,8 @@ jobs:
           pip install ".[dev]"
       - name: Lint
         run: pdm run lint
-      - name: TESTING run verbose pytest 
-        run: pdm run pytest -v
       - name: Test with coverage
-        run: pdm run coverage -v
+        run: pdm run coverage
       - name: Coverage report to coveralls
         uses: coverallsapp/github-action@v2.0.0
         with:
