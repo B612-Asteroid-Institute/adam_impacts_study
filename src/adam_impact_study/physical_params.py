@@ -33,7 +33,6 @@ class PhotometricProperties(qv.Table):
     GS = qv.Float64Column()
 
 
-
 def photometric_properties_to_sorcha_table(
     properties: PhotometricProperties, main_filter: str
 ) -> pa.Table:
