@@ -26,7 +26,7 @@ class ImpactStudyResults(qv.Table):
 
 
 def run_impact_study_all(
-    impactors_file: str,
+    impactor_orbits: qv.Table,
     run_config_file: str,
     pointing_file: str,
     RUN_NAME: str,
@@ -66,7 +66,6 @@ def run_impact_study_all(
     propagator = ASSISTPropagator()
     os.makedirs(f"{RESULT_DIR}", exist_ok=True)
 
-    impactor_orbits = impactor_file_to_adam_orbit(impactors_file)
     print("Impactor Orbits: ", impactor_orbits)
     object_ids = impactor_orbits.object_id.unique()
     print("Object IDs: ", object_ids)
