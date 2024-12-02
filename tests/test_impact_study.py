@@ -63,7 +63,7 @@ I00001,0.9125315468414172,0.3841166640887326,2.1597232256169803,42.1290789217616
     impactors_file = tmpdir.join("Impactors.csv")
     impactors_file.write(csv_data)
 
-    orbits = Orbits.from_kwargs(
+    orbits = impactor_file_to_adam_orbit(impactors_file)
 
     config_data = """
 {
