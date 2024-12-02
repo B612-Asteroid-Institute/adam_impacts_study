@@ -63,6 +63,8 @@ I00001,0.9125315468414172,0.3841166640887326,2.1597232256169803,42.1290789217616
     impactors_file = tmpdir.join("Impactors.csv")
     impactors_file.write(csv_data)
 
+    orbits = Orbits.from_kwargs(
+
     config_data = """
 {
   "C_albedo_min": 0.03,
@@ -139,7 +141,7 @@ I00001,0.9125315468414172,0.3841166640887326,2.1597232256169803,42.1290789217616
     # Call the function with the mocked inputs
     try:
         run_impact_study_all(
-            str(impactors_file),
+            orbits,
             str(run_config_file),
             str(pointing_file),
             str(RUN_NAME),
