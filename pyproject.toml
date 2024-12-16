@@ -21,17 +21,18 @@ build-backend = "pdm.backend"
 
 [project.optional-dependencies]
 dev = [
-  "black",
-  "ipython",
-  "isort",
-  "mypy",
-  "pdm",
-  "pytest-benchmark",
-  "pytest-cov",
-  "pytest-doctestplus",
-  "pytest-mock",
-  "pytest",
-  "ruff",
+    "black",
+    "ipython",
+    "isort",
+    "mypy",
+    "pdm",
+    "pytest-benchmark",
+    "pytest-cov",
+    "pytest-doctestplus",
+    "pytest-mock",
+    "pytest",
+    "ruff",
+    "adam-assist @ git+https://github.com/B612-Asteroid-Institute/adam-assist.git@96de5a7b6565c9a5420ad1cf474d54928cb5708e",
 ]
 
 [tool.pdm.scripts]

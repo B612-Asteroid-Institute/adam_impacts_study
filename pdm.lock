@@ -5,17 +5,20 @@
 groups = ["default", "dev"]
 strategy = ["inherit_metadata"]
 lock_version = "4.5.0"
-content_hash = "sha256:9236a060c9729002f5b3dd674a09f269a7e73d1878080d04fbd9721f5dea8827"
+content_hash = "sha256:5fdaaee3dd1baec9c9fdd659193656b71a890314dff2ac43f2c853a58d122a81"
 
 [[metadata.targets]]
 requires_python = ">=3.11,<3.13"
 
 [[package]]
 name = "adam-assist"
-version = "0.2.0"
+version = "0.2.1.dev1"
 requires_python = "<4.0,>=3.10"
+git = "https://github.com/B612-Asteroid-Institute/adam-assist.git"
+ref = "96de5a7b6565c9a5420ad1cf474d54928cb5708e"
+revision = "96de5a7b6565c9a5420ad1cf474d54928cb5708e"
 summary = "ADAM Core Propagator class using ASSIST"
-groups = ["default"]
+groups = ["default", "dev"]
 dependencies = [
     "adam-core>=0.2.5",
     "assist-adam-fork==1.1.9a2",
@@ -25,17 +28,13 @@ dependencies = [
     "ray",
     "spiceypy>=6.0.0",
 ]
-files = [
-    {file = "adam_assist-0.2.0-py3-none-any.whl", hash = "sha256:0f0c3c1d6b13c1bca250d687707363ebb9c11a329932f4345b16933540e0f6c9"},
-    {file = "adam_assist-0.2.0.tar.gz", hash = "sha256:ff3043b37559a173fcfa8df781a7d3909910762b28f2060b05fc12f09164d3a2"},
-]
 
 [[package]]
 name = "adam-core"
 version = "0.3.4"
 requires_python = "<3.13,>=3.10"
 summary = "Core libraries for the ADAM platform"
-groups = ["default"]
+groups = ["default", "dev"]
 dependencies = [
     "astropy",
     "astroquery",
@@ -71,7 +70,7 @@ name = "aiosignal"
 version = "1.3.2"
 requires_python = ">=3.9"
 summary = "aiosignal: a list of registered asynchronous callbacks"
-groups = ["default"]
+groups = ["default", "dev"]
 dependencies = [
     "frozenlist>=1.1.0",
 ]
@@ -101,7 +100,7 @@ files = [
 name = "assist-adam-fork"
 version = "1.1.9a2"
 summary = "A temporary fork of ASSIST: A library high accuracy ephemeris in REBOUND"
-groups = ["default"]
+groups = ["default", "dev"]
 dependencies = [
     "numpy",
     "rebound>=4.0.1",
@@ -115,7 +114,7 @@ name = "astropy"
 version = "7.0.0"
 requires_python = ">=3.11"
 summary = "Astronomy and astrophysics core library"
-groups = ["default"]
+groups = ["default", "dev"]
 dependencies = [
     "PyYAML>=6.0.0",
     "astropy-iers-data>=0.2024.10.28.0.34.7",
@@ -146,7 +145,7 @@ name = "astropy-iers-data"
 version = "0.2024.12.16.0.35.48"
 requires_python = ">=3.8"
 summary = "IERS Earth Rotation and Leap Second tables for the astropy core package"
-groups = ["default"]
+groups = ["default", "dev"]
 files = [
     {file = "astropy_iers_data-0.2024.12.16.0.35.48-py3-none-any.whl", hash = "sha256:c277670bf5324d9e17a28b011d4d7493acc06ce9dc75e7cfab848bd8c4847ce3"},
     {file = "astropy_iers_data-0.2024.12.16.0.35.48.tar.gz", hash = "sha256:dbb95668d66bb160342f058df49953c9d47bac628279169ffd476ca51fe90fac"},
@@ -157,7 +156,7 @@ name = "astroquery"
 version = "0.4.7"
 requires_python = ">=3.7"
 summary = "Functions and classes to access online astronomical data resources"
-groups = ["default"]
+groups = ["default", "dev"]
 dependencies = [
     "astropy>=4.2.1",
     "beautifulsoup4>=4.8",
@@ -188,7 +187,7 @@ name = "attrs"
 version = "24.3.0"
 requires_python = ">=3.8"
 summary = "Classes Without Boilerplate"
-groups = ["default"]
+groups = ["default", "dev"]
 files = [
     {file = "attrs-24.3.0-py3-none-any.whl", hash = "sha256:ac96cd038792094f438ad1f6ff80837353805ac950cd2aa0e0625ef19850c308"},
     {file = "attrs-24.3.0.tar.gz", hash = "sha256:8f5c07333d543103541ba7be0e2ce16eeee8130cb0b3f9238ab904ce1e85baff"},
@@ -199,7 +198,7 @@ name = "backports-tarfile"
 version = "1.2.0"
 requires_python = ">=3.8"
 summary = "Backport of CPython tarfile module"
-groups = ["default"]
+groups = ["default", "dev"]
 marker = "python_version < \"3.12\""
 files = [
     {file = "backports.tarfile-1.2.0-py3-none-any.whl", hash = "sha256:77e284d754527b01fb1e6fa8a1afe577858ebe4e9dad8919e34c862cb399bc34"},
@@ -211,7 +210,7 @@ name = "beautifulsoup4"
 version = "4.12.3"
 requires_python = ">=3.6.0"
 summary = "Screen-scraping library"
-groups = ["default"]
+groups = ["default", "dev"]
 dependencies = [
     "soupsieve>1.2",
 ]
@@ -303,7 +302,7 @@ name = "cffi"
 version = "1.17.1"
 requires_python = ">=3.8"
 summary = "Foreign Function Interface for Python calling C code."
-groups = ["default"]
+groups = ["default", "dev"]
 dependencies = [
     "pycparser",
 ]
@@ -339,7 +338,7 @@ name = "charset-normalizer"
 version = "3.4.0"
 requires_python = ">=3.7.0"
 summary = "The Real First Universal Charset Detector. Open, modern and actively maintained alternative to Chardet."
-groups = ["default"]
+groups = ["default", "dev"]
 files = [
     {file = "charset_normalizer-3.4.0-cp311-cp311-macosx_10_9_universal2.whl", hash = "sha256:0d99dd8ff461990f12d6e42c7347fd9ab2532fb70e9621ba520f9e8637161d7c"},
     {file = "charset_normalizer-3.4.0-cp311-cp311-macosx_10_9_x86_64.whl", hash = "sha256:c57516e58fd17d03ebe67e181a4e4e2ccab1168f8c2976c6a334d4f819fe5944"},
@@ -505,7 +504,7 @@ name = "cryptography"
 version = "44.0.0"
 requires_python = "!=3.9.0,!=3.9.1,>=3.7"
 summary = "cryptography is a package which provides cryptographic recipes and primitives to Python developers."
-groups = ["default"]
+groups = ["default", "dev"]
 marker = "sys_platform == \"linux\""
 dependencies = [
     "cffi>=1.12; platform_python_implementation != \"PyPy\"",
@@ -648,7 +647,7 @@ name = "frozenlist"
 version = "1.5.0"
 requires_python = ">=3.8"
 summary = "A list-like structure which implements collections.abc.MutableSequence"
-groups = ["default"]
+groups = ["default", "dev"]
 files = [
     {file = "frozenlist-1.5.0-cp311-cp311-macosx_10_9_universal2.whl", hash = "sha256:fd74520371c3c4175142d02a976aee0b4cb4a7cc912a60586ffd8d5929979b30"},
     {file = "frozenlist-1.5.0-cp311-cp311-macosx_10_9_x86_64.whl", hash = "sha256:2f3f7a0fbc219fb4455264cae4d9f01ad41ae6ee8524500f381de64ffaa077d5"},
@@ -703,7 +702,7 @@ name = "h3"
 version = "4.1.2"
 requires_python = ">=3.8"
 summary = "Uber's hierarchical hexagonal geospatial indexing system"
-groups = ["default"]
+groups = ["default", "dev"]
 files = [
     {file = "h3-4.1.2-cp311-cp311-macosx_10_9_x86_64.whl", hash = "sha256:bf4d5c4d80765ad35a2b095356d925ffdabd4862f222551c662fa5d67601719e"},
     {file = "h3-4.1.2-cp311-cp311-macosx_11_0_arm64.whl", hash = "sha256:2d94bb16ebb1430a867d947a05f9e8aeeb826c1a57103451a3d6f7a074fb8cf4"},
@@ -725,7 +724,7 @@ name = "healpy"
 version = "1.18.0"
 requires_python = ">=3.10"
 summary = "Healpix tools package for Python"
-groups = ["default"]
+groups = ["default", "dev"]
 dependencies = [
     "astropy",
     "numpy>=1.19",
@@ -761,7 +760,7 @@ name = "html5lib"
 version = "1.1"
 requires_python = ">=2.7, !=3.0.*, !=3.1.*, !=3.2.*, !=3.3.*, !=3.4.*"
 summary = "HTML parser based on the WHATWG HTML specification"
-groups = ["default"]
+groups = ["default", "dev"]
 dependencies = [
     "six>=1.9",
     "webencodings",
@@ -835,7 +834,7 @@ name = "importlib-metadata"
 version = "8.5.0"
 requires_python = ">=3.8"
 summary = "Read metadata from Python packages"
-groups = ["default"]
+groups = ["default", "dev"]
 marker = "python_version < \"3.12\""
 dependencies = [
     "typing-extensions>=3.6.4; python_version < \"3.8\"",
@@ -922,7 +921,7 @@ name = "jaraco-classes"
 version = "3.4.0"
 requires_python = ">=3.8"
 summary = "Utility functions for Python class constructs"
-groups = ["default"]
+groups = ["default", "dev"]
 dependencies = [
     "more-itertools",
 ]
@@ -936,7 +935,7 @@ name = "jaraco-context"
 version = "6.0.1"
 requires_python = ">=3.8"
 summary = "Useful decorators and context managers"
-groups = ["default"]
+groups = ["default", "dev"]
 dependencies = [
     "backports-tarfile; python_version < \"3.12\"",
 ]
@@ -950,7 +949,7 @@ name = "jaraco-functools"
 version = "4.1.0"
 requires_python = ">=3.8"
 summary = "Functools like those found in stdlib"
-groups = ["default"]
+groups = ["default", "dev"]
 dependencies = [
     "more-itertools",
 ]
@@ -964,7 +963,7 @@ name = "jax"
 version = "0.4.37"
 requires_python = ">=3.10"
 summary = "Differentiate, compile, and transform Numpy code."
-groups = ["default"]
+groups = ["default", "dev"]
 dependencies = [
     "jaxlib<=0.4.37,>=0.4.36",
     "ml-dtypes>=0.4.0",
@@ -984,7 +983,7 @@ name = "jaxlib"
 version = "0.4.36"
 requires_python = ">=3.10"
 summary = "XLA library for JAX"
-groups = ["default"]
+groups = ["default", "dev"]
 dependencies = [
     "ml-dtypes>=0.2.0",
     "numpy>=1.24",
@@ -1023,7 +1022,7 @@ name = "jeepney"
 version = "0.8.0"
 requires_python = ">=3.7"
 summary = "Low-level, pure Python DBus protocol wrapper."
-groups = ["default"]
+groups = ["default", "dev"]
 marker = "sys_platform == \"linux\""
 files = [
     {file = "jeepney-0.8.0-py3-none-any.whl", hash = "sha256:c0a454ad016ca575060802ee4d590dd912e35c122fa04e70306de3d076cce755"},
@@ -1035,7 +1034,7 @@ name = "jpl-small-bodies-de441-n16"
 version = "2021.3.31"
 requires_python = ">=3.7"
 summary = "JPL Small Bodies DE441 of 16 most massive asteroids."
-groups = ["default"]
+groups = ["default", "dev"]
 files = [
     {file = "jpl_small_bodies_de441_n16-2021.3.31-py3-none-any.whl", hash = "sha256:43f4e7c4ad7adecda0e934df83daca75c0f55245f7684e6bf9e957831752fdd6"},
     {file = "jpl_small_bodies_de441_n16-2021.3.31.tar.gz", hash = "sha256:c7f90ff15778728058be109f553e444ec7930ddd850d693cdb5cf7a075d49e14"},
@@ -1046,7 +1045,7 @@ name = "jsonschema"
 version = "4.23.0"
 requires_python = ">=3.8"
 summary = "An implementation of JSON Schema validation for Python"
-groups = ["default"]
+groups = ["default", "dev"]
 dependencies = [
     "attrs>=22.2.0",
     "importlib-resources>=1.4.0; python_version < \"3.9\"",
@@ -1065,7 +1064,7 @@ name = "jsonschema-specifications"
 version = "2024.10.1"
 requires_python = ">=3.9"
 summary = "The JSON Schema meta-schemas and vocabularies, exposed as a Registry"
-groups = ["default"]
+groups = ["default", "dev"]
 dependencies = [
     "referencing>=0.31.0",
 ]
@@ -1079,7 +1078,7 @@ name = "keyring"
 version = "25.5.0"
 requires_python = ">=3.8"
 summary = "Store and access your passwords safely."
-groups = ["default"]
+groups = ["default", "dev"]
 dependencies = [
     "SecretStorage>=3.2; sys_platform == \"linux\"",
     "importlib-metadata>=4.11.4; python_version < \"3.12\"",
@@ -1142,7 +1141,7 @@ name = "llvmlite"
 version = "0.43.0"
 requires_python = ">=3.9"
 summary = "lightweight wrapper around basic LLVM functionality"
-groups = ["default"]
+groups = ["default", "dev"]
 files = [
     {file = "llvmlite-0.43.0-cp311-cp311-macosx_10_9_x86_64.whl", hash = "sha256:3e8d0618cb9bfe40ac38a9633f2493d4d4e9fcc2f438d39a4e854f39cc0f5f98"},
     {file = "llvmlite-0.43.0-cp311-cp311-macosx_11_0_arm64.whl", hash = "sha256:e0a9a1a39d4bf3517f2af9d23d479b4175ead205c592ceeb8b89af48a327ea57"},
@@ -1234,7 +1233,7 @@ name = "ml-dtypes"
 version = "0.5.0"
 requires_python = ">=3.9"
 summary = ""
-groups = ["default"]
+groups = ["default", "dev"]
 dependencies = [
     "numpy>=1.21",
     "numpy>=1.21.2; python_version >= \"3.10\"",
@@ -1259,7 +1258,7 @@ name = "mmh3"
 version = "5.0.1"
 requires_python = ">=3.8"
 summary = "Python extension for MurmurHash (MurmurHash3), a set of fast and robust hash functions."
-groups = ["default"]
+groups = ["default", "dev"]
 files = [
     {file = "mmh3-5.0.1-cp311-cp311-macosx_10_9_universal2.whl", hash = "sha256:9a6d5a9b1b923f1643559ba1fc0bf7a5076c90cbb558878d3bf3641ce458f25d"},
     {file = "mmh3-5.0.1-cp311-cp311-macosx_10_9_x86_64.whl", hash = "sha256:3349b968be555f7334bbcce839da98f50e1e80b1c615d8e2aa847ea4a964a012"},
@@ -1301,7 +1300,7 @@ name = "more-itertools"
 version = "10.5.0"
 requires_python = ">=3.8"
 summary = "More routines for operating on iterables, beyond itertools"
-groups = ["default"]
+groups = ["default", "dev"]
 files = [
     {file = "more-itertools-10.5.0.tar.gz", hash = "sha256:5482bfef7849c25dc3c6dd53a6173ae4795da2a41a80faea6700d9f5846c5da6"},
     {file = "more_itertools-10.5.0-py3-none-any.whl", hash = "sha256:037b0d3203ce90cca8ab1defbbdac29d5f993fc20131f3664dc8d6acfa872aef"},
@@ -1312,7 +1311,7 @@ name = "mpc-obscodes"
 version = "2024.12.12"
 requires_python = ">=3.7"
 summary = "Minor Planet Center Observatory Codes"
-groups = ["default"]
+groups = ["default", "dev"]
 files = [
     {file = "mpc_obscodes-2024.12.12-py3-none-any.whl", hash = "sha256:3e01b6db52c8b90805eecadfba446a8caf15043f20e6b348ed9a3e6065ab0dca"},
     {file = "mpc_obscodes-2024.12.12.tar.gz", hash = "sha256:22b380e3851d773d1633dd38fce9e3010829b411e540798f5f12952701f4e0c9"},
@@ -1392,7 +1391,7 @@ name = "naif-de440"
 version = "2020.12.21"
 requires_python = ">=3.7"
 summary = "NAIF Development Ephemeris (DE) 440 for SPICE"
-groups = ["default"]
+groups = ["default", "dev"]
 files = [
     {file = "naif_de440-2020.12.21-py3-none-any.whl", hash = "sha256:54756e6a9489c6a80f0b34478d449f079cc0a62e017b593df297ff00c0113eaf"},
     {file = "naif_de440-2020.12.21.tar.gz", hash = "sha256:a85b02108618a02d1efb983e77c4a0733c74f524bf23c28e2be90e2666111b62"},
@@ -1403,7 +1402,7 @@ name = "naif-earth-itrf93"
 version = "2007.4.3"
 requires_python = ">=3.7"
 summary = "NAIF Earth Body-fixed Reference Frame/Body Association Kernel for SPICE"
-groups = ["default"]
+groups = ["default", "dev"]
 files = [
     {file = "naif_earth_itrf93-2007.4.3-py3-none-any.whl", hash = "sha256:a70516a4717a11651f3c05b0bbb9d7a0c45589ebce81e371823b0e984864880b"},
     {file = "naif_earth_itrf93-2007.4.3.tar.gz", hash = "sha256:95c850a5b893f1fb4b18e24e63aca852a03fa7b5f3b6202f3ecb636b7122a297"},
@@ -1414,7 +1413,7 @@ name = "naif-eop-high-prec"
 version = "2024.12.16"
 requires_python = ">=3.7"
 summary = "NAIF High Precision Earth Orientation Parameters (EOP) Kernel for SPICE"
-groups = ["default"]
+groups = ["default", "dev"]
 files = [
     {file = "naif_eop_high_prec-2024.12.16-py3-none-any.whl", hash = "sha256:54308eed8bb684ab6bc7c8e05fb8dd70cc602b39983dc58dec5f35c80a3e7124"},
     {file = "naif_eop_high_prec-2024.12.16.tar.gz", hash = "sha256:2d9a28fc44f1feed782d70264b81e400f3c9d50cc7b9127bcca6099760c03fc6"},
@@ -1425,7 +1424,7 @@ name = "naif-eop-historical"
 version = "2024.8.28"
 requires_python = ">=3.7"
 summary = "NAIF Historical Earth Orientation Parameters (EOP) Kernel for SPICE"
-groups = ["default"]
+groups = ["default", "dev"]
 files = [
     {file = "naif_eop_historical-2024.8.28-py3-none-any.whl", hash = "sha256:d8214de456c6008001bbea4994bd700a6d4413c85c189db3273037f02656f06b"},
     {file = "naif_eop_historical-2024.8.28.tar.gz", hash = "sha256:2ca2c2eb06eaef3d187ca4c7ca026e559fa63b4252e28faddb389b17d5b96f42"},
@@ -1436,7 +1435,7 @@ name = "naif-eop-predict"
 version = "2024.8.28"
 requires_python = ">=3.7"
 summary = "NAIF Longterm Prediction Earth Orientation Parameters (EOP) Kernel for SPICE"
-groups = ["default"]
+groups = ["default", "dev"]
 files = [
     {file = "naif_eop_predict-2024.8.28-py3-none-any.whl", hash = "sha256:566c6ac8ef55186a5f4f0fa45bbf8881d9bd33b49873421d987260fcd0143e27"},
     {file = "naif_eop_predict-2024.8.28.tar.gz", hash = "sha256:2c2ca5f97e8256bdd47fb868607609dddabdf96dd97c27c725e0a0599c0b4e0e"},
@@ -1447,7 +1446,7 @@ name = "naif-leapseconds"
 version = "2023.5.31"
 requires_python = ">=3.7"
 summary = "NAIF Leapseconds Kernel for SPICE"
-groups = ["default"]
+groups = ["default", "dev"]
 files = [
     {file = "naif_leapseconds-2023.5.31-py3-none-any.whl", hash = "sha256:ff02c1d1a5b8b4c97ecb554b0c1b192cd8af39820b7fb219aeb3815a565e2283"},
     {file = "naif_leapseconds-2023.5.31.tar.gz", hash = "sha256:1316c1d2568a9c4852a39377e7ef82e87d43f9c5de7489c6d6a37ec2ab2d23ad"},
@@ -1484,7 +1483,7 @@ name = "numba"
 version = "0.60.0"
 requires_python = ">=3.9"
 summary = "compiling Python code using LLVM"
-groups = ["default"]
+groups = ["default", "dev"]
 dependencies = [
     "llvmlite<0.44,>=0.43.0dev0",
     "numpy<2.1,>=1.22",
@@ -1535,7 +1534,7 @@ name = "numpy"
 version = "2.0.2"
 requires_python = ">=3.9"
 summary = "Fundamental package for array computing in Python"
-groups = ["default"]
+groups = ["default", "dev"]
 files = [
     {file = "numpy-2.0.2-cp311-cp311-macosx_10_9_x86_64.whl", hash = "sha256:49ca4decb342d66018b01932139c0961a8f9ddc7589611158cb3c27cbcf76448"},
     {file = "numpy-2.0.2-cp311-cp311-macosx_11_0_arm64.whl", hash = "sha256:11a76c372d1d37437857280aa142086476136a8c0f373b2e648ab2c8f18fb195"},
@@ -1565,7 +1564,7 @@ name = "opt-einsum"
 version = "3.4.0"
 requires_python = ">=3.8"
 summary = "Path optimization of einsum functions."
-groups = ["default"]
+groups = ["default", "dev"]
 files = [
     {file = "opt_einsum-3.4.0-py3-none-any.whl", hash = "sha256:69bb92469f86a1565195ece4ac0323943e83477171b91d24c35afe028a90d7cd"},
     {file = "opt_einsum-3.4.0.tar.gz", hash = "sha256:96ca72f1b886d148241348783498194c577fa30a8faac108586b14f1ba4473ac"},
@@ -1587,7 +1586,7 @@ name = "pandas"
 version = "2.2.3"
 requires_python = ">=3.9"
 summary = "Powerful data structures for data analysis, time series, and statistics"
-groups = ["default"]
+groups = ["default", "dev"]
 dependencies = [
     "numpy>=1.22.4; python_version < \"3.11\"",
     "numpy>=1.23.2; python_version == \"3.11\"",
@@ -1787,7 +1786,7 @@ name = "protobuf"
 version = "5.29.1"
 requires_python = ">=3.8"
 summary = ""
-groups = ["default"]
+groups = ["default", "dev"]
 files = [
     {file = "protobuf-5.29.1-cp310-abi3-win32.whl", hash = "sha256:22c1f539024241ee545cbcb00ee160ad1877975690b16656ff87dde107b5f110"},
     {file = "protobuf-5.29.1-cp310-abi3-win_amd64.whl", hash = "sha256:1fc55267f086dd4050d18ef839d7bd69300d0d08c2a53ca7df3920cc271a3c34"},
@@ -1834,7 +1833,7 @@ name = "pyarrow"
 version = "18.1.0"
 requires_python = ">=3.9"
 summary = "Python library for Apache Arrow"
-groups = ["default"]
+groups = ["default", "dev"]
 files = [
     {file = "pyarrow-18.1.0-cp311-cp311-macosx_12_0_arm64.whl", hash = "sha256:eaeabf638408de2772ce3d7793b2668d4bb93807deed1725413b70e3156a7854"},
     {file = "pyarrow-18.1.0-cp311-cp311-macosx_12_0_x86_64.whl", hash = "sha256:3b2e2239339c538f3464308fd345113f886ad031ef8266c6f004d49769bb074c"},
@@ -1858,7 +1857,7 @@ name = "pycparser"
 version = "2.22"
 requires_python = ">=3.8"
 summary = "C parser in Python"
-groups = ["default"]
+groups = ["default", "dev"]
 files = [
     {file = "pycparser-2.22-py3-none-any.whl", hash = "sha256:c3702b6d3dd8c7abc1afa565d7e63d53a1d0bd86cdc24edd75470f4de499cfcc"},
     {file = "pycparser-2.22.tar.gz", hash = "sha256:491c8be9c040f5390f5bf44a5b07752bd07f56edf992381b05c701439eec10f6"},
@@ -1869,7 +1868,7 @@ name = "pyerfa"
 version = "2.0.1.5"
 requires_python = ">=3.9"
 summary = "Python bindings for ERFA"
-groups = ["default"]
+groups = ["default", "dev"]
 dependencies = [
     "numpy>=1.19.3",
 ]
@@ -2002,7 +2001,7 @@ name = "python-dateutil"
 version = "2.9.0.post0"
 requires_python = "!=3.0.*,!=3.1.*,!=3.2.*,>=2.7"
 summary = "Extensions to the standard Python datetime module"
-groups = ["default"]
+groups = ["default", "dev"]
 dependencies = [
     "six>=1.5",
 ]
@@ -2026,7 +2025,7 @@ files = [
 name = "pytz"
 version = "2024.2"
 summary = "World timezone definitions, modern and historical"
-groups = ["default"]
+groups = ["default", "dev"]
 files = [
     {file = "pytz-2024.2-py2.py3-none-any.whl", hash = "sha256:31c7c1817eb7fae7ca4b8c7ee50c72f93aa2dd863de768e1ef4245d426aa0725"},
     {file = "pytz-2024.2.tar.gz", hash = "sha256:2aa355083c50a0f93fa581709deac0c9ad65cca8a9e9beac660adcbd493c798a"},
@@ -2037,7 +2036,7 @@ name = "pyvo"
 version = "1.6"
 requires_python = ">=3.8"
 summary = "Astropy affiliated package for accessing Virtual Observatory data and services"
-groups = ["default"]
+groups = ["default", "dev"]
 dependencies = [
     "astropy>=4.1",
     "requests",
@@ -2052,7 +2051,7 @@ name = "pywin32-ctypes"
 version = "0.2.3"
 requires_python = ">=3.6"
 summary = "A (partial) reimplementation of pywin32 using ctypes/cffi"
-groups = ["default"]
+groups = ["default", "dev"]
 marker = "sys_platform == \"win32\""
 files = [
     {file = "pywin32-ctypes-0.2.3.tar.gz", hash = "sha256:d162dc04946d704503b2edc4d55f3dba5c1d539ead017afa00142c38b9885755"},
@@ -2064,7 +2063,7 @@ name = "pyyaml"
 version = "6.0.2"
 requires_python = ">=3.8"
 summary = "YAML parser and emitter for Python"
-groups = ["default"]
+groups = ["default", "dev"]
 files = [
     {file = "PyYAML-6.0.2-cp311-cp311-macosx_10_9_x86_64.whl", hash = "sha256:cc1c1159b3d456576af7a3e4d1ba7e6924cb39de8f67111c735f6fc832082774"},
     {file = "PyYAML-6.0.2-cp311-cp311-macosx_11_0_arm64.whl", hash = "sha256:1e2120ef853f59c7419231f3bf4e7021f1b936f6ebd222406c3b60212205d2ee"},
@@ -2092,7 +2091,7 @@ name = "quivr"
 version = "0.7.4"
 requires_python = ">=3.9"
 summary = "Container library for working with tabular Arrow data"
-groups = ["default"]
+groups = ["default", "dev"]
 dependencies = [
     "mmh3",
     "numpy",
@@ -2110,7 +2109,7 @@ name = "ray"
 version = "2.40.0"
 requires_python = ">=3.9"
 summary = "Ray provides a simple, universal API for building distributed applications."
-groups = ["default"]
+groups = ["default", "dev"]
 dependencies = [
     "aiosignal",
     "click>=7.0",
@@ -2140,7 +2139,7 @@ files = [
 name = "rebound"
 version = "4.4.5"
 summary = "An open-source multi-purpose N-body code"
-groups = ["default"]
+groups = ["default", "dev"]
 files = [
     {file = "rebound-4.4.5-cp311-cp311-macosx_10_9_x86_64.whl", hash = "sha256:9f330d7ddf729ead66ae3c4f1aa04e47be3fcacb7553aa4eda0bd6adb65092c3"},
     {file = "rebound-4.4.5-cp311-cp311-macosx_11_0_arm64.whl", hash = "sha256:056bd3a8e588dd9b4a8f889f8d50aa21fefd5fb6632bb5917c9c3739f7c6795a"},
@@ -2166,7 +2165,7 @@ name = "referencing"
 version = "0.35.1"
 requires_python = ">=3.8"
 summary = "JSON Referencing + Python"
-groups = ["default"]
+groups = ["default", "dev"]
 dependencies = [
     "attrs>=22.2.0",
     "rpds-py>=0.7.0",
@@ -2181,7 +2180,7 @@ name = "requests"
 version = "2.32.3"
 requires_python = ">=3.8"
 summary = "Python HTTP for Humans."
-groups = ["default"]
+groups = ["default", "dev"]
 dependencies = [
     "certifi>=2017.4.17",
     "charset-normalizer<4,>=2",
@@ -2225,7 +2224,7 @@ name = "rpds-py"
 version = "0.22.3"
 requires_python = ">=3.9"
 summary = "Python bindings to Rust's persistent data structures (rpds)"
-groups = ["default"]
+groups = ["default", "dev"]
 files = [
     {file = "rpds_py-0.22.3-cp311-cp311-macosx_10_12_x86_64.whl", hash = "sha256:d20cfb4e099748ea39e6f7b16c91ab057989712d31761d3300d43134e26e165f"},
     {file = "rpds_py-0.22.3-cp311-cp311-macosx_11_0_arm64.whl", hash = "sha256:68049202f67380ff9aa52f12e92b1c30115f32e6895cd7198fa2a7961621fc5a"},
@@ -2302,7 +2301,7 @@ name = "scipy"
 version = "1.14.1"
 requires_python = ">=3.10"
 summary = "Fundamental algorithms for scientific computing in Python"
-groups = ["default"]
+groups = ["default", "dev"]
 dependencies = [
     "numpy<2.3,>=1.23.5",
 ]
@@ -2331,7 +2330,7 @@ name = "secretstorage"
 version = "3.3.3"
 requires_python = ">=3.6"
 summary = "Python bindings to FreeDesktop.org Secret Service API"
-groups = ["default"]
+groups = ["default", "dev"]
 marker = "sys_platform == \"linux\""
 dependencies = [
     "cryptography>=2.0",
@@ -2358,7 +2357,7 @@ name = "six"
 version = "1.17.0"
 requires_python = "!=3.0.*,!=3.1.*,!=3.2.*,>=2.7"
 summary = "Python 2 and 3 compatibility utilities"
-groups = ["default"]
+groups = ["default", "dev"]
 files = [
     {file = "six-1.17.0-py2.py3-none-any.whl", hash = "sha256:4721f391ed90541fddacab5acf947aa0d3dc7d27b2e1e8eda2be8970586c3274"},
     {file = "six-1.17.0.tar.gz", hash = "sha256:ff70335d468e7eb6ec65b95b99d3a2836546063f63acc5171de367e834932a81"},
@@ -2419,7 +2418,7 @@ name = "soupsieve"
 version = "2.6"
 requires_python = ">=3.8"
 summary = "A modern CSS selector implementation for Beautiful Soup."
-groups = ["default"]
+groups = ["default", "dev"]
 files = [
     {file = "soupsieve-2.6-py3-none-any.whl", hash = "sha256:e72c4ff06e4fb6e4b5a9f0f55fe6e81514581fca1515028625d0f299c602ccc9"},
     {file = "soupsieve-2.6.tar.gz", hash = "sha256:e2e68417777af359ec65daac1057404a3c8a5455bb8abc36f1a9866ab1a51abb"},
@@ -2430,7 +2429,7 @@ name = "spiceypy"
 version = "6.0.0"
 requires_python = "<4,>=3.6"
 summary = "A Python Wrapper for the NAIF CSPICE Toolkit"
-groups = ["default"]
+groups = ["default", "dev"]
 dependencies = [
     "numpy>=1.17.0",
 ]
@@ -2491,7 +2490,7 @@ name = "timezonefinder"
 version = "6.5.7"
 requires_python = "<4,>=3.8"
 summary = "python package for finding the timezone of any point on earth (coordinates) offline"
-groups = ["default"]
+groups = ["default", "dev"]
 dependencies = [
     "cffi<2,>=1.15.1",
     "h3>4",
@@ -2570,7 +2569,7 @@ name = "tzdata"
 version = "2024.2"
 requires_python = ">=2"
 summary = "Provider of IANA time zone data"
-groups = ["default"]
+groups = ["default", "dev"]
 files = [
     {file = "tzdata-2024.2-py2.py3-none-any.whl", hash = "sha256:a48093786cdcde33cad18c2555e8532f34422074448fbc874186f0abd79565cd"},
     {file = "tzdata-2024.2.tar.gz", hash = "sha256:7d85cc416e9382e69095b7bdf4afd9e3880418a2413feec7069d533d6b4e31cc"},
@@ -2596,7 +2595,7 @@ name = "urllib3"
 version = "2.2.3"
 requires_python = ">=3.8"
 summary = "HTTP library with thread-safe connection pooling, file post, and more."
-groups = ["default"]
+groups = ["default", "dev"]
 files = [
     {file = "urllib3-2.2.3-py3-none-any.whl", hash = "sha256:ca899ca043dcb1bafa3e262d73aa25c465bfb49e0bd9dd5d59f1d0acba2f8fac"},
     {file = "urllib3-2.2.3.tar.gz", hash = "sha256:e7d814a81dad81e6caf2ec9fdedb284ecc9c73076b62654547cc64ccdcae26e9"},
@@ -2636,7 +2635,7 @@ files = [
 name = "webencodings"
 version = "0.5.1"
 summary = "Character encoding aliases for legacy web content"
-groups = ["default"]
+groups = ["default", "dev"]
 files = [
     {file = "webencodings-0.5.1-py2.py3-none-any.whl", hash = "sha256:a0af1213f3c2226497a97e2b3aa01a7e4bee4f403f95be16fc9acd2947514a78"},
     {file = "webencodings-0.5.1.tar.gz", hash = "sha256:b36a1c245f2d304965eb4e0a82848379241dc04b865afcc4aab16748587e1923"},
@@ -2647,7 +2646,7 @@ name = "zipp"
 version = "3.21.0"
 requires_python = ">=3.9"
 summary = "Backport of pathlib-compatible object wrapper for zip files"
-groups = ["default"]
+groups = ["default", "dev"]
 marker = "python_version < \"3.12\""
 files = [
     {file = "zipp-3.21.0-py3-none-any.whl", hash = "sha256:ac1bbe05fd2991f160ebce24ffbac5f6d11d83dc90891255885223d42b3cd931"},
