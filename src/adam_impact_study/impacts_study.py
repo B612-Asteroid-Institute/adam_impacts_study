@@ -5,6 +5,7 @@ import pyarrow.compute as pc
 import quivr as qv
 from adam_assist import ASSISTPropagator
 from adam_core.dynamics.impacts import calculate_impact_probabilities, calculate_impacts
+from adam_core.orbits import Orbits
 
 from adam_impact_study.conversions import od_observations_to_ades_file
 from adam_impact_study.fo_od import run_fo_od
@@ -23,7 +24,7 @@ class ImpactStudyResults(qv.Table):
 
 
 def run_impact_study_all(
-    impactor_orbits: qv.Table,
+    impactor_orbits: Orbits,
     run_config_file: str,
     pointing_file: str,
     RUN_NAME: str,
@@ -94,7 +95,7 @@ def run_impact_study_all(
 
 
 def run_impact_study_fo(
-    impactor_orbit: qv.Table,
+    impactor_orbit: Orbits,
     propagator: ASSISTPropagator,
     run_config_file: str,
     pointing_file: str,
@@ -110,7 +111,7 @@ def run_impact_study_fo(
 
     Parameters
     ----------
-    impactor_orbit : qv.Table
+    impactor_orbit : Orbits
         Table containing the initial orbits of the impactors.
     propagator : ASSISTPropagator
         Propagator object to propagate orbits.
