@@ -6,10 +6,7 @@ import quivr as qv
 from adam_core.dynamics.impacts import calculate_impact_probabilities, calculate_impacts
 from adam_core.propagator.adam_assist import ASSISTPropagator
 
-from adam_impact_study.conversions import (
-    impactor_file_to_adam_orbit,
-    od_observations_to_ades_file,
-)
+from adam_impact_study.conversions import od_observations_to_ades_file
 from adam_impact_study.fo_od import run_fo_od
 from adam_impact_study.physical_params import (
     create_physical_params_single,
@@ -26,7 +23,7 @@ class ImpactStudyResults(qv.Table):
 
 
 def run_impact_study_all(
-    impactors_file: str,
+    impactor_orbits: qv.Table,
     run_config_file: str,
     pointing_file: str,
     RUN_NAME: str,
@@ -66,7 +63,6 @@ def run_impact_study_all(
     propagator = ASSISTPropagator()
     os.makedirs(f"{RESULT_DIR}", exist_ok=True)
 
-    impactor_orbits = impactor_file_to_adam_orbit(impactors_file)
     print("Impactor Orbits: ", impactor_orbits)
     object_ids = impactor_orbits.object_id.unique()
     print("Object IDs: ", object_ids)
