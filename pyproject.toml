@@ -7,14 +7,11 @@ authors = [
 ]
 dependencies = [
     "matplotlib",
-    "adam_core",
-    "adam_assist",
+    "adam_core>=0.3.4",
+    "adam_assist>=0.2.0",
     "sorcha",
-    "jax",
-    "jaxlib",
-    "numpy>=1.24.4",
 ]
-requires-python = ">=3.11"
+requires-python = "<3.13,>=3.11"
 readme = "README.md"
 license = {text = "MIT"}
 
@@ -55,6 +52,8 @@ coverage = "pytest --cov=adam_impact_study --cov-report=xml"
 
 [tool.pdm]
 distribution = true
+# We use our fork but sorcha wants to install vanilla assist
+resolution.excludes = ["assist"]
 
 [tool.black]
 line-length = 88

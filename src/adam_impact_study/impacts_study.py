@@ -4,7 +4,7 @@ from typing import Optional
 import pyarrow.compute as pc
 import quivr as qv
 from adam_core.dynamics.impacts import calculate_impact_probabilities, calculate_impacts
-from adam_core.propagator.adam_assist import ASSISTPropagator
+from adam_assist import ASSISTPropagator
 
 from adam_impact_study.conversions import od_observations_to_ades_file
 from adam_impact_study.fo_od import run_fo_od

@@ -23,14 +23,6 @@ pip install .
 
 However, using PDM is recommended to ensure consistent and reproducible environments.
 
-### Download Ephemeris Files
-
-If using pdm, first activate the environement with: `eval $(pdm venv activate)`, then to download the assist ephemeris files, run:
-
-```
-python set_up_assist.py
-```
-
 You will also need to decide which OD platform you want to use. Currently only Find Orb is available.
 
 ### Install Find Orb
