@@ -32,7 +32,7 @@ dev = [
     "pytest-mock",
     "pytest",
     "ruff",
-    "adam-assist @ git+https://github.com/B612-Asteroid-Institute/adam-assist.git@96de5a7b6565c9a5420ad1cf474d54928cb5708e",
+    "adam-assist @ git+https://github.com/B612-Asteroid-Institute/adam-assist.git@a3a8d1374177d92ee6da905c209972bbddd39b2f",
 ]
 
 [tool.pdm.scripts]

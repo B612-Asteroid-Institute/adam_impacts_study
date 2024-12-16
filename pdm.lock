@@ -5,18 +5,18 @@
 groups = ["default", "dev"]
 strategy = ["inherit_metadata"]
 lock_version = "4.5.0"
-content_hash = "sha256:5fdaaee3dd1baec9c9fdd659193656b71a890314dff2ac43f2c853a58d122a81"
+content_hash = "sha256:5a09cfd93ec0f563d5151413e73a531f357f9715bffc403cdd8388d4018ecf55"
 
 [[metadata.targets]]
 requires_python = ">=3.11,<3.13"
 
 [[package]]
 name = "adam-assist"
-version = "0.2.1.dev1"
+version = "0.2.1.dev5"
 requires_python = "<4.0,>=3.10"
 git = "https://github.com/B612-Asteroid-Institute/adam-assist.git"
-ref = "96de5a7b6565c9a5420ad1cf474d54928cb5708e"
-revision = "96de5a7b6565c9a5420ad1cf474d54928cb5708e"
+ref = "a3a8d1374177d92ee6da905c209972bbddd39b2f"
+revision = "a3a8d1374177d92ee6da905c209972bbddd39b2f"
 summary = "ADAM Core Propagator class using ASSIST"
 groups = ["default", "dev"]
 dependencies = [
