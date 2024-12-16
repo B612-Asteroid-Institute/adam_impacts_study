@@ -6,7 +6,7 @@ from adam_core.coordinates import CartesianCoordinates, Origin, SphericalCoordin
 from adam_core.dynamics.impacts import ImpactProbabilities
 from adam_core.observers import Observers
 from adam_core.orbits import Orbits
-from adam_core.propagator.adam_assist import ASSISTPropagator
+from adam_assist import ASSISTPropagator
 from adam_core.time import Timestamp
 
 from adam_impact_study.conversions import (
