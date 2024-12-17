@@ -5,7 +5,7 @@
 groups = ["default", "dev"]
 strategy = ["inherit_metadata"]
 lock_version = "4.5.0"
-content_hash = "sha256:7df719f0f648181d595f0bf3d84060180c2adb8bb1a27ecb75cb84882b1d3cb1"
+content_hash = "sha256:cbf5bd114a202c251dd90fd516fc760dca7fa9e3231184133f171839e288e7e2"
 
 [[metadata.targets]]
 requires_python = ">=3.11,<3.13"
@@ -2106,7 +2106,7 @@ files = [
 
 [[package]]
 name = "ray"
-version = "2.40.0"
+version = "2.39.0"
 requires_python = ">=3.9"
 summary = "Ray provides a simple, universal API for building distributed applications."
 groups = ["default", "dev"]
@@ -2123,16 +2123,16 @@ dependencies = [
     "requests",
 ]
 files = [
-    {file = "ray-2.40.0-cp311-cp311-macosx_10_15_x86_64.whl", hash = "sha256:dac89bb2cb889c19549a4ac0383492e7550f3e63b78b629a3118e8b91e4e82f3"},
-    {file = "ray-2.40.0-cp311-cp311-macosx_11_0_arm64.whl", hash = "sha256:3e4efdf8aebff6e71391c2d5dd66bb45835f2d6d629ac03a3e21e2d4283e2311"},
-    {file = "ray-2.40.0-cp311-cp311-manylinux2014_aarch64.whl", hash = "sha256:c776f131e5d0a169a98ab8021c5796f52bf48fcfc6c44ffbd2a9d090fe10748a"},
-    {file = "ray-2.40.0-cp311-cp311-manylinux2014_x86_64.whl", hash = "sha256:71711cbf2c156213fd49b0f9cc93180a7ba424110070a34bdea3dc09527f31df"},
-    {file = "ray-2.40.0-cp311-cp311-win_amd64.whl", hash = "sha256:532321132618983366e39aeb4cc7867cf7241b0b1e49ee44b01d2aee9923e422"},
-    {file = "ray-2.40.0-cp312-cp312-macosx_10_15_x86_64.whl", hash = "sha256:6992922fe91a90b5cc97d9f05ca51b64d72cd644db7ad55caa936be9a6098cce"},
-    {file = "ray-2.40.0-cp312-cp312-macosx_11_0_arm64.whl", hash = "sha256:28329e7a7471610a475d3bb09a4c1b31abcf3596cee25c4254f8d01ad161ba84"},
-    {file = "ray-2.40.0-cp312-cp312-manylinux2014_aarch64.whl", hash = "sha256:8ea05221fa48e32c652c29498d320e90134b3a012421006af98965097dd1cc3b"},
-    {file = "ray-2.40.0-cp312-cp312-manylinux2014_x86_64.whl", hash = "sha256:674755814f5692306c554cadbc24015af823dc0516e34bdef24ccac9d7a656e3"},
-    {file = "ray-2.40.0-cp312-cp312-win_amd64.whl", hash = "sha256:bbc01d773cbc43e3efa462ec28ee4c0cacc50f098078332fb45b1ab38eaf9b5d"},
+    {file = "ray-2.39.0-cp311-cp311-macosx_10_15_x86_64.whl", hash = "sha256:5547f2e6cf3b5d5aaea8aabea2d223a65c9566db198349c0aac668f454710f1a"},
+    {file = "ray-2.39.0-cp311-cp311-macosx_11_0_arm64.whl", hash = "sha256:7f8a83c2b7719386b3f8d6e3120aae49d9aa4cf49050acaee059b45df92eb281"},
+    {file = "ray-2.39.0-cp311-cp311-manylinux2014_aarch64.whl", hash = "sha256:413488eb2f8bfced8ecc269b120321f33106cbe412a69c3e23ce20c6d5b6f702"},
+    {file = "ray-2.39.0-cp311-cp311-manylinux2014_x86_64.whl", hash = "sha256:21aee127ae1a9cf6193001ab41d2551bcc81331ba3b7196d000f16d10f15c705"},
+    {file = "ray-2.39.0-cp311-cp311-win_amd64.whl", hash = "sha256:fdcb7ad51883d194f7b49f23533d29b3c96d78034f829b6cde1e24b6783dff9d"},
+    {file = "ray-2.39.0-cp312-cp312-macosx_10_15_x86_64.whl", hash = "sha256:77fbcf0002cfbb673b2832e273ee8a834358a2a2bff77e2ff5c97924fcd2b389"},
+    {file = "ray-2.39.0-cp312-cp312-macosx_11_0_arm64.whl", hash = "sha256:a10cfca3a2f05d285ba1ab3cdd3ce43ec2934b05eb91516a9766bcfc4c070425"},
+    {file = "ray-2.39.0-cp312-cp312-manylinux2014_aarch64.whl", hash = "sha256:f8d01550f718a65e0be48da578fa2a3f2e1be85a5453d4b98c3576e1cfaab01b"},
+    {file = "ray-2.39.0-cp312-cp312-manylinux2014_x86_64.whl", hash = "sha256:016930e6ba74b91b40117a64b24f7bfff48a6a780f23d2b064a7a3f43bc4e1a2"},
+    {file = "ray-2.39.0-cp312-cp312-win_amd64.whl", hash = "sha256:4893cc7fd8b3c48c68c3d90bc5fe2023ee2732f91e9664ee79e8272b18ddb170"},
 ]
 
 [[package]]

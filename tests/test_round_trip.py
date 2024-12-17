@@ -61,7 +61,7 @@ class RoundTripResults(qv.Table):
     min_dt = qv.Float64Column(nullable=True)
     adaptive_mode = qv.Int64Column(nullable=True)
     position_diff_km = qv.Float64Column(nullable=True)
-    num_impacts = qv.Int64Column(nullable=True)
+    impact_mjd = qv.Float64Column(nullable=True)
     forward_steps_done = qv.Int64Column(nullable=True)
     backward_steps_done = qv.Int64Column(nullable=True)
     time_taken = qv.Float64Column(nullable=True)
@@ -71,9 +71,6 @@ class RoundTripResults(qv.Table):
 def round_trip_worker(
     orbit: Orbits, min_dt: float, initial_dt: float, adaptive_mode: int, epsilon: float
 ):
-    print(
-        f"start {orbit.orbit_id[0].as_py()} | {initial_dt} | {min_dt} | {adaptive_mode} | {epsilon}"
-    )
     start = time.time()
     propagator = ASSISTPropagator(
         min_dt=min_dt,
@@ -85,25 +82,30 @@ def round_trip_worker(
     original_epoch = orbit.coordinates.time
     forward_orbit = propagator.propagate_orbits(orbit, time_2025)
     forward_steps_done = propagator._last_simulation.steps_done
-    back_orbit = propagator.propagate_orbits(forward_orbit, original_epoch)
+    back_orbit = propagator.propagate_orbits(forward_orbit, original_epoch.add_days(-60))
+    # back_orbit = propagator.propagate_orbits(forward_orbit, original_epoch)
     backward_steps_done = propagator._last_simulation.steps_done
     diff = orbit.coordinates.r - back_orbit.coordinates.r
     norm_diff = np.linalg.norm(diff)
     diff_km = norm_diff * KM_P_AU
 
     # Check for impacts
-    impact_results, impacts = propagator.detect_impacts(back_orbit, 60)
+    impact_results, impacts = propagator.detect_impacts(back_orbit, 120)
+    impact_mjd = None
+    if len(impacts) > 0:
+        impact_mjd = impacts.coordinates.time.mjd()[0].as_py()
     end = time.time()
     print(
-        f"end {orbit.orbit_id[0].as_py()} | {initial_dt} | {min_dt} | {adaptive_mode} | {epsilon} | {diff_km} | {len(impacts)} | {forward_steps_done} | {backward_steps_done} | {end - start}"
+        f"end {orbit.orbit_id[0].as_py()} | {initial_dt} | {min_dt} | {adaptive_mode} | {epsilon} | {diff_km} | {impact_mjd} | {forward_steps_done} | {backward_steps_done} | {end - start}"
     )
+
     return RoundTripResults.from_kwargs(
         orbit_id=orbit.orbit_id,
         initial_dt=[initial_dt],
         min_dt=[min_dt],
         adaptive_mode=[adaptive_mode],
         position_diff_km=[diff_km],
-        num_impacts=[len(impacts)],
+        impact_mjd=[impact_mjd],
         forward_steps_done=[forward_steps_done],
         backward_steps_done=[backward_steps_done],
         time_taken=[end - start],
@@ -118,7 +120,7 @@ def test_round_trip_propagation_non_impacting(orbits: Orbits, max_processes: int
     """Run round trip propagation tests with various parameters and collect results."""
 
     min_dts = np.logspace(0, -6, 7)
-    initial_dts = np.logspace(0, -6, 7)
+    initial_dts = np.logspace(-3, -6, 4)
     adaptive_modes = [0, 1, 2, 3]
     epsilons = np.logspace(-12, -6, 7)
 
@@ -150,7 +152,7 @@ def test_round_trip_propagation_non_impacting(orbits: Orbits, max_processes: int
                                 )
                             )
 
-                        if len(futures) > max_processes:
+                        if len(futures) > max_processes * 1.5:
                             finished, futures = ray.wait(futures, num_returns=1)
                             result = ray.get(finished[0])
                             all_results = qv.concatenate([all_results, result])
