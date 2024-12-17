@@ -1,3 +1,4 @@
+import logging
 import multiprocessing as mp
 import os
 import time
@@ -14,6 +15,9 @@ from adam_core.constants import KM_P_AU
 from adam_core.orbits import Orbits
 from adam_core.ray_cluster import initialize_use_ray
 from adam_core.time import Timestamp
+
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
 
 
 @pytest.fixture
@@ -64,8 +68,8 @@ class RoundTripResults(qv.Table):
     adaptive_mode = qv.Int64Column(nullable=True)
     position_diff_km = qv.Float64Column(nullable=True)
     impact_mjd = qv.Float64Column(nullable=True)
-    forward_steps_done = qv.Int64Column(nullable=True)
-    backward_steps_done = qv.Int64Column(nullable=True)
+    # forward_steps_done = qv.Int64Column(nullable=True)
+    # backward_steps_done = qv.Int64Column(nullable=True)
     time_taken = qv.Float64Column(nullable=True)
     epsilon = qv.Float64Column(nullable=True)
 
@@ -83,10 +87,9 @@ def round_trip_worker(
     time_2025 = Timestamp.from_iso8601("2025-05-05T00:00:00")
     original_epoch = orbit.coordinates.time
     forward_orbit = propagator.propagate_orbits(orbit, time_2025)
-    forward_steps_done = propagator._last_simulation.steps_done
-    # back_orbit = propagator.propagate_orbits(forward_orbit, original_epoch.add_days(-60))
+    # forward_steps_done = propagator._last_simulation.steps_done
     back_orbit = propagator.propagate_orbits(forward_orbit, original_epoch)
-    backward_steps_done = propagator._last_simulation.steps_done
+    # backward_steps_done = propagator._last_simulation.steps_done
     diff = orbit.coordinates.r - back_orbit.coordinates.r
     norm_diff = np.linalg.norm(diff)
     diff_km = norm_diff * KM_P_AU
@@ -98,7 +101,7 @@ def round_trip_worker(
         impact_mjd = impacts.coordinates.time.mjd()[0].as_py()
     end = time.time()
     print(
-        f"end {orbit.orbit_id[0].as_py()} | {initial_dt} | {min_dt} | {adaptive_mode} | {epsilon} | {diff_km} | {impact_mjd} | {forward_steps_done} | {backward_steps_done} | {end - start}"
+        f"end {orbit.orbit_id[0].as_py()} | {initial_dt} | {min_dt} | {adaptive_mode} | {epsilon} | {diff_km} | {impact_mjd} | {end - start}"
     )
 
     return RoundTripResults.from_kwargs(
@@ -108,8 +111,8 @@ def round_trip_worker(
         adaptive_mode=[adaptive_mode],
         position_diff_km=[diff_km],
         impact_mjd=[impact_mjd],
-        forward_steps_done=[forward_steps_done],
-        backward_steps_done=[backward_steps_done],
+        # forward_steps_done=[forward_steps_done],
+        # backward_steps_done=[backward_steps_done],
         time_taken=[end - start],
         epsilon=[epsilon],
     )
@@ -124,10 +127,11 @@ def test_round_trip_propagation_non_impacting(orbits: Orbits, max_processes: int
     min_dts = np.logspace(0, -5, 6)
     initial_dts = np.logspace(-3, -5, 3)
     adaptive_modes = [0, 1, 2, 3]
-    # epsilons = np.logspace(-6, -9, 4)
     epsilons = np.logspace(-6, -7, 2)
 
+
     initialize_use_ray(num_cpus=max_processes)
+
     futures = []
     all_results = RoundTripResults.empty()
     for epsilon in epsilons:
@@ -164,7 +168,13 @@ def test_round_trip_propagation_non_impacting(orbits: Orbits, max_processes: int
         result = ray.get(finished[0])
         all_results = qv.concatenate([all_results, result])
 
+    import pdb; pdb.set_trace()
+    print("All results: ", all_results)
     return all_results
+
+if __name__ == "__main__":
+    orbits = non_impacting_orbits()
+    test_round_trip_propagation_non_impacting(orbits[0], max_processes=8)
 
 
 def analyze_round_trip_results(results: RoundTripResults):
@@ -181,17 +191,16 @@ def analyze_round_trip_results(results: RoundTripResults):
     """
     # Convert to pandas for easier analysis
     df = results.to_pandas()
-    df['total_steps'] = df['forward_steps_done'] + df['backward_steps_done']
+    # df['total_steps'] = df['forward_steps_done'] + df['backward_steps_done']
     
     # Correlation analysis
     correlation_vars = ['initial_dt', 'min_dt', 'epsilon', 'adaptive_mode', 
-                       'position_diff_km', 'total_steps', 'time_taken']
+                       'position_diff_km', 'time_taken']
     correlation_matrix = df[correlation_vars].corr()
     
     # Group by parameters and calculate mean metrics
     grouped = df.groupby(['initial_dt', 'min_dt', 'epsilon', 'adaptive_mode']).agg({
         'position_diff_km': 'mean',
-        'total_steps': 'mean',
         'time_taken': 'mean',
         'impact_mjd': lambda x: x.notna().mean()
     }).reset_index()
@@ -199,14 +208,14 @@ def analyze_round_trip_results(results: RoundTripResults):
     # Find best combinations
     best_configs = grouped[
         grouped['impact_mjd'] > 0.99
-    ].sort_values(['total_steps', 'time_taken'])
+    ].sort_values(['time_taken'])
     
     print("\nCorrelations with position difference (km):")
     print(correlation_matrix['position_diff_km'].sort_values(ascending=False))
     
     print("\nTop 5 most efficient configurations that reliably detect impacts:")
     print(best_configs[['initial_dt', 'min_dt', 'epsilon', 'adaptive_mode', 
-                       'total_steps', 'time_taken', 'impact_mjd']].head())
+                       'time_taken', 'impact_mjd']].head())
     
     return correlation_matrix, best_configs, df
 
@@ -220,7 +229,7 @@ def visualize_round_trip_results(df: pd.DataFrame, save_path: str = None):
     """
     # Correlation heatmap
     correlation_vars = ['initial_dt', 'min_dt', 'epsilon', 'adaptive_mode', 
-                       'position_diff_km', 'total_steps', 'time_taken']
+                       'position_diff_km', 'time_taken']
     correlation_matrix = df[correlation_vars].corr()
     
     plt.figure(figsize=(10, 8))

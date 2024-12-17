@@ -1,6 +1,7 @@
 import os
 import shutil
 import subprocess
+from typing import Optional, Tuple
 
 from adam_core.orbits import Orbits
 
@@ -13,7 +14,7 @@ def run_fo_od(
     FO_DIR: str,
     RUN_DIR: str,
     RESULT_DIR: str,
-) -> Orbits:
+) -> Tuple[Orbits, Optional[str]]:
     """
     Run the find_orb orbit determination process for each object
 
@@ -34,6 +35,8 @@ def run_fo_od(
     -------
     orbit : `~adam_core.orbits.orbits.Orbits`
         Orbit object containing the orbital elements and covariance matrix.
+    error : str
+        Error message if the orbit determination failed.
     """
 
     # Generate the find_orb commands
@@ -55,9 +58,9 @@ def run_fo_od(
     subprocess.run(fo_command, shell=True)
     if not os.path.exists(f"{FO_DIR}/{fo_output_folder}/covar.json"):
         print("No find_orb output for: ", fo_output_folder)
-        return None
+        return Orbits.empty(), "No find_orb output"
     else:
         # Convert to ADAM Orbit objects
         orbit = fo_to_adam_orbit_cov(f"{RESULT_DIR}/{fo_output_folder}")
 
-        return orbit
+        return orbit, None
