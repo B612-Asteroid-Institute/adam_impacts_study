@@ -5,18 +5,18 @@
 groups = ["default", "dev"]
 strategy = ["inherit_metadata"]
 lock_version = "4.5.0"
-content_hash = "sha256:5a09cfd93ec0f563d5151413e73a531f357f9715bffc403cdd8388d4018ecf55"
+content_hash = "sha256:7df719f0f648181d595f0bf3d84060180c2adb8bb1a27ecb75cb84882b1d3cb1"
 
 [[metadata.targets]]
 requires_python = ">=3.11,<3.13"
 
 [[package]]
 name = "adam-assist"
-version = "0.2.1.dev5"
+version = "0.2.1.dev7"
 requires_python = "<4.0,>=3.10"
 git = "https://github.com/B612-Asteroid-Institute/adam-assist.git"
-ref = "a3a8d1374177d92ee6da905c209972bbddd39b2f"
-revision = "a3a8d1374177d92ee6da905c209972bbddd39b2f"
+ref = "9ddc2c3b4c99d35e0f29a7cd2f77dce05d3efa76"
+revision = "9ddc2c3b4c99d35e0f29a7cd2f77dce05d3efa76"
 summary = "ADAM Core Propagator class using ASSIST"
 groups = ["default", "dev"]
 dependencies = [
@@ -1410,13 +1410,13 @@ files = [
 
 [[package]]
 name = "naif-eop-high-prec"
-version = "2024.12.16"
+version = "2024.12.17"
 requires_python = ">=3.7"
 summary = "NAIF High Precision Earth Orientation Parameters (EOP) Kernel for SPICE"
 groups = ["default", "dev"]
 files = [
-    {file = "naif_eop_high_prec-2024.12.16-py3-none-any.whl", hash = "sha256:54308eed8bb684ab6bc7c8e05fb8dd70cc602b39983dc58dec5f35c80a3e7124"},
-    {file = "naif_eop_high_prec-2024.12.16.tar.gz", hash = "sha256:2d9a28fc44f1feed782d70264b81e400f3c9d50cc7b9127bcca6099760c03fc6"},
+    {file = "naif_eop_high_prec-2024.12.17-py3-none-any.whl", hash = "sha256:a1262e98097dbe691be895815ed75b2352b675f42b217f53166bebed8ee069d2"},
+    {file = "naif_eop_high_prec-2024.12.17.tar.gz", hash = "sha256:3d79fb6ffebb94cb4932c7d65f730ed8a350f330b6d0cda17536fddb5aafbe98"},
 ]
 
 [[package]]
