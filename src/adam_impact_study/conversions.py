@@ -381,9 +381,8 @@ def fo_to_adam_orbit_cov(fo_output_folder: str) -> Orbits:
 
     elements_dict, covar_dict = read_fo_output(fo_output_folder)
 
-    orbits = None
+    orbits = Orbits.empty()
     for object_id, elements in elements_dict.items():
-
         covar_matrix = np.array([covar_dict["covar"]])
         covar_state_vector = [covar_dict["state_vect"]]
 
@@ -407,9 +406,8 @@ def fo_to_adam_orbit_cov(fo_output_folder: str) -> Orbits:
             object_id=[object_id],
             coordinates=cartesian_coordinates,
         )
-        if orbits is None:
-            orbits = orbit
-        else:
-            orbits = qv.concatenate([orbits, orbit])
+        orbits = qv.concatenate([orbits, orbit])
+        if orbits.fragmented():
+            orbits = qv.defragment(orbits)
 
     return orbits

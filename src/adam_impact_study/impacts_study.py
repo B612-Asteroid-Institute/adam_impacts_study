@@ -7,6 +7,7 @@ import quivr as qv
 import ray
 from adam_assist import ASSISTPropagator
 from adam_core.dynamics.impacts import calculate_impact_probabilities, calculate_impacts
+from adam_core.observers.utils import calculate_observing_night
 from adam_core.orbit_determination import OrbitDeterminationObservations
 from adam_core.orbits import Orbits
 from adam_core.ray_cluster import initialize_use_ray
@@ -70,7 +71,9 @@ def run_impact_study_all(
         Table containing the results of the impact study with columns 'object_id',
         'day', and 'impact_probability'. If no impacts were found, returns None.
     """
-    propagator = ASSISTPropagator(initial_dt=0.001, min_dt=1e-5, adaptive_mode=1, epsilon=1e-6)
+    propagator = ASSISTPropagator(
+        initial_dt=0.001, min_dt=1e-5, adaptive_mode=1, epsilon=1e-6
+    )
     os.makedirs(f"{RESULT_DIR}", exist_ok=True)
 
     print("Impactor Orbits: ", impactor_orbits)
@@ -94,11 +97,9 @@ def run_impact_study_all(
             RESULT_DIR,
             chunk_size,
         )
-
-        if impact_results is None:
-            impact_results = impact_result
-        else:
-            impact_results = qv.concatenate([impact_results, impact_result])
+        impact_results = qv.concatenate([impact_results, impact_result])
+        if impact_results.fragmented():
+            impact_results = qv.defragment(impact_results)
 
     return impact_results
 
@@ -137,7 +138,7 @@ def run_impact_study_fo(
     )
 
     # Run Sorcha to generate observational data
-    od_observations = run_sorcha(
+    observations = run_sorcha(
         impactor_orbit,
         sorcha_config_file,
         sorcha_orbits_file,
@@ -147,43 +148,36 @@ def run_impact_study_fo(
         sorcha_output_name,
         RESULT_DIR,
     )
-    if od_observations is None:
-        return None
+    if len(observations) == 0:
+        return ImpactStudyResults.empty()
 
-    od_observations = od_observations.sort_by(["coordinates.time.days", "coordinates.time.nanos"])
+    # Sort the observations by time and origin code
+    observations = observations.sort_by(
+        ["coordinates.time.days", "coordinates.time.nanos", "coordinates.origin.code"]
+    )
 
-    # Propagate the orbit and calculate the impact probability over time
-    impact_results = None
-    futures = []
-    
-    min_mjd = pc.min(od_observations.coordinates.time.mjd())
-    mask = pc.equal(od_observations.coordinates.time.mjd(), min_mjd)
-    first_obs = od_observations.apply_mask(mask).coordinates.time
+    # Select the unique nights of observations and
+    nights = calculate_observing_night(
+        observations.coordinates.origin.code, observations.coordinates.time
+    )
+    unique_nights = pc.unique(nights).sort()
 
-    # Initialize time to first observation
-    day_count = first_obs
+    if len(unique_nights) < 3:
+        # TODO: We might consider returning something else here.
+        return ImpactStudyResults.empty()
 
-    print("Impact Date: ", impact_date)
-
-
-    # Select the unique nights of od_observations and
-    
-    from adam_core.observers.utils import calculate_observing_night
-    nights = calculate_observing_night(od_observations.coordinates.origin.code, od_observations.coordinates.time)
-    unique_nights = set(nights)
-    unique_nights = sorted(unique_nights)
-    print("Unique Nights: ", unique_nights)
-
-    # We iterate through unique nights and filter observations based on 
+    # We iterate through unique nights and filter observations based on
     # to everything below or equal to the current night number
     # We start with a minimum of three unique nights
+    futures = []
+    results = ImpactStudyResults.empty()
     for night in unique_nights[2:]:
         mask = pc.less_equal(nights, night)
-        od_observations_window = od_observations.apply_mask(mask)
-        
+        observations_window = observations.apply_mask(mask)
+
         if max_processes == 1:
-            result = calculate_impact_probability_for_day(
-                od_observations_window,
+            result = calculate_impact_probability(
+                observations_window,
                 impactor_orbit,
                 propagator,
                 fo_input_file_base,
@@ -192,12 +186,14 @@ def run_impact_study_fo(
                 RUN_DIR,
                 RESULT_DIR,
             )
-            if result is not None:
-                impact_results = result if impact_results is None else qv.concatenate([impact_results, result])
+            results = qv.concatenate([results, result])
+            if results.fragmented():
+                results = qv.defragment(results)
+
         else:
             futures.append(
-                calculate_impact_probability_for_day_remote.remote(
-                    od_observations_window,
+                calculate_impact_probability_remote.remote(
+                    observations_window,
                     impactor_orbit,
                     propagator,
                     fo_input_file_base,
@@ -207,25 +203,27 @@ def run_impact_study_fo(
                     RESULT_DIR,
                 )
             )
-            
+
             if len(futures) > max_processes * 1.5:
                 finished, futures = ray.wait(futures, num_returns=1)
                 result = ray.get(finished[0])
-                if result is not None:
-                    impact_results = result if impact_results is None else qv.concatenate([impact_results, result])
-                    
+                results = qv.concatenate([results, result])
+                if results.fragmented():
+                    results = qv.defragment(results)
+
     # Get remaining results
     while len(futures) > 0:
         finished, futures = ray.wait(futures, num_returns=1)
         result = ray.get(finished[0])
-        if result is not None:
-            impact_results = result if impact_results is None else qv.concatenate([impact_results, result])
-            
-    return impact_results
+        results = qv.concatenate([results, result])
+        if results.fragmented():
+            results = qv.defragment(results)
+
+    return results
 
 
-def calculate_impact_probability_for_day(
-    od_observations: Observations,
+def calculate_impact_probability(
+    observations: Observations,
     impactor_orbit: Orbits,
     propagator: ASSISTPropagator,
     fo_input_file_base: str,
@@ -233,13 +231,13 @@ def calculate_impact_probability_for_day(
     FO_DIR: str,
     RUN_DIR: str,
     RESULT_DIR: str,
-) -> Optional[ImpactStudyResults]:
-    """Calculate impact probability for a specific day.
-    
+) -> ImpactStudyResults:
+    """Calculate impact probability for a s of observations.
+
     Parameters
     ----------
-    od_observations : Observations
-        Filtered observations up to current day
+    observations : Observations
+        Observations to calculate an orbit from and determine impact probability.
     impactor_orbit : Orbits
         Original impactor orbit
     propagator : ASSISTPropagator
@@ -254,7 +252,7 @@ def calculate_impact_probability_for_day(
         Working directory
     RESULT_DIR : str
         Results output directory
-        
+
     Returns
     -------
     ImpactStudyResults
@@ -263,17 +261,38 @@ def calculate_impact_probability_for_day(
     obj_id = impactor_orbit.object_id[0].as_py()
     thirty_days_before_impact = impactor_orbit.coordinates.time
 
-    start_date = od_observations.coordinates.time.min().mjd()[0].as_py()
-    end_date = od_observations.coordinates.time.max().mjd()[0].as_py()
+    # Get the start and end date of the observations, the number of
+    # observations, and the number of unique nights
+    start_date = observations.coordinates.time.min()
+    end_date = observations.coordinates.time.max()
+    observations_count = len(observations)
+    nights = calculate_observing_night(
+        observations.coordinates.origin.code, observations.coordinates.time
+    )
+    unique_nights = pc.unique(nights).sort()
+    observation_nights = len(unique_nights)
 
-    fo_file_name = f"{fo_input_file_base}_{start_date}_{end_date}.csv"
-    fo_output_folder = f"{fo_output_file_base}_{obj_id}_{start_date}_{end_date}"
-    od_observations_to_ades_file(od_observations, f"{RESULT_DIR}/{fo_file_name}")
+    # Create the find_orb input and output files
+    start_date_mjd = start_date.mjd()[0]
+    end_date_mjd = end_date.mjd()[0]
+    fo_file_name = f"{fo_input_file_base}_{start_date_mjd}_{end_date_mjd}.csv"
+    fo_output_folder = f"{fo_output_file_base}_{obj_id}_{start_date_mjd}_{end_date_mjd}"
+    od_observations_to_ades_file(observations, f"{RESULT_DIR}/{fo_file_name}")
 
     try:
+        # TODO: This generate a ValueError for JM
+        # See: >   orbit, error = run_fo_od(
+        #             fo_file_name,
+        #             fo_output_folder,
+        #             FO_DIR,
+        #             RUN_DIR,
+        #             RESULT_DIR,
+        #         )
+        # E       ValueError: not enough values to unpack (expected 2, got 1)
+        # If I then run it with pdb and re-call the function it returns the expected values...
         orbit, error = run_fo_od(
             fo_file_name,
-            fo_output_folder, 
+            fo_output_folder,
             FO_DIR,
             RUN_DIR,
             RESULT_DIR,
@@ -281,59 +300,69 @@ def calculate_impact_probability_for_day(
     except Exception as e:
         return ImpactStudyResults.from_kwargs(
             object_id=[obj_id],
-            observation_start=[od_observations.coordinates.time.min()],
-            observation_end=[od_observations.coordinates.time.max()],
+            observation_start=start_date,
+            observation_end=end_date,
+            observation_count=[observations_count],
+            observation_nights=[observation_nights],
             error=[str(e)],
         )
 
-    if error is not None:
+    if len(error) > 0:
         return ImpactStudyResults.from_kwargs(
             object_id=[obj_id],
-            observation_start=[od_observations.coordinates.time.min()],
-            observation_end=[od_observations.coordinates.time.max()],
+            observation_start=start_date,
+            observation_end=end_date,
+            observation_count=[observations_count],
+            observation_nights=[observation_nights],
             error=[error],
         )
 
-    # At this point we can guarante we at least have an orbit
-    time = impactor_orbit.coordinates.time[0]
     try:
-        propagated_30_days_from_impact = propagator.propagate_orbits(
-            orbit, time, covariance=True, covariance_method="monte_carlo", num_samples=1000
+        propagated_30_days_before_impact = propagator.propagate_orbits(
+            orbit,
+            thirty_days_before_impact,
+            covariance=True,
+            covariance_method="monte_carlo",
+            num_samples=1000,
         )
-        propagated_30_days_from_impact.to_parquet(
+        propagated_30_days_before_impact.to_parquet(
             f"{RESULT_DIR}/propagated_orbit_{obj_id}_{start_date}_{end_date}.parquet"
         )
     except Exception as e:
         return ImpactStudyResults.from_kwargs(
             object_id=[obj_id],
-            observation_start=[od_observations.coordinates.time.min()],
-            observation_end=[od_observations.coordinates.time.max()],
+            observation_start=start_date,
+            observation_end=end_date,
+            observation_count=[observations_count],
+            observation_nights=[observation_nights],
             error=[str(e)],
         )
-        
+
     try:
         final_orbit_states, impacts = calculate_impacts(
-            propagated_30_days_from_impact, 60, propagator, num_samples=10000
+            propagated_30_days_before_impact, 60, propagator, num_samples=10000
         )
 
         ip = calculate_impact_probabilities(final_orbit_states, impacts)
     except Exception as e:
         return ImpactStudyResults.from_kwargs(
             object_id=[obj_id],
-            observation_start=[od_observations.coordinates.time.min()],
-            observation_end=[od_observations.coordinates.time.max()],
+            observation_start=start_date,
+            observation_end=end_date,
+            observation_count=[observations_count],
+            observation_nights=[observation_nights],
             error=[str(e)],
         )
-    
+
     return ImpactStudyResults.from_kwargs(
         object_id=[obj_id],
-        observation_start=[od_observations.coordinates.time.min()],
-        observation_end=[od_observations.coordinates.time.max()],
+        observation_start=start_date,
+        observation_end=end_date,
+        observation_count=[observations_count],
+        observation_nights=[observation_nights],
         impact_probability=[ip.cumulative_probability[0].as_py()],
-        observation_count=[len(od_observations)],
     )
 
 
-
 # Create remote version
-calculate_impact_probability_for_day_remote = ray.remote(calculate_impact_probability_for_day)
+calculate_impact_probability_remote = ray.remote(calculate_impact_probability)

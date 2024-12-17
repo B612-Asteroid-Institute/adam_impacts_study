@@ -151,7 +151,7 @@ def run_sorcha(
     pointing_file: str,
     sorcha_output_name: str,
     RESULT_DIR: str,
-) -> Optional[Observations]:
+) -> Observations:
     """
     Run the Sorcha software to generate observational data based on input orbital and physical parameters.
 
@@ -180,7 +180,6 @@ def run_sorcha(
     -------
     sorcha_observations : Observations (qv.Table)
         Observations object containing the Sorcha observations.
-        Returns None if the input file is empty.
     """
 
     generate_sorcha_orbits(adam_orbits, sorcha_orbits_file)
@@ -205,8 +204,9 @@ def run_sorcha(
         return None
     sorcha_output_file = f"{RESULT_DIR}/{sorcha_output_name}/{sorcha_output_file}"
     od_observations = sorcha_output_to_od_observations(sorcha_output_file)
+
     if od_observations is None:
         print(f"No observations found in {sorcha_output_file}")
-        od_observations = Observations.empty()
-        return od_observations
+        return Observations.empty()
+
     return od_observations
