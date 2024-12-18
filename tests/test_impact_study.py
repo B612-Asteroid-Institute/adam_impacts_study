@@ -93,6 +93,7 @@ I00001,0.9125315468414172,0.3841166640887326,2.1597232256169803,42.1290789217616
 
     # Mock returns
     mock_calculate_impact_probabilities.return_value = ImpactProbabilities.from_kwargs(
+        condition_id=["1", "1", "1"],
         orbit_id=["1", "2", "3"],
         impacts=[1, 2, 0],
         variants=[3, 3, 3],
