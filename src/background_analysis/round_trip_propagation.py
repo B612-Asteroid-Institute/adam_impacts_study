@@ -1,12 +1,12 @@
-import atexit
-import fcntl
+"""
+This module is used to test what propagation settings correctly round trip our impactors
+successfully with the least amount of computation and wall time.
+"""
+
+
 import logging
 import os
-import signal
-import sys
-import termios
 import time
-import tty
 
 import matplotlib.pyplot as plt
 import numpy as np
@@ -122,17 +122,13 @@ round_trip_worker_remote = ray.remote(round_trip_worker)
 round_trip_worker_remote.options(num_returns=1)
 
 
-def test_round_trip_propagation_non_impacting(orbits: Orbits, max_processes: int = 1):
+def propagation_round_trip_analysis(orbits: Orbits, max_processes: int = 1):
     """Run round trip propagation tests with various parameters and collect results."""
 
     min_dts = np.logspace(-3, -12, 10)
     initial_dts = np.logspace(-3, -6, 4)
     adaptive_modes = [1]
     epsilons = np.logspace(-6, -10, 5)
-    # min_dts = [0.0001]
-    # initial_dts = [0.0001]
-    # adaptive_modes = [1]
-    # epsilons = [1e-6]
 
     initialize_use_ray(num_cpus=max_processes)
 
@@ -170,13 +166,13 @@ def test_round_trip_propagation_non_impacting(orbits: Orbits, max_processes: int
             result = ray.get(finished[0])
             all_results = qv.concatenate([all_results, result])
         
-        print(f"Completed: {len(all_results)} / {len(combinations)}")
+        logger.info(f"Completed: {len(all_results)} / {len(combinations)}")
 
     while len(futures) > 0:
         finished, futures = ray.wait(futures, num_returns=1)
         result = ray.get(finished[0])
         all_results = qv.concatenate([all_results, result])
-        print(f"Completed: {len(all_results)} / {len(combinations)}")
+        logger.info(f"Completed: {len(all_results)} / {len(combinations)}")
     return all_results
 
 
@@ -214,11 +210,11 @@ def analyze_round_trip_results(results: RoundTripResults):
         grouped['impact_mjd'] > 0.99
     ].sort_values(['time_taken'])
     
-    print("\nCorrelations with position difference (km):")
-    print(correlation_matrix['position_diff_km'].sort_values(ascending=False))
+    logger.info("\nCorrelations with position difference (km):")
+    logger.info(correlation_matrix['position_diff_km'].sort_values(ascending=False))
     
-    print("\nTop 5 most efficient configurations that reliably detect impacts:")
-    print(best_configs[['initial_dt', 'min_dt', 'epsilon', 'adaptive_mode', 
+    logger.info("\nTop 5 most efficient configurations that reliably detect impacts:")
+    logger.info(best_configs[['initial_dt', 'min_dt', 'epsilon', 'adaptive_mode', 
                        'time_taken', 'impact_mjd']].head())
     
     return correlation_matrix, best_configs, df

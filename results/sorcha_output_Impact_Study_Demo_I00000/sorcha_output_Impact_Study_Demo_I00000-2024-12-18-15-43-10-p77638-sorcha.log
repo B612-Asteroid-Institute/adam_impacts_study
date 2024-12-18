@@ -1,0 +1,122 @@
+2024-12-18 15:43:10,785 root         INFO     Sorcha Start (Main) 
+2024-12-18 15:43:10,785 root         INFO     Command line: /Users/aleck/Code/adam_impacts_study/.venv/bin/sorcha-run -c sorcha_config_Impact_Study_Demo_I00000.ini -p sorcha_params_Impact_Study_Demo_I00000.csv -ob sorcha_input_Impact_Study_Demo_I00000.csv -pd /Users/aleck/Code/adam_impacts_study/demo/data/baseline_v2.0_1yr.db -o results/sorcha_output_Impact_Study_Demo_I00000 -t sorcha_output_Impact_Study_Demo_I00000 -f 
+2024-12-18 15:43:10,785 sorcha.modules.PPCommandLineParser INFO     Using commandline setting paramsinput = sorcha_params_Impact_Study_Demo_I00000.csv 
+2024-12-18 15:43:10,785 sorcha.modules.PPCommandLineParser INFO     Using commandline setting orbinfile = sorcha_input_Impact_Study_Demo_I00000.csv 
+2024-12-18 15:43:10,785 sorcha.modules.PPCommandLineParser INFO     Using commandline setting configfile = sorcha_config_Impact_Study_Demo_I00000.ini 
+2024-12-18 15:43:10,785 sorcha.modules.PPCommandLineParser INFO     Using commandline setting outpath = results/sorcha_output_Impact_Study_Demo_I00000 
+2024-12-18 15:43:10,785 sorcha.modules.PPCommandLineParser INFO     Using commandline setting pointing_database = /Users/aleck/Code/adam_impacts_study/demo/data/baseline_v2.0_1yr.db 
+2024-12-18 15:43:10,785 sorcha.modules.PPCommandLineParser INFO     Using commandline setting oifoutput = None 
+2024-12-18 15:43:10,785 sorcha.modules.PPCommandLineParser INFO     Using commandline setting output_ephemeris_file = None 
+2024-12-18 15:43:10,785 sorcha.modules.PPCommandLineParser INFO     Using commandline setting surveyname = rubin_sim 
+2024-12-18 15:43:10,785 sorcha.modules.PPCommandLineParser INFO     Using commandline setting outfilestem = sorcha_output_Impact_Study_Demo_I00000 
+2024-12-18 15:43:10,785 sorcha.modules.PPCommandLineParser INFO     Using commandline setting verbose = True 
+2024-12-18 15:43:10,785 sorcha.modules.PPCommandLineParser INFO     Using commandline setting stats = None 
+2024-12-18 15:43:10,785 sorcha.modules.PPCommandLineParser INFO     Using commandline setting ar_data_path = None 
+2024-12-18 15:43:10,785 root         INFO     Reading configuration file... 
+2024-12-18 15:43:10,785 sorcha.modules.PPConfigParser INFO     Copy of configuration file sorcha_config_Impact_Study_Demo_I00000.ini:
+
+[Sorcha Configuration File]
+
+[INPUT]
+ephemerides_type = ar
+eph_format = csv
+size_serial_chunk = 5000
+aux_format = whitespace
+pointing_sql_query = SELECT observationId, observationStartMJD as observationStartMJD_TAI, visitTime, visitExposureTime, filter, seeingFwhmGeom as seeingFwhmGeom_arcsec, seeingFwhmEff as seeingFwhmEff_arcsec, fiveSigmaDepth as fieldFiveSigmaDepth_mag , fieldRA as fieldRA_deg, fieldDec as fieldDec_deg, rotSkyPos as fieldRotSkyPos_deg FROM observations WHERE observationStartMJD < 66232.91220580554 ORDER BY observationId
+
+[SIMULATION]
+ar_ang_fov = 2.06
+ar_fov_buffer = 0.2
+ar_picket = 1
+ar_obs_code = X05
+ar_healpix_order = 6
+
+[FILTERS]
+observing_filters = r,g,i,z,u,y
+
+[SATURATION]
+bright_limit = 16.0
+
+[PHASECURVES]
+phase_function = HG
+
+[FOV]
+camera_model = footprint
+
+[FADINGFUNCTION]
+fading_function_on = True
+fading_function_width = 0.1
+fading_function_peak_efficiency = 1.
+
+[LINKINGFILTER]
+SSP_detection_efficiency = 0.95
+SSP_number_observations = 2
+SSP_separation_threshold = 0.5
+SSP_maximum_time = 0.0625
+SSP_number_tracklets = 3
+SSP_track_window = 15
+SSP_night_start_utc = 16.0
+
+[OUTPUT]
+output_format = csv
+output_columns = basic
+position_decimals = 7
+magnitude_decimals = 3
+
+[LIGHTCURVE]
+lc_model = none
+
+[ACTIVITY]
+comet_activity = none
+ 
+2024-12-18 15:43:10,786 root         INFO     Configuration file read. 
+2024-12-18 15:43:10,786 sorcha.utilities.sorchaArguments INFO     the base rng seed is 3665427915 
+2024-12-18 15:43:10,786 sorcha.sorcha INFO     Post-processing begun. 
+2024-12-18 15:43:10,786 sorcha.modules.PPConfigParser INFO     The config file used is located at sorcha_config_Impact_Study_Demo_I00000.ini 
+2024-12-18 15:43:10,786 sorcha.modules.PPConfigParser INFO     The physical parameters file used is located at sorcha_params_Impact_Study_Demo_I00000.csv 
+2024-12-18 15:43:10,786 sorcha.modules.PPConfigParser INFO     The orbits file used is located at sorcha_input_Impact_Study_Demo_I00000.csv 
+2024-12-18 15:43:10,786 sorcha.modules.PPConfigParser INFO     The survey selected is: rubin_sim 
+2024-12-18 15:43:10,786 sorcha.modules.PPConfigParser INFO     Format of ephemerides file is: csv 
+2024-12-18 15:43:10,786 sorcha.modules.PPConfigParser INFO     Format of auxiliary files is: whitespace 
+2024-12-18 15:43:10,786 sorcha.modules.PPConfigParser INFO     Pointing database path is: /Users/aleck/Code/adam_impacts_study/demo/data/baseline_v2.0_1yr.db 
+2024-12-18 15:43:10,786 sorcha.modules.PPConfigParser INFO     Pointing database required query is: SELECT observationId, observationStartMJD as observationStartMJD_TAI, visitTime, visitExposureTime, filter, seeingFwhmGeom as seeingFwhmGeom_arcsec, seeingFwhmEff as seeingFwhmEff_arcsec, fiveSigmaDepth as fieldFiveSigmaDepth_mag , fieldRA as fieldRA_deg, fieldDec as fieldDec_deg, rotSkyPos as fieldRotSkyPos_deg FROM observations WHERE observationStartMJD < 66232.91220580554 ORDER BY observationId 
+2024-12-18 15:43:10,786 sorcha.modules.PPConfigParser INFO     The number of objects processed in a single chunk is: 5000 
+2024-12-18 15:43:10,786 sorcha.modules.PPConfigParser INFO     The main filter in which H is defined is r 
+2024-12-18 15:43:10,786 sorcha.modules.PPConfigParser INFO     The filters included in the post-processing results are r g i z u y 
+2024-12-18 15:43:10,786 sorcha.modules.PPConfigParser INFO     Thus, the colour indices included in the simulation are g-r i-r z-r u-r y-r 
+2024-12-18 15:43:10,786 sorcha.modules.PPConfigParser INFO     The apparent brightness is calculated using the following phase function model: HG 
+2024-12-18 15:43:10,786 sorcha.modules.PPConfigParser INFO     Computation of trailing losses is switched ON. 
+2024-12-18 15:43:10,786 sorcha.modules.PPConfigParser INFO     Randomization of position and magnitude around uncertainties is switched ON. 
+2024-12-18 15:43:10,786 sorcha.modules.PPConfigParser INFO     Vignetting is switched ON. 
+2024-12-18 15:43:10,786 sorcha.modules.PPConfigParser INFO     Footprint is modelled after the actual camera footprint. 
+2024-12-18 15:43:10,786 sorcha.modules.PPConfigParser INFO     Loading default LSST footprint LSST_detector_corners_100123.csv 
+2024-12-18 15:43:10,786 sorcha.modules.PPConfigParser INFO     The upper saturation limit(s) is/are: 16.0 
+2024-12-18 15:43:10,786 sorcha.modules.PPConfigParser INFO     SNR limit is turned OFF. 
+2024-12-18 15:43:10,786 sorcha.modules.PPConfigParser INFO     Default SNR cut is ON. All observations with SNR < 2.0 will be removed. 
+2024-12-18 15:43:10,786 sorcha.modules.PPConfigParser INFO     Magnitude limit is turned OFF. 
+2024-12-18 15:43:10,786 sorcha.modules.PPConfigParser INFO     The detection efficiency fading function is ON. 
+2024-12-18 15:43:10,786 sorcha.modules.PPConfigParser INFO     The width parameter of the fading function has been set to: 0.1 
+2024-12-18 15:43:10,786 sorcha.modules.PPConfigParser INFO     The peak efficiency of the fading function has been set to: 1.0 
+2024-12-18 15:43:10,786 sorcha.modules.PPConfigParser INFO     Solar System Processing linking filter is turned ON. 
+2024-12-18 15:43:10,786 sorcha.modules.PPConfigParser INFO     For SSP linking... 
+2024-12-18 15:43:10,786 sorcha.modules.PPConfigParser INFO     ...the fractional detection efficiency is: 0.95 
+2024-12-18 15:43:10,786 sorcha.modules.PPConfigParser INFO     ...the minimum required number of observations in a tracklet is: 2 
+2024-12-18 15:43:10,786 sorcha.modules.PPConfigParser INFO     ...the minimum required number of tracklets to form a track is: 3 
+2024-12-18 15:43:10,786 sorcha.modules.PPConfigParser INFO     ...the maximum window of time in days of tracklets to be contained in to form a track is: 15 
+2024-12-18 15:43:10,786 sorcha.modules.PPConfigParser INFO     ...the minimum angular separation between observations in arcseconds is: 0.5 
+2024-12-18 15:43:10,786 sorcha.modules.PPConfigParser INFO     ...the maximum temporal separation between subsequent observations in a tracklet in days is: 0.0625 
+2024-12-18 15:43:10,786 sorcha.modules.PPConfigParser INFO     ASSIST+REBOUND Simulation is turned ON. 
+2024-12-18 15:43:10,786 sorcha.modules.PPConfigParser INFO     For ASSIST+REBOUND... 
+2024-12-18 15:43:10,786 sorcha.modules.PPConfigParser INFO     ...the field's angular FOV is: 2.06 
+2024-12-18 15:43:10,786 sorcha.modules.PPConfigParser INFO     ...the buffer around the FOV is: 0.2 
+2024-12-18 15:43:10,786 sorcha.modules.PPConfigParser INFO     ...the picket interval is: 1 
+2024-12-18 15:43:10,786 sorcha.modules.PPConfigParser INFO     ...the observatory code is: X05 
+2024-12-18 15:43:10,786 sorcha.modules.PPConfigParser INFO     ...the healpix order is: 6 
+2024-12-18 15:43:10,786 sorcha.modules.PPConfigParser INFO     No lightcurve model is being applied. 
+2024-12-18 15:43:10,786 sorcha.modules.PPConfigParser INFO     Output files will be saved in path: results/sorcha_output_Impact_Study_Demo_I00000 with filestem sorcha_output_Impact_Study_Demo_I00000 
+2024-12-18 15:43:10,786 sorcha.modules.PPConfigParser INFO     Output files will be saved as format: csv 
+2024-12-18 15:43:10,786 sorcha.modules.PPConfigParser INFO     In the output, positions will be rounded to 7 decimal places. 
+2024-12-18 15:43:10,786 sorcha.modules.PPConfigParser INFO     In the output, magnitudes will be rounded to 3 decimal places. 
+2024-12-18 15:43:10,786 sorcha.modules.PPConfigParser INFO     The output columns are set to: basic 
+2024-12-18 15:43:10,786 sorcha.sorcha INFO     Reading pointing database... 
+2024-12-18 15:43:11,682 sorcha.sorcha INFO     Pre-computing pointing information for ephemeris generation 

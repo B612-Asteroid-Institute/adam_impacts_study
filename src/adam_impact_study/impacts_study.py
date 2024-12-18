@@ -1,3 +1,4 @@
+import logging
 import os
 from typing import Optional
 
@@ -22,6 +23,8 @@ from adam_impact_study.physical_params import (
 )
 from adam_impact_study.sorcha_utils import run_sorcha, write_config_file_timeframe
 
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
 
 class ImpactStudyResults(qv.Table):
     object_id = qv.LargeStringColumn()
@@ -41,7 +44,7 @@ def run_impact_study_all(
     FO_DIR: str,
     RUN_DIR: str,
     RESULT_DIR: str,
-    chunk_size: Optional[int] = 1,
+    max_processes: Optional[int] = 1,
 ) -> Optional[ImpactStudyResults]:
     """
     Run an impact study for all impactors in the input file.
@@ -62,8 +65,6 @@ def run_impact_study_all(
         Directory path where the script is being run.
     RESULT_DIR : str
         Directory where the results will be stored.
-    chunk_size : int, optional
-        Number of days to propagate orbits at a time.
 
     Returns
     -------
@@ -76,32 +77,56 @@ def run_impact_study_all(
     )
     os.makedirs(f"{RESULT_DIR}", exist_ok=True)
 
-    print("Impactor Orbits: ", impactor_orbits)
+    logger.info(f"Impactor Orbits: {impactor_orbits}")
     object_ids = impactor_orbits.object_id.unique()
-    print("Object IDs: ", object_ids)
+    logger.info(f"Object IDs: {object_ids.to_pylist()}")
 
-    impact_results = None
+    impact_results = ImpactStudyResults.empty()
 
+    futures = []
     for obj_id in object_ids:
-        impactor_orbit = impactor_orbits.apply_mask(
-            pc.equal(impactor_orbits.object_id, obj_id)
-        )
-        impact_result = run_impact_study_fo(
-            impactor_orbit,
-            propagator,
-            run_config_file,
-            pointing_file,
-            RUN_NAME,
-            FO_DIR,
-            RUN_DIR,
-            RESULT_DIR,
-            chunk_size,
-        )
-        impact_results = qv.concatenate([impact_results, impact_result])
-        if impact_results.fragmented():
-            impact_results = qv.defragment(impact_results)
+        impactor_orbit = impactor_orbits.select("object_id", obj_id)
+
+        if max_processes == 1:
+            impact_result = run_impact_study_fo(
+                impactor_orbit,
+                propagator,
+                run_config_file,
+                pointing_file,
+                RUN_NAME,
+                FO_DIR,
+                RUN_DIR,
+                RESULT_DIR,
+                max_processes,
+            )
+            impact_results = qv.concatenate([impact_results, impact_result])
+        else:
+            futures.append(
+                run_impact_study_fo_remote.remote(
+                    impactor_orbit,
+                    propagator,
+                    run_config_file,
+                    pointing_file,
+                    RUN_NAME,
+                    FO_DIR,
+                    RUN_DIR,
+                    RESULT_DIR,
+                    max_processes,
+                )
+            )
+
+            if len(futures) > max_processes * 1.5:
+                finished, futures = ray.wait(futures, num_returns=1)
+                result = ray.get(finished[0])
+                impact_results = qv.concatenate([impact_results, result])
+
+    while len(futures) > 0:
+        finished, futures = ray.wait(futures, num_returns=1)
+        result = ray.get(finished[0])
+        impact_results = qv.concatenate([impact_results, result])
 
     return impact_results
+
 
 
 def run_impact_study_fo(
@@ -113,12 +138,11 @@ def run_impact_study_fo(
     FO_DIR: str,
     RUN_DIR: str,
     RESULT_DIR: str,
-    chunk_size: Optional[int] = 1,
     max_processes: int = 1,
 ) -> ImpactStudyResults:
     """Run impact study with optional parallel processing"""
     obj_id = impactor_orbit.object_id[0]
-    print("Object ID: ", obj_id)
+    logger.info("Object ID: ", obj_id)
 
     sorcha_config_file_name = f"sorcha_config_{RUN_NAME}_{obj_id}.ini"
     sorcha_orbits_file = f"sorcha_input_{RUN_NAME}_{obj_id}.csv"
@@ -208,18 +232,17 @@ def run_impact_study_fo(
                 finished, futures = ray.wait(futures, num_returns=1)
                 result = ray.get(finished[0])
                 results = qv.concatenate([results, result])
-                if results.fragmented():
-                    results = qv.defragment(results)
 
     # Get remaining results
     while len(futures) > 0:
         finished, futures = ray.wait(futures, num_returns=1)
         result = ray.get(finished[0])
         results = qv.concatenate([results, result])
-        if results.fragmented():
-            results = qv.defragment(results)
 
     return results
+
+run_impact_study_fo_remote = ray.remote(run_impact_study_fo)
+
 
 
 def calculate_impact_probability(
@@ -280,16 +303,6 @@ def calculate_impact_probability(
     od_observations_to_ades_file(observations, f"{RESULT_DIR}/{fo_file_name}")
 
     try:
-        # TODO: This generate a ValueError for JM
-        # See: >   orbit, error = run_fo_od(
-        #             fo_file_name,
-        #             fo_output_folder,
-        #             FO_DIR,
-        #             RUN_DIR,
-        #             RESULT_DIR,
-        #         )
-        # E       ValueError: not enough values to unpack (expected 2, got 1)
-        # If I then run it with pdb and re-call the function it returns the expected values...
         orbit, error = run_fo_od(
             fo_file_name,
             fo_output_folder,
@@ -307,7 +320,7 @@ def calculate_impact_probability(
             error=[str(e)],
         )
 
-    if len(error) > 0:
+    if error is not None:
         return ImpactStudyResults.from_kwargs(
             object_id=[obj_id],
             observation_start=start_date,

@@ -1,4 +1,5 @@
 import json
+import logging
 import os
 
 import numpy as np
@@ -6,6 +7,8 @@ import pyarrow as pa
 import pyarrow.compute as pc
 import quivr as qv
 
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
 
 class ImpactorConfig(qv.Table):
     config_id = qv.LargeStringColumn()

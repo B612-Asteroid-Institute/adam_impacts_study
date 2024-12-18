@@ -1,4 +1,5 @@
 import json
+import logging
 from typing import Dict, Optional, Tuple
 
 import numpy as np
@@ -24,6 +25,8 @@ from adam_core.observers import Observers
 from adam_core.orbits import Orbits
 from adam_core.time import Timestamp
 
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
 
 class Photometry(qv.Table):
     mag = qv.Float64Column()

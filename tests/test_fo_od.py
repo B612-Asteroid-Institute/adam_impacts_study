@@ -154,14 +154,14 @@ def test_run_fo_od(mock_subprocess_run, tmpdir):
     total_json_result_path.write(total_json_text)
 
     # Call the function under test
-    result = run_fo_od(
+    orbits, errors = run_fo_od(
         fo_input_file=str(fo_input_file),
         fo_output_folder=str(fo_output_folder),
         FO_DIR=str(FO_DIR),
         RUN_DIR=str(RUN_DIR),
         RESULT_DIR=str(RESULT_DIR),
     )
-
+    assert errors is None
     assert os.path.exists(f"{FO_DIR}/{fo_input_file}")
 
     # Verify that correct find_orb command was run
@@ -174,15 +174,15 @@ def test_run_fo_od(mock_subprocess_run, tmpdir):
 
     assert os.path.exists(f"{FO_DIR}/{fo_output_folder}/covar.json")
 
-    assert isinstance(result, Orbits)
-    assert result.orbit_id[0].as_py() == "Test_1001"
-    assert result.coordinates.time.mjd()[0].as_py() - 60490.342573 < 1e-6
-    assert result.coordinates.x[0].as_py() - 2.40431779633740117 < 1e-13
-    assert result.coordinates.y[0].as_py() - -2.0586498601048886 < 1e-13
-    assert result.coordinates.z[0].as_py() - 1.56463294002342372e-05 < 1e-13
-    assert result.coordinates.vx[0].as_py() - 0.00508148904172802708 < 1e-13
-    assert result.coordinates.vy[0].as_py() - -0.00632766941087369462 < 1e-13
-    assert result.coordinates.vz[0].as_py() - 2.1947140448603267e-07 < 1e-13
+    assert isinstance(orbits, Orbits)
+    assert orbits.orbit_id[0].as_py() == "Test_1001"
+    assert orbits.coordinates.time.mjd()[0].as_py() - 60490.342573 < 1e-6
+    assert orbits.coordinates.x[0].as_py() - 2.40431779633740117 < 1e-13
+    assert orbits.coordinates.y[0].as_py() - -2.0586498601048886 < 1e-13
+    assert orbits.coordinates.z[0].as_py() - 1.56463294002342372e-05 < 1e-13
+    assert orbits.coordinates.vx[0].as_py() - 0.00508148904172802708 < 1e-13
+    assert orbits.coordinates.vy[0].as_py() - -0.00632766941087369462 < 1e-13
+    assert orbits.coordinates.vz[0].as_py() - 2.1947140448603267e-07 < 1e-13
     assert (
-        result.coordinates.covariance.values[0][0].as_py() - 4.16121327342e-12 < 1e-13
+        orbits.coordinates.covariance.values[0][0].as_py() - 4.16121327342e-12 < 1e-13
     )
