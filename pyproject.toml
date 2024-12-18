@@ -10,7 +10,7 @@ dependencies = [
     "adam_core>=0.3.4",
     "adam_assist>=0.2.0",
     "sorcha",
-    "ray[default]>=2.40.0",
+    "ray[default]==2.39.0",
 ]
 requires-python = "<3.13,>=3.11"
 readme = "README.md"

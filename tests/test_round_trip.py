@@ -1,12 +1,16 @@
+import atexit
+import fcntl
 import logging
-import multiprocessing as mp
 import os
+import signal
+import sys
+import termios
 import time
+import tty
 
 import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
-import pytest
 import quivr as qv
 import ray
 import seaborn as sns
@@ -18,11 +22,6 @@ from adam_core.time import Timestamp
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
-
-
-@pytest.fixture
-def non_impacting_orbit_fixture():
-    return non_impacting_orbit()
 
 
 def non_impacting_orbits():
@@ -56,11 +55,6 @@ def impacting_orbit():
     return orbits[0:1]
 
 
-@pytest.fixture
-def impacting_orbit_fixture():
-    return impacting_orbit()
-
-
 class RoundTripResults(qv.Table):
     orbit_id = qv.LargeStringColumn(nullable=True)
     initial_dt = qv.Float64Column(nullable=True)
@@ -68,8 +62,8 @@ class RoundTripResults(qv.Table):
     adaptive_mode = qv.Int64Column(nullable=True)
     position_diff_km = qv.Float64Column(nullable=True)
     impact_mjd = qv.Float64Column(nullable=True)
-    # forward_steps_done = qv.Int64Column(nullable=True)
-    # backward_steps_done = qv.Int64Column(nullable=True)
+    forward_steps_done = qv.Int64Column(nullable=True)
+    backward_steps_done = qv.Int64Column(nullable=True)
     time_taken = qv.Float64Column(nullable=True)
     epsilon = qv.Float64Column(nullable=True)
 
@@ -77,6 +71,9 @@ class RoundTripResults(qv.Table):
 def round_trip_worker(
     orbit: Orbits, min_dt: float, initial_dt: float, adaptive_mode: int, epsilon: float
 ):
+    # Configure JAX at start of worker
+
+    
     start = time.time()
     propagator = ASSISTPropagator(
         min_dt=min_dt,
@@ -87,9 +84,9 @@ def round_trip_worker(
     time_2025 = Timestamp.from_iso8601("2025-05-05T00:00:00")
     original_epoch = orbit.coordinates.time
     forward_orbit = propagator.propagate_orbits(orbit, time_2025)
-    # forward_steps_done = propagator._last_simulation.steps_done
+    forward_steps_done = propagator._last_simulation.steps_done
     back_orbit = propagator.propagate_orbits(forward_orbit, original_epoch)
-    # backward_steps_done = propagator._last_simulation.steps_done
+    backward_steps_done = propagator._last_simulation.steps_done
     diff = orbit.coordinates.r - back_orbit.coordinates.r
     norm_diff = np.linalg.norm(diff)
     diff_km = norm_diff * KM_P_AU
@@ -100,9 +97,12 @@ def round_trip_worker(
     if len(impacts) > 0:
         impact_mjd = impacts.coordinates.time.mjd()[0].as_py()
     end = time.time()
-    print(
-        f"end {orbit.orbit_id[0].as_py()} | {initial_dt} | {min_dt} | {adaptive_mode} | {epsilon} | {diff_km} | {impact_mjd} | {end - start}"
+    logging.info(
+        f"end {orbit.orbit_id[0].as_py()} | {initial_dt} | {min_dt} | "
+        f"{adaptive_mode} | {epsilon} | {diff_km} | {impact_mjd} | "
+        f"{forward_steps_done + backward_steps_done} | {end - start}"
     )
+
 
     return RoundTripResults.from_kwargs(
         orbit_id=orbit.orbit_id,
@@ -111,28 +111,33 @@ def round_trip_worker(
         adaptive_mode=[adaptive_mode],
         position_diff_km=[diff_km],
         impact_mjd=[impact_mjd],
-        # forward_steps_done=[forward_steps_done],
-        # backward_steps_done=[backward_steps_done],
+        forward_steps_done=[forward_steps_done],
+        backward_steps_done=[backward_steps_done],
         time_taken=[end - start],
         epsilon=[epsilon],
     )
 
 
 round_trip_worker_remote = ray.remote(round_trip_worker)
+round_trip_worker_remote.options(num_returns=1)
 
 
 def test_round_trip_propagation_non_impacting(orbits: Orbits, max_processes: int = 1):
     """Run round trip propagation tests with various parameters and collect results."""
 
-    min_dts = np.logspace(0, -5, 6)
-    initial_dts = np.logspace(-3, -5, 3)
-    adaptive_modes = [0, 1, 2, 3]
-    epsilons = np.logspace(-6, -7, 2)
-
+    min_dts = np.logspace(-3, -12, 10)
+    initial_dts = np.logspace(-3, -6, 4)
+    adaptive_modes = [1]
+    epsilons = np.logspace(-6, -10, 5)
+    # min_dts = [0.0001]
+    # initial_dts = [0.0001]
+    # adaptive_modes = [1]
+    # epsilons = [1e-6]
 
     initialize_use_ray(num_cpus=max_processes)
 
     futures = []
+    combinations = []
     all_results = RoundTripResults.empty()
     for epsilon in epsilons:
         for orbit in orbits:
@@ -141,40 +146,39 @@ def test_round_trip_propagation_non_impacting(orbits: Orbits, max_processes: int
                     for adaptive_mode in adaptive_modes:
                         if min_dt > initial_dt:
                             continue
+                        combinations.append((orbit, min_dt, initial_dt, adaptive_mode, epsilon))
 
-                        if max_processes == 1:
-                            all_results = qv.concatenate(
-                                [
-                                    all_results,
-                                    round_trip_worker(
-                                        orbit, min_dt, initial_dt, adaptive_mode, epsilon
-                                    ),
-                                ]
-                            )
-                        else:
-                            futures.append(
-                                round_trip_worker_remote.remote(
-                                    orbit, min_dt, initial_dt, adaptive_mode, epsilon
-                                )
-                            )
+    for orbit, min_dt, initial_dt, adaptive_mode, epsilon in combinations:
+        if max_processes == 1:
+            all_results = qv.concatenate(
+                [
+                    all_results,
+                    round_trip_worker(
+                        orbit, min_dt, initial_dt, adaptive_mode, epsilon
+                    ),
+                ]
+            )
+        else:
+            futures.append(
+                round_trip_worker_remote.remote(
+                    orbit, min_dt, initial_dt, adaptive_mode, epsilon
+                )
+            )
 
-                        if len(futures) > max_processes * 1.5:
-                            finished, futures = ray.wait(futures, num_returns=1)
-                            result = ray.get(finished[0])
-                            all_results = qv.concatenate([all_results, result])
+        if len(futures) > max_processes * 1.5:
+            finished, futures = ray.wait(futures, num_returns=1)
+            result = ray.get(finished[0])
+            all_results = qv.concatenate([all_results, result])
+        
+        print(f"Completed: {len(all_results)} / {len(combinations)}")
 
     while len(futures) > 0:
         finished, futures = ray.wait(futures, num_returns=1)
         result = ray.get(finished[0])
         all_results = qv.concatenate([all_results, result])
-
-    import pdb; pdb.set_trace()
-    print("All results: ", all_results)
+        print(f"Completed: {len(all_results)} / {len(combinations)}")
     return all_results
 
-if __name__ == "__main__":
-    orbits = non_impacting_orbits()
-    test_round_trip_propagation_non_impacting(orbits[0], max_processes=8)
 
 
 def analyze_round_trip_results(results: RoundTripResults):
