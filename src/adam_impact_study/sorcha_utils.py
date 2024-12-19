@@ -1,11 +1,18 @@
+import glob
+import logging
 import os
 import subprocess
-from typing import Optional
 
 import pandas as pd
+import quivr as qv
 from adam_core.orbits import Orbits
+from jpl_small_bodies_de441_n16 import de441_n16
+from naif_de440 import de440
 
 from adam_impact_study.conversions import Observations, sorcha_output_to_od_observations
+
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
 
 
 def write_config_file_timeframe(impact_date, config_file):
@@ -24,6 +31,10 @@ def write_config_file_timeframe(impact_date, config_file):
     config_file : str
         Path to the file where the Sorcha configuration data was saved.
     """
+    logger.info("Writing Sorcha config file")
+    assist_planets = de440
+    assist_small_bodies = de441_n16
+
     pointing_command = f"SELECT observationId, observationStartMJD as observationStartMJD_TAI, visitTime, visitExposureTime, filter, seeingFwhmGeom as seeingFwhmGeom_arcsec, seeingFwhmEff as seeingFwhmEff_arcsec, fiveSigmaDepth as fieldFiveSigmaDepth_mag , fieldRA as fieldRA_deg, fieldDec as fieldDec_deg, rotSkyPos as fieldRotSkyPos_deg FROM observations WHERE observationStartMJD < {impact_date} ORDER BY observationId"
     config_text = f"""
 [Sorcha Configuration File]
@@ -79,6 +90,10 @@ lc_model = none
 
 [ACTIVITY]
 comet_activity = none
+    
+[AUXILIARY]
+jpl_planets = {assist_planets}
+jpl_small_bodies = {assist_small_bodies}
 """
     with open(config_file, "w") as f:
         f.write(config_text)
@@ -147,11 +162,10 @@ def run_sorcha(
     sorcha_config_file: str,
     sorcha_orbits_file: str,
     sorcha_physical_params_file: str,
-    sorcha_output_file: str,
     pointing_file: str,
-    sorcha_output_name: str,
-    RESULT_DIR: str,
-) -> Optional[Observations]:
+    sorcha_output_dir: str,
+    sorcha_output_stem: str,
+) -> Observations:
     """
     Run the Sorcha software to generate observational data based on input orbital and physical parameters.
 
@@ -161,18 +175,18 @@ def run_sorcha(
         ADAM Orbits object containing orbital parameters for the impactors.
     sorcha_config_file : str
         Path to the Sorcha configuration file.
-    sorcha_orbits_file : str
+    sorcha_orbits_dir : str
         Path to the file where the Sorcha orbits are written as input.
     sorcha_physical_params_file : str
         Path to the file where the Sorcha physical parameters data will be saved.
-    sorcha_output_file : str
-        Name of the Sorcha output file.
     physical_params_df : pd.DataFrame
         DataFrame containing physical parameters for the impactors.
     pointing_file : str
         Path to the file containing pointing data.
-    sorcha_output_name : str
-        Name for the output directory where Sorcha results will be saved.
+    sorcha_output_file : str
+        Name of the Sorcha output file.
+    sorcha_output_stem : str
+        File stem for the Sorcha output files.
     RESULT_DIR : str
         Directory where the results will be stored.
 
@@ -180,33 +194,35 @@ def run_sorcha(
     -------
     sorcha_observations : Observations (qv.Table)
         Observations object containing the Sorcha observations.
-        Returns None if the input file is empty.
     """
 
     generate_sorcha_orbits(adam_orbits, sorcha_orbits_file)
-    print(f"Generated Sorcha orbits file: {sorcha_orbits_file}")
+    logger.info(f"Generated Sorcha orbits file: {sorcha_orbits_file}")
+
+    # Get the output directory from the output file path
+    os.makedirs(sorcha_output_dir, exist_ok=True)
 
     # Run Sorcha
     sorcha_command_string = (
         f"sorcha run -c {sorcha_config_file} -p {sorcha_physical_params_file} "
-        f"-ob {sorcha_orbits_file} -pd {pointing_file} -o {RESULT_DIR}/{sorcha_output_name} "
-        f"-t {sorcha_output_name} -f"
+        f"--orbits {sorcha_orbits_file} --pointing-db {pointing_file} -o {sorcha_output_dir} "
+        f"--stem {sorcha_output_stem} -f"
     )
-    print(f"Running Sorcha with command: {sorcha_command_string}")
-    print(f"Output will be saved to: {RESULT_DIR}/{sorcha_output_name}")
-    os.makedirs(f"{RESULT_DIR}/{sorcha_output_name}", exist_ok=True)
+    logger.info(f"Running Sorcha with command: {sorcha_command_string}")
+    logger.info(f"Outputs will be saved to: {sorcha_output_dir}")
+    # os.makedirs(f"{RESULT_DIR}/{sorcha_output_name}", exist_ok=True)
+
     subprocess.run(sorcha_command_string, shell=True)
 
+    result_files = glob.glob(f"{sorcha_output_dir}/*.csv")
+
+    if len(result_files) == 0:
+        logger.warning(f"No output files found in {sorcha_output_dir}")
+        return Observations.empty()
+
     # Read the sorcha output
-    if not os.path.exists(f"{RESULT_DIR}/{sorcha_output_name}/{sorcha_output_file}"):
-        print(
-            f"No output file found at {RESULT_DIR}/{sorcha_output_name}/{sorcha_output_file}"
-        )
-        return None
-    sorcha_output_file = f"{RESULT_DIR}/{sorcha_output_name}/{sorcha_output_file}"
-    od_observations = sorcha_output_to_od_observations(sorcha_output_file)
-    if od_observations is None:
-        print(f"No observations found in {sorcha_output_file}")
-        od_observations = Observations.empty()
-        return od_observations
-    return od_observations
+    observations = Observations.empty()
+    for result_file in result_files:
+        observations = qv.concatenate([observations, sorcha_output_to_od_observations(result_file)])
+
+    return observations

@@ -9,7 +9,8 @@ dependencies = [
     "matplotlib",
     "adam_core>=0.3.4",
     "adam_assist>=0.2.0",
-    "sorcha",
+    "sorcha @ git+https://github.com/B612-Asteroid-Institute/sorcha.git@22f4ea513c3614ee14d84326a704ff567c904d5f",
+    "ray[default]==2.39.0",
 ]
 requires-python = "<3.13,>=3.11"
 readme = "README.md"
@@ -21,17 +22,19 @@ build-backend = "pdm.backend"
 
 [project.optional-dependencies]
 dev = [
-  "black",
-  "ipython",
-  "isort",
-  "mypy",
-  "pdm",
-  "pytest-benchmark",
-  "pytest-cov",
-  "pytest-doctestplus",
-  "pytest-mock",
-  "pytest",
-  "ruff",
+    "black",
+    "ipython",
+    "isort",
+    "mypy",
+    "pdm",
+    "pytest-benchmark",
+    "pytest-cov",
+    "pytest-doctestplus",
+    "pytest-mock",
+    "pytest",
+    "ruff",
+    "adam-assist @ git+https://github.com/B612-Asteroid-Institute/adam-assist.git@8e5204654fc74f9b91a0c461f4940c1787ed06de",
+    "seaborn>=0.13.2",
 ]
 
 [tool.pdm.scripts]
