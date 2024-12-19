@@ -1,4 +1,5 @@
 import json
+import logging
 from typing import Dict, Optional, Tuple
 
 import numpy as np
@@ -24,6 +25,8 @@ from adam_core.observers import Observers
 from adam_core.orbits import Orbits
 from adam_core.time import Timestamp
 
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
 
 class Photometry(qv.Table):
     mag = qv.Float64Column()
@@ -79,7 +82,7 @@ def impactor_file_to_adam_orbit(impactor_file: str) -> Orbits:
     return orbit
 
 
-def sorcha_output_to_od_observations(sorcha_output_file: str) -> Optional[Observations]:
+def sorcha_output_to_od_observations(sorcha_output_file: str) -> Observations:
     """
     Convert Sorcha observations output files to Observations type.
 
@@ -94,14 +97,14 @@ def sorcha_output_to_od_observations(sorcha_output_file: str) -> Optional[Observ
         Observations object continaining the Sorcha observations.
         Returns None if the input file is empty.
     """
-
+    logger.info(f"Reading Sorcha output file: {sorcha_output_file}")
     sorcha_observations_table = pa.csv.read_csv(sorcha_output_file)
     sort_indices = pc.sort_indices(
         sorcha_observations_table,
         sort_keys=[("ObjID", "ascending"), ("fieldMJD_TAI", "ascending")],
     )
     sorcha_observations_table = sorcha_observations_table.take(sort_indices)
-    od_observations = None
+    observations = Observations.empty()
 
     object_ids = pc.unique(sorcha_observations_table["ObjID"]).to_numpy(
         zero_copy_only=False
@@ -143,7 +146,7 @@ def sorcha_output_to_od_observations(sorcha_output_file: str) -> Optional[Observ
             ]
         )
 
-        od_observation = Observations.from_kwargs(
+        object_observation = Observations.from_kwargs(
             obs_id=[f"{obj}_{i}" for i in range(len(object_obs))],
             object_id=pa.repeat(obj, len(object_obs)),
             coordinates=coordinates_sorted,
@@ -151,12 +154,9 @@ def sorcha_output_to_od_observations(sorcha_output_file: str) -> Optional[Observ
             photometry=photometry,
         )
 
-        if od_observations is None:
-            od_observations = od_observation
-        else:
-            od_observations = qv.concatenate([od_observations, od_observation])
+        observations = qv.concatenate([observations, object_observation])
 
-    return od_observations
+    return observations
 
 
 def od_observations_to_ades_file(
@@ -381,9 +381,8 @@ def fo_to_adam_orbit_cov(fo_output_folder: str) -> Orbits:
 
     elements_dict, covar_dict = read_fo_output(fo_output_folder)
 
-    orbits = None
+    orbits = Orbits.empty()
     for object_id, elements in elements_dict.items():
-
         covar_matrix = np.array([covar_dict["covar"]])
         covar_state_vector = [covar_dict["state_vect"]]
 
@@ -407,9 +406,8 @@ def fo_to_adam_orbit_cov(fo_output_folder: str) -> Orbits:
             object_id=[object_id],
             coordinates=cartesian_coordinates,
         )
-        if orbits is None:
-            orbits = orbit
-        else:
-            orbits = qv.concatenate([orbits, orbit])
+        orbits = qv.concatenate([orbits, orbit])
+        if orbits.fragmented():
+            orbits = qv.defragment(orbits)
 
     return orbits
