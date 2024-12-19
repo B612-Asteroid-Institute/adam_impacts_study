@@ -1,11 +1,15 @@
+import logging
 import os
 import shutil
 import subprocess
+from typing import Optional, Tuple
 
 from adam_core.orbits import Orbits
 
 from adam_impact_study.conversions import fo_to_adam_orbit_cov
 
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
 
 def run_fo_od(
     fo_input_file: str,
@@ -13,7 +17,7 @@ def run_fo_od(
     FO_DIR: str,
     RUN_DIR: str,
     RESULT_DIR: str,
-) -> Orbits:
+) -> Tuple[Orbits, Optional[str]]:
     """
     Run the find_orb orbit determination process for each object
 
@@ -34,6 +38,8 @@ def run_fo_od(
     -------
     orbit : `~adam_core.orbits.orbits.Orbits`
         Orbit object containing the orbital elements and covariance matrix.
+    error : str
+        Error message if the orbit determination failed.
     """
 
     # Generate the find_orb commands
@@ -42,7 +48,7 @@ def run_fo_od(
         f"-O {fo_output_folder}; cp -r {fo_output_folder} "
         f"{RUN_DIR}/{RESULT_DIR}/; cd {RUN_DIR}"
     )
-    print(f"Find Orb command: {fo_command}")
+    logger.info(f"Find Orb command: {fo_command}")
 
     # Ensure the output directory exists and copy the input file
     os.makedirs(f"{FO_DIR}/{fo_output_folder}", exist_ok=True)
@@ -54,10 +60,10 @@ def run_fo_od(
     # Run find_orb and check for output
     subprocess.run(fo_command, shell=True)
     if not os.path.exists(f"{FO_DIR}/{fo_output_folder}/covar.json"):
-        print("No find_orb output for: ", fo_output_folder)
-        return None
-    else:
-        # Convert to ADAM Orbit objects
-        orbit = fo_to_adam_orbit_cov(f"{RESULT_DIR}/{fo_output_folder}")
+        logger.info("No find_orb output for: ", fo_output_folder)
+        return (Orbits.empty(), "No find_orb output")
 
-        return orbit
+    # Convert to ADAM Orbit objects
+    orbit = fo_to_adam_orbit_cov(f"{RESULT_DIR}/{fo_output_folder}")
+
+    return (orbit, None)

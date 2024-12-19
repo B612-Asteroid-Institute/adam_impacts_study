@@ -1,8 +1,9 @@
 import os
 
+from adam_core.orbits import Orbits
+
 from adam_impact_study.analysis import plot_ip_over_time
 from adam_impact_study.impacts_study import run_impact_study_all
-from adam_core.orbits import Orbits
 
 # Define the run name and directories
 RUN_NAME = "Impact_Study"
@@ -31,7 +32,7 @@ impact_study_results = run_impact_study_all(
     chunk_size,
 )
 
-print(impact_study_results)
+logger.info(impact_study_results)
 
 if impact_study_results is not None:
     plot_ip_over_time(impact_study_results)

@@ -1,8 +1,12 @@
+import logging
+
 import matplotlib.pyplot as plt
 import pyarrow.compute as pc
 
 from adam_impact_study.impacts_study import ImpactStudyResults
 
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
 
 def plot_ip_over_time(impact_study_results: ImpactStudyResults) -> None:
     # change to x axis #days before impact
@@ -22,15 +26,15 @@ def plot_ip_over_time(impact_study_results: ImpactStudyResults) -> None:
     object_ids = impact_study_results.object_id.unique()
 
     for obj in object_ids:
-        print("Object ID Plotting: ", obj)
+        logger.info("Object ID Plotting: ", obj)
         plt.figure()
         ips = impact_study_results.apply_mask(
             pc.equal(impact_study_results.object_id, obj)
         )
-        plt.scatter(ips.day, ips.impact_probability)
+        plt.scatter(ips.observation_end.mjd().to_numpy(zero_copy_only=False), ips.impact_probability)
         plt.title(obj)
         plt.xlabel("Day")
         plt.ylabel("Impact Probability")
-        plt.plot(ips.day, ips.impact_probability)
+        plt.plot(ips.observation_end.mjd().to_numpy(zero_copy_only=False), ips.impact_probability)
         plt.savefig(f"IP_{obj}.png")
         plt.close()
