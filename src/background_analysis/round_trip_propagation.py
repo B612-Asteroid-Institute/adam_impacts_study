@@ -28,7 +28,7 @@ def non_impacting_orbits():
     """Load all non-impacting orbits from the round trip data."""
     orbit_path = os.path.join(
         os.path.dirname(__file__),
-        "../data/inputs/12-16-2024--round-trip/ImpactorsStudy_2125-05-05T00_00_00_2135-05-06T00_00_00_non_impacting_objects.parquet",
+        "../../data/inputs/12-16-2024--round-trip/ImpactorsStudy_2125-05-05T00_00_00_2135-05-06T00_00_00_non_impacting_objects.parquet",
     )
     return Orbits.from_parquet(orbit_path)
 
@@ -43,7 +43,7 @@ def impacting_orbits():
     """Load all impacting orbits from the round trip data."""
     orbit_path = os.path.join(
         os.path.dirname(__file__),
-        "../data/inputs/12-16-2024--round-trip/ImpactorsStudy_2125-05-05T00_00_00_2135-05-06T00_00_00_impacting_objects.parquet",
+        "../../data/inputs/12-16-2024--round-trip/ImpactorsStudy_2125-05-05T00_00_00_2135-05-06T00_00_00_impacting_objects.parquet",
     )
     return Orbits.from_parquet(orbit_path)
 
@@ -125,10 +125,10 @@ round_trip_worker_remote.options(num_returns=1)
 def propagation_round_trip_analysis(orbits: Orbits, max_processes: int = 1):
     """Run round trip propagation tests with various parameters and collect results."""
 
-    min_dts = np.logspace(-3, -12, 10)
-    initial_dts = np.logspace(-3, -6, 4)
+    min_dts = np.logspace(-6, -12, 3)
+    initial_dts = np.logspace(-3, -9, 3)
     adaptive_modes = [1]
-    epsilons = np.logspace(-6, -10, 5)
+    epsilons = np.logspace(-6, -9, 2)
 
     initialize_use_ray(num_cpus=max_processes)
 
