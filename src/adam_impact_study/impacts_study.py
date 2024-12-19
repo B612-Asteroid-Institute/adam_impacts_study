@@ -54,8 +54,6 @@ def run_impact_study_all(
     ----------
     impactors_file : str
         Path to the CSV file containing impactor data.
-    sorcha_physical_params_string : str
-        String containing the physical parameters for the impactors.
     pointing_file : str
         Path to the file containing pointing data for Sorcha.
     RUN_NAME : str
@@ -74,7 +72,7 @@ def run_impact_study_all(
         'day', and 'impact_probability'. If no impacts were found, returns None.
     """
     propagator = ASSISTPropagator(
-        initial_dt=0.001, min_dt=1e-5, adaptive_mode=1, epsilon=1e-6
+        initial_dt=0.001, min_dt=1e-12, adaptive_mode=1, epsilon=1e-9
     )
     os.makedirs(f"{RESULT_DIR}", exist_ok=True)
 
@@ -148,7 +146,7 @@ def run_impact_study_fo(
     obj_result_dir = os.path.join(RESULT_DIR, f"{RUN_NAME}_{obj_id}")
     os.makedirs(obj_result_dir, exist_ok=True)
 
-    # Create Sorcha output directory
+    # Create Sorcha object output directory
     sorcha_output_dir = os.path.join(RESULT_DIR, f"sorcha_output_{RUN_NAME}_{obj_id}")
     os.makedirs(sorcha_output_dir, exist_ok=True)
 
@@ -156,10 +154,10 @@ def run_impact_study_fo(
     sorcha_config_file_name = os.path.join(obj_result_dir, f"sorcha_config_{RUN_NAME}_{obj_id}.ini")
     sorcha_orbits_file = os.path.join(obj_result_dir, f"sorcha_input_{RUN_NAME}_{obj_id}.csv")
     sorcha_physical_params_file = os.path.join(obj_result_dir, f"sorcha_params_{RUN_NAME}_{obj_id}.csv")
-    sorcha_output_name = f"sorcha_output_{RUN_NAME}_{obj_id}"
-    sorcha_output_file = os.path.join(sorcha_output_dir, f"{sorcha_output_name}.csv")
+    sorcha_output_stem = f"{RUN_NAME}_{obj_id}"
     fo_input_file_base = f"fo_input_{RUN_NAME}_{obj_id}"
     fo_output_file_base = f"fo_output_{RUN_NAME}_{obj_id}"
+
 
     phys_params = create_physical_params_single(run_config_file, obj_id)
     phys_para_file_str = photometric_properties_to_sorcha_table(phys_params, "r")
@@ -176,13 +174,19 @@ def run_impact_study_fo(
         sorcha_config_file,
         sorcha_orbits_file,
         sorcha_physical_params_file,
-        sorcha_output_file,
         pointing_file,
-        sorcha_output_name,
-        RESULT_DIR,
+        sorcha_output_dir,
+        sorcha_output_stem,
     )
     if len(observations) == 0:
-        return ImpactStudyResults.empty()
+        return ImpactStudyResults.from_kwargs(
+            object_id=[obj_id],
+            observation_start=Timestamp.from_mjd([0], scale="utc"),
+            observation_end=Timestamp.from_mjd([0], scale="utc"),
+            observation_count=[0],
+            observation_nights=[0],
+            error=["No observations recovered."],
+        )
 
     # Sort the observations by time and origin code
     observations = observations.sort_by(

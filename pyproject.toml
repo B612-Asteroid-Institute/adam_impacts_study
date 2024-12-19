@@ -9,7 +9,7 @@ dependencies = [
     "matplotlib",
     "adam_core>=0.3.4",
     "adam_assist>=0.2.0",
-    "sorcha",
+    "sorcha @ git+https://github.com/dirac-institute/sorcha.git@6ff172be90daa2160ce7eb0bf9b64765926bd2e7",
     "ray[default]==2.39.0",
 ]
 requires-python = "<3.13,>=3.11"

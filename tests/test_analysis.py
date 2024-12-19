@@ -30,7 +30,7 @@ def impact_study_results():
 def test_plot_ip_over_time(impact_study_results, tmpdir):
     tmpdir_path = tmpdir.mkdir("plots")
     os.chdir(tmpdir_path)
-    plot_ip_over_time(impact_study_results)
+    plot_ip_over_time(impact_study_results, tmpdir_path)
     object_ids = impact_study_results.object_id.unique()
     for obj_id in object_ids:
-        assert os.path.exists(f"IP_{obj_id}.png")
+        assert os.path.exists(os.path.join(tmpdir_path, f"IP_{obj_id}.png"))

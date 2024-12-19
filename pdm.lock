@@ -5,7 +5,7 @@
 groups = ["default", "dev"]
 strategy = ["inherit_metadata"]
 lock_version = "4.5.0"
-content_hash = "sha256:30d94c029dd5aab5e0b6bd800c08d6a54b653da1c50bba6b1a2be1cf9e97ba25"
+content_hash = "sha256:195b2c13f62ca1c551709786b0a6fa1a769c68ae24b68cacbc0937001ae62560"
 
 [[metadata.targets]]
 requires_python = ">=3.11,<3.13"
@@ -3030,8 +3030,11 @@ files = [
 
 [[package]]
 name = "sorcha"
-version = "0.9.2"
+version = "0.9.3.dev131"
 requires_python = ">=3.9"
+git = "https://github.com/dirac-institute/sorcha.git"
+ref = "6ff172be90daa2160ce7eb0bf9b64765926bd2e7"
+revision = "6ff172be90daa2160ce7eb0bf9b64765926bd2e7"
 summary = "The survey simulator post processing code for the LSST"
 groups = ["default"]
 dependencies = [
@@ -3050,10 +3053,6 @@ dependencies = [
     "spiceypy",
     "tables",
     "tqdm",
-]
-files = [
-    {file = "sorcha-0.9.2-py3-none-any.whl", hash = "sha256:7742d12514907a9a25866dea6e04ec611406f9c30e2633ce14a4a21ce5bc024e"},
-    {file = "sorcha-0.9.2.tar.gz", hash = "sha256:e0af9c942cb2bf907c10470b1bc9dcc8e48930cd17cf1eea5a6c3ad412c672dd"},
 ]
 
 [[package]]
