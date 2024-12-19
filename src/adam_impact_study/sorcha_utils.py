@@ -13,6 +13,7 @@ from adam_impact_study.conversions import Observations, sorcha_output_to_od_obse
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
+
 def write_config_file_timeframe(impact_date, config_file):
     """
     Write a Sorcha configuration file for a given impact date.
@@ -32,6 +33,7 @@ def write_config_file_timeframe(impact_date, config_file):
     logger.info("Writing Sorcha config file")
     assist_planets = de440
     assist_small_bodies = de441_n16
+
     pointing_command = f"SELECT observationId, observationStartMJD as observationStartMJD_TAI, visitTime, visitExposureTime, filter, seeingFwhmGeom as seeingFwhmGeom_arcsec, seeingFwhmEff as seeingFwhmEff_arcsec, fiveSigmaDepth as fieldFiveSigmaDepth_mag , fieldRA as fieldRA_deg, fieldDec as fieldDec_deg, rotSkyPos as fieldRotSkyPos_deg FROM observations WHERE observationStartMJD < {impact_date} ORDER BY observationId"
     config_text = f"""
 [Sorcha Configuration File]
@@ -87,7 +89,7 @@ lc_model = none
 
 [ACTIVITY]
 comet_activity = none
-
+    
 [AUXILIARY]
 jpl_planets = {assist_planets}
 jpl_small_bodies = {assist_small_bodies}
@@ -197,26 +199,29 @@ def run_sorcha(
     generate_sorcha_orbits(adam_orbits, sorcha_orbits_file)
     logger.info(f"Generated Sorcha orbits file: {sorcha_orbits_file}")
 
+    # Get the output directory from the output file path
+    sorcha_output_dir = os.path.dirname(sorcha_output_file)
+    os.makedirs(sorcha_output_dir, exist_ok=True)
+
     # Run Sorcha
     sorcha_command_string = (
         f"sorcha run -c {sorcha_config_file} -p {sorcha_physical_params_file} "
-        f"-ob {sorcha_orbits_file} -pd {pointing_file} -o {RESULT_DIR}/{sorcha_output_name} "
+        f"-ob {sorcha_orbits_file} -pd {pointing_file} -o {sorcha_output_dir} "
         f"-t {sorcha_output_name} -f"
     )
     logger.info(f"Running Sorcha with command: {sorcha_command_string}")
-    logger.info(f"Output will be saved to: {RESULT_DIR}/{sorcha_output_name}")
+    logger.info(f"Output will be saved to: {sorcha_output_file}")
     os.makedirs(f"{RESULT_DIR}/{sorcha_output_name}", exist_ok=True)
+
     subprocess.run(sorcha_command_string, shell=True)
 
-    # Read the sorcha output
-    if not os.path.exists(f"{RESULT_DIR}/{sorcha_output_name}/{sorcha_output_file}"):
-        logger.info(
-            f"No output file found at {RESULT_DIR}/{sorcha_output_name}/{sorcha_output_file}"
-        )
+    # Check for output file - use the output file path directly
+    if not os.path.exists(sorcha_output_file):
+        logger.info(f"No output file found at {sorcha_output_file}")
         return None
-    sorcha_output_file = f"{RESULT_DIR}/{sorcha_output_name}/{sorcha_output_file}"
-    od_observations = sorcha_output_to_od_observations(sorcha_output_file)
 
+    # Read the sorcha output
+    od_observations = sorcha_output_to_od_observations(sorcha_output_file)
     if od_observations is None:
         logger.info(f"No observations found in {sorcha_output_file}")
         return Observations.empty()

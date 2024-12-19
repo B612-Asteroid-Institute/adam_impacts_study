@@ -26,6 +26,7 @@ from adam_impact_study.sorcha_utils import run_sorcha, write_config_file_timefra
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
+
 class ImpactStudyResults(qv.Table):
     object_id = qv.LargeStringColumn()
     observation_start = Timestamp.as_column()
@@ -128,7 +129,6 @@ def run_impact_study_all(
     return impact_results
 
 
-
 def run_impact_study_fo(
     impactor_orbit: Orbits,
     propagator: ASSISTPropagator,
@@ -142,13 +142,22 @@ def run_impact_study_fo(
 ) -> ImpactStudyResults:
     """Run impact study with optional parallel processing"""
     obj_id = impactor_orbit.object_id[0]
-    logger.info("Object ID: ", obj_id)
+    logger.info(f"Object ID: {obj_id}")
 
-    sorcha_config_file_name = f"sorcha_config_{RUN_NAME}_{obj_id}.ini"
-    sorcha_orbits_file = f"sorcha_input_{RUN_NAME}_{obj_id}.csv"
-    sorcha_physical_params_file = f"sorcha_params_{RUN_NAME}_{obj_id}.csv"
+    # Create object-specific result directory
+    obj_result_dir = os.path.join(RESULT_DIR, f"{RUN_NAME}_{obj_id}")
+    os.makedirs(obj_result_dir, exist_ok=True)
+
+    # Create Sorcha output directory
+    sorcha_output_dir = os.path.join(RESULT_DIR, f"sorcha_output_{RUN_NAME}_{obj_id}")
+    os.makedirs(sorcha_output_dir, exist_ok=True)
+
+    # Define file paths relative to result directory
+    sorcha_config_file_name = os.path.join(obj_result_dir, f"sorcha_config_{RUN_NAME}_{obj_id}.ini")
+    sorcha_orbits_file = os.path.join(obj_result_dir, f"sorcha_input_{RUN_NAME}_{obj_id}.csv")
+    sorcha_physical_params_file = os.path.join(obj_result_dir, f"sorcha_params_{RUN_NAME}_{obj_id}.csv")
     sorcha_output_name = f"sorcha_output_{RUN_NAME}_{obj_id}"
-    sorcha_output_file = f"{sorcha_output_name}.csv"
+    sorcha_output_file = os.path.join(sorcha_output_dir, f"{sorcha_output_name}.csv")
     fo_input_file_base = f"fo_input_{RUN_NAME}_{obj_id}"
     fo_output_file_base = f"fo_output_{RUN_NAME}_{obj_id}"
 
@@ -241,8 +250,8 @@ def run_impact_study_fo(
 
     return results
 
-run_impact_study_fo_remote = ray.remote(run_impact_study_fo)
 
+run_impact_study_fo_remote = ray.remote(run_impact_study_fo)
 
 
 def calculate_impact_probability(
