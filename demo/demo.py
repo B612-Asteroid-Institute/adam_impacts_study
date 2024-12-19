@@ -32,8 +32,8 @@ FO_DIR = args.fo_dir
 
 # Define the input files
 impactors_file = os.path.join(os.path.dirname(__file__), "data/10_impactors.csv")
-pointing_file = os.path.join(os.path.dirname(__file__), "data/baseline_v2.0_1yr.db")
-# pointing_file = os.path.join(os.path.dirname(__file__), "data/baseline_v4.0_10yrs.db")
+# pointing_file = os.path.join(os.path.dirname(__file__), "data/baseline_v2.0_1yr.db")
+pointing_file = os.path.join(os.path.dirname(__file__), "data/baseline_v3.6_10yrs.db")
 
 run_config_file = os.path.join(os.path.dirname(__file__), "impact_run_config.json")
 
@@ -50,7 +50,7 @@ impact_study_results = run_impact_study_all(
     FO_DIR,
     RUN_DIR,
     RESULT_DIR,
-    max_processes=5
+    max_processes=1
 )
 
 logger.info(impact_study_results)

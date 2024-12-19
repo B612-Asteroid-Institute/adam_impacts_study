@@ -5,7 +5,7 @@
 groups = ["default", "dev"]
 strategy = ["inherit_metadata"]
 lock_version = "4.5.0"
-content_hash = "sha256:41b9d2d88650c596cf772acba92bd0647adc1301c82c94deb2dbdd0073cdf7b9"
+content_hash = "sha256:ad79c3e2f132690feed999557be9c387083fb571263d01fd8bf19d08c907db23"
 
 [[metadata.targets]]
 requires_python = ">=3.11,<3.13"
@@ -3030,11 +3030,11 @@ files = [
 
 [[package]]
 name = "sorcha"
-version = "0.1.dev1891"
+version = "0.1.dev1893"
 requires_python = ">=3.9"
 git = "https://github.com/B612-Asteroid-Institute/sorcha.git"
-ref = "fb3c1a43c4b2516c12d17f0a892e67310bc65136"
-revision = "fb3c1a43c4b2516c12d17f0a892e67310bc65136"
+ref = "22f4ea513c3614ee14d84326a704ff567c904d5f"
+revision = "22f4ea513c3614ee14d84326a704ff567c904d5f"
 summary = "The survey simulator post processing code for the LSST"
 groups = ["default"]
 dependencies = [
