@@ -33,13 +33,13 @@ FO_DIR = args.fo_dir
 # Define the input files
 impactors_file = os.path.join(os.path.dirname(__file__), "data/10_impactors.csv")
 pointing_file = os.path.join(os.path.dirname(__file__), "data/baseline_v2.0_1yr.db")
-chunk_size = 1
+# pointing_file = os.path.join(os.path.dirname(__file__), "data/baseline_v4.0_10yrs.db")
 
 run_config_file = os.path.join(os.path.dirname(__file__), "impact_run_config.json")
 
 impactor_orbits = impactor_file_to_adam_orbit(impactors_file)
 
-impactor_orbits = impactor_orbits[0]
+impactor_orbits = impactor_orbits[0:20]
 
 # Run the impact study
 impact_study_results = run_impact_study_all(
@@ -50,11 +50,11 @@ impact_study_results = run_impact_study_all(
     FO_DIR,
     RUN_DIR,
     RESULT_DIR,
-    max_processes=1
+    max_processes=5
 )
 
 logger.info(impact_study_results)
 
 if impact_study_results is not None:
-    plot_ip_over_time(impact_study_results)
+    plot_ip_over_time(impact_study_results, RESULT_DIR)
 
