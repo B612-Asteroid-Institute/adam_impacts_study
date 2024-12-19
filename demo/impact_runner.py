@@ -35,4 +35,4 @@ impact_study_results = run_impact_study_all(
 logger.info(impact_study_results)
 
 if impact_study_results is not None:
-    plot_ip_over_time(impact_study_results)
+    plot_ip_over_time(impact_study_results, RESULT_DIR)
