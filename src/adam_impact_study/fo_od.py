@@ -13,9 +13,7 @@ logger = logging.getLogger(__name__)
 
 def run_fo_od(
     fo_input_file: str,
-    fo_output_folder: str,
     FO_DIR: str,
-    RUN_DIR: str,
     RESULT_DIR: str,
 ) -> Tuple[Orbits, Optional[str]]:
     """
@@ -25,8 +23,6 @@ def run_fo_od(
     ----------
     fo_input_file : str
         Name of the find_orb input file.
-    fo_output_folder : str
-        Name of the find_orb output folder.
     FO_DIR : str
         Directory path where the find_orb executable is located.
     RUN_DIR : str
@@ -43,24 +39,30 @@ def run_fo_od(
     """
 
     # Generate the find_orb commands
+    fo_output_folder = os.path.join(RESULT_DIR, f"{orbit.object_id[0].as_py()}")
+    os.makedirs(fo_output_folder, exist_ok=True)
     fo_command = (
-        f"cd {FO_DIR}; ./fo {fo_input_file} "
-        f"-O {fo_output_folder}; cp -r {fo_output_folder} "
-        f"{RUN_DIR}/{RESULT_DIR}/; cd {RUN_DIR}"
+        f"{FO_DIR}/fo {fo_input_file} -O {fo_output_folder}"
+        f" -D {FO_DIR}/environ.dat"
     )
+    # fo_command = (
+    #     f"cd {FO_DIR}; ./fo {fo_input_file} "
+    #     f"-O {fo_output_folder}; cp -r {fo_output_folder} "
+    #     f"{RUN_DIR}/{RESULT_DIR}/; cd {RUN_DIR}"
+    # )
     logger.info(f"Find Orb command: {fo_command}")
-
+    
     # Ensure the output directory exists and copy the input file
-    os.makedirs(f"{FO_DIR}/{fo_output_folder}", exist_ok=True)
-    shutil.copyfile(
-        f"{RESULT_DIR}/{fo_input_file}",
-        f"{FO_DIR}/{fo_input_file}",
-    )
+    # os.makedirs(f"{FO_DIR}/{fo_output_folder}", exist_ok=True)
+    # shutil.copyfile(
+    #     f"{RESULT_DIR}/{fo_input_file}",
+    #     f"{FO_DIR}/{fo_input_file}",
+    # )
 
     # Run find_orb and check for output
     subprocess.run(fo_command, shell=True)
-    if not os.path.exists(f"{FO_DIR}/{fo_output_folder}/covar.json"):
-        logger.info("No find_orb output for: ", fo_output_folder)
+    if not os.path.exists(f"{fo_output_folder}/covar.json"):
+        logger.info(f"No find_orb output for: {fo_output_folder}")
         return (Orbits.empty(), "No find_orb output")
 
     # Convert to ADAM Orbit objects

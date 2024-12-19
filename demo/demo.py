@@ -19,8 +19,8 @@ parser.add_argument('--result-dir',
 parser.add_argument('--run-dir', default=os.getcwd(),
                    help='Working directory for the run (default: current working directory)')
 parser.add_argument('--fo-dir', 
-                   default=os.path.join(os.path.dirname(__file__), "find_orb/find_orb"),
-                   help='Find_Orb directory path (default: ./find_orb/find_orb)')
+                   default=os.path.join(os.path.dirname(__file__), "../find_orb/find_orb"),
+                   help='Find_Orb directory path (default: ../find_orb/find_orb)')
 
 args = parser.parse_args()
 
@@ -32,14 +32,15 @@ FO_DIR = args.fo_dir
 
 # Define the input files
 impactors_file = os.path.join(os.path.dirname(__file__), "data/10_impactors.csv")
-# pointing_file = os.path.join(os.path.dirname(__file__), "data/baseline_v2.0_1yr.db")
-pointing_file = os.path.join(os.path.dirname(__file__), "data/baseline_v3.6_10yrs.db")
+pointing_file = os.path.join(os.path.dirname(__file__), "data/baseline_v2.0_1yr.db")
+# pointing_file = os.path.join(os.path.dirname(__file__), "data/baseline_v3.6_10yrs.db")
 
 run_config_file = os.path.join(os.path.dirname(__file__), "impact_run_config.json")
 
 impactor_orbits = impactor_file_to_adam_orbit(impactors_file)
 
 impactor_orbits = impactor_orbits[0:20]
+# impactor_orbits = impactor_orbits.select("object_id", "I00008")
 
 # Run the impact study
 impact_study_results = run_impact_study_all(

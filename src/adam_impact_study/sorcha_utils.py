@@ -94,6 +94,9 @@ comet_activity = none
 [AUXILIARY]
 jpl_planets = {assist_planets}
 jpl_small_bodies = {assist_small_bodies}
+
+[EXPERT]
+ar_use_integrate = True
 """
     with open(config_file, "w") as f:
         f.write(config_text)
@@ -226,3 +229,61 @@ def run_sorcha(
         observations = qv.concatenate([observations, sorcha_output_to_od_observations(result_file)])
 
     return observations
+
+# def run_sorcha_internal(
+#     adam_orbits: Orbits,
+#     sorcha_config_file: str, 
+#     sorcha_orbits_file: str,
+#     sorcha_physical_params_file: str,
+#     pointing_file: str,
+#     sorcha_output_dir: str,
+#     sorcha_output_stem: str,
+# ) -> Observations:
+#     """
+#     Run Sorcha simulation directly using internal library functions instead of shell command.
+    
+#     Parameters are the same as run_sorcha().
+#     """
+
+
+#     # Generate orbit file first
+#     generate_sorcha_orbits(adam_orbits, sorcha_orbits_file)
+#     logger.info(f"Generated Sorcha orbits file: {sorcha_orbits_file}")
+
+#     # Create output directory
+#     os.makedirs(sorcha_output_dir, exist_ok=True)
+
+#     # Parse Sorcha config file
+#     config = sorchaConfigs(
+#         sorcha_config_file,
+#         survey_name="LSST",
+#     )
+
+#     # Create arguments object
+#     args = sorchaArguments()
+#     args.orbinfile = sorcha_orbits_file
+#     args.configfile = sorcha_config_file
+#     args.outpath = sorcha_output_dir
+#     args.pointing_database = pointing_file
+#     args.paramsinput = sorcha_physical_params_file
+#     args.outfilestem = sorcha_output_stem
+#     args.loglevel = True
+#     args.ar_data_file_path = ""
+    
+#     # Run Sorcha simulation
+#     logger.info("Running Sorcha simulation internally")
+#     runLSSTSimulation(args, config)
+
+#     # Process results same as original function
+#     result_files = glob.glob(f"{sorcha_output_dir}/*.csv")
+
+#     if len(result_files) == 0:
+#         logger.warning(f"No output files found in {sorcha_output_dir}")
+#         return Observations.empty()
+
+#     # Read the sorcha output
+#     observations = Observations.empty()
+#     for result_file in result_files:
+#         observations = qv.concatenate([observations, sorcha_output_to_od_observations(result_file)])
+
+#     return observations

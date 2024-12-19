@@ -263,7 +263,6 @@ def calculate_impact_probability(
     impactor_orbit: Orbits,
     propagator: ASSISTPropagator,
     fo_input_file_base: str,
-    fo_output_file_base: str,
     FO_DIR: str,
     RUN_DIR: str,
     RESULT_DIR: str,
@@ -312,15 +311,12 @@ def calculate_impact_probability(
     start_date_mjd = start_date.mjd()[0]
     end_date_mjd = end_date.mjd()[0]
     fo_file_name = f"{fo_input_file_base}_{start_date_mjd}_{end_date_mjd}.csv"
-    fo_output_folder = f"{fo_output_file_base}_{obj_id}_{start_date_mjd}_{end_date_mjd}"
     od_observations_to_ades_file(observations, f"{RESULT_DIR}/{fo_file_name}")
 
     try:
         orbit, error = run_fo_od(
             fo_file_name,
-            fo_output_folder,
             FO_DIR,
-            RUN_DIR,
             RESULT_DIR,
         )
     except Exception as e:
