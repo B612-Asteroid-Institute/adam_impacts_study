@@ -1,2 +1,7 @@
 .pdm-python
 find_orb/*
+
+
+*__pycache__
+
+debug.txt

@@ -48,7 +48,7 @@ lint = { composite = [
 fix = "ruff ./src/adam_impact_study --fix"
 typecheck = "mypy --strict ./src/adam_impact_study"
 
-test = "pytest --benchmark-disable {args}"
+test = "pytest --benchmark-disable {args} --ignore=__pypackages__"
 doctest = "pytest --doctest-plus --doctest-only"
 benchmark = "pytest --benchmark-only"
 coverage = "pytest --cov=adam_impact_study --cov-report=xml"
