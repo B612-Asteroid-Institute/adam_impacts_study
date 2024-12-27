@@ -227,6 +227,8 @@ def run_impact_study_fo(
                 RUN_DIR,
                 RESULT_DIR,
             )
+            if result.error is not None:
+                logger.info(f"Error: {result.error}")
             results = qv.concatenate([results, result])
             if results.fragmented():
                 results = qv.defragment(results)
@@ -248,12 +250,16 @@ def run_impact_study_fo(
             if len(futures) > max_processes * 1.5:
                 finished, futures = ray.wait(futures, num_returns=1)
                 result = ray.get(finished[0])
+                if result.error is not None:
+                    logger.info(f"Error: {result.error}")
                 results = qv.concatenate([results, result])
 
     # Get remaining results
     while len(futures) > 0:
         finished, futures = ray.wait(futures, num_returns=1)
         result = ray.get(finished[0])
+        if result.error is not None:
+            logger.info(f"Error: {result.error}")
         results = qv.concatenate([results, result])
 
     return results
@@ -349,7 +355,7 @@ def calculate_impact_probability(
             orbit,
             thirty_days_before_impact,
             covariance=True,
-            covariance_method="monte_carlo",
+            covariance_method="monte-carlo",
             num_samples=1000,
         )
         propagated_30_days_before_impact.to_parquet(

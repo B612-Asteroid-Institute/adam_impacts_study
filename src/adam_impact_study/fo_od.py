@@ -43,10 +43,11 @@ def run_fo_od(
     # Generate the find_orb commands
     fo_output_folder = os.path.join(RESULT_DIR, f"{obj_id}")
     os.makedirs(fo_output_folder, exist_ok=True)
+    # Note: This does not work becuase fo cannot be run from a different directory
     # fo_command = (
     #     f"{FO_DIR}/fo {fo_input_file} -O {fo_output_folder}" f" -D {FO_DIR}/environ.dat"
     # )
-    RUN_DIR = "/Users/natetellis/code/adam_impacts_study/demo"
+    RUN_DIR = "[SET BY USER]" #this is for testing while testing alternatives for running fo 
     fo_command = (
         f"cd {FO_DIR}; ./fo {fo_input_file} "
         f"-O {fo_output_folder}; cp -r {fo_output_folder} "
@@ -63,7 +64,7 @@ def run_fo_od(
 
     # Run find_orb and check for output
     subprocess.run(fo_command, shell=True)
-    if not os.path.exists(f"{obj_id}/covar.json"):
+    if not os.path.exists(f"{fo_output_folder}/covar.json"):
         logger.info(f"No find_orb output for: {fo_output_folder}")
         return (Orbits.empty(), "No find_orb output")
 
