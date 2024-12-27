@@ -5,3 +5,5 @@ find_orb/*
 *__pycache__
 
 debug.txt
+demo/results/*
+*.DS_Store

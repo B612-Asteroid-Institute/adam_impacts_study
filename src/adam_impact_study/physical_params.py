@@ -10,6 +10,7 @@ import quivr as qv
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
+
 class ImpactorConfig(qv.Table):
     config_id = qv.LargeStringColumn()
     ast_class = qv.LargeStringColumn()
@@ -161,7 +162,7 @@ def select_asteroid_size(min_diam: float, max_diam: float, seed: int = 13612) ->
     return rng.uniform(min_diam, max_diam)
 
 
-def determine_ast_class(percent_C: float, percent_S: float) -> str:
+def determine_ast_class(percent_C: float, percent_S: float, seed: int = 13612) -> str:
     """
     Determine the asteroid class based on the percentage of C and S asteroids.
 
@@ -178,7 +179,7 @@ def determine_ast_class(percent_C: float, percent_S: float) -> str:
         Asteroid class.
     """
     assert percent_C + percent_S == 1, "Percentage of C and S asteroids must equal 1"
-    rng = np.random.default_rng()
+    rng = np.random.default_rng(seed)
     return "C" if rng.random() < percent_C else "S"
 
 
@@ -262,7 +263,7 @@ def load_config(file_path: str, run_id: str = None) -> ImpactorConfig:
 
 
 def create_physical_params_single(
-    config_file: str, obj_id: str
+    config_file: str, obj_id: str, seed: int = 13612
 ) -> PhotometricProperties:
     """
     Create physical parameters for a single impactor.
@@ -283,8 +284,11 @@ def create_physical_params_single(
     C_config = config.apply_mask(pc.equal(config.ast_class, "C"))
     S_config = config.apply_mask(pc.equal(config.ast_class, "S"))
 
+    # log the seed used for the physical parameters
+    logger.info(f"Seed used for physical parameters: {seed}")
+
     ast_class = determine_ast_class(
-        C_config.percentage.to_numpy()[0], S_config.percentage.to_numpy()[0]
+        C_config.percentage.to_numpy()[0], S_config.percentage.to_numpy()[0], seed
     )
 
     if ast_class == "C":
@@ -293,10 +297,10 @@ def create_physical_params_single(
         config = S_config
 
     d = select_asteroid_size(
-        config.min_diam.to_numpy()[0], config.max_diam.to_numpy()[0]
+        config.min_diam.to_numpy()[0], config.max_diam.to_numpy()[0], seed
     )
     albedo = select_albedo_from_range(
-        config.albedo_min.to_numpy()[0], config.albedo_max.to_numpy()[0]
+        config.albedo_min.to_numpy()[0], config.albedo_max.to_numpy()[0], seed
     )
     H = calculate_H(d, albedo)
     phys_params = PhotometricProperties.from_kwargs(

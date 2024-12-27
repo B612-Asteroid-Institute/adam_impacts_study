@@ -2,6 +2,7 @@ import logging
 import os
 from typing import Optional
 
+import numpy as np
 import pyarrow as pa
 import pyarrow.compute as pc
 import quivr as qv
@@ -46,6 +47,7 @@ def run_impact_study_all(
     RUN_DIR: str,
     RESULT_DIR: str,
     max_processes: Optional[int] = 1,
+    seed: int = 13612,
 ) -> Optional[ImpactStudyResults]:
     """
     Run an impact study for all impactors in the input file.
@@ -82,8 +84,13 @@ def run_impact_study_all(
 
     impact_results = ImpactStudyResults.empty()
 
+    # randomly seed the physical parameters based on the supplied seed
+    # create ints of length object_ids
+    rng = np.random.default_rng(seed)
+    seed_ints = rng.integers(0, 1000000, len(object_ids))
+
     futures = []
-    for obj_id in object_ids:
+    for obj_id, seed in zip(object_ids, seed_ints):
         impactor_orbit = impactor_orbits.select("object_id", obj_id)
 
         if max_processes == 1:
@@ -97,6 +104,7 @@ def run_impact_study_all(
                 RUN_DIR,
                 RESULT_DIR,
                 max_processes,
+                seed,
             )
             impact_results = qv.concatenate([impact_results, impact_result])
         else:
@@ -111,6 +119,7 @@ def run_impact_study_all(
                     RUN_DIR,
                     RESULT_DIR,
                     max_processes,
+                    seed,
                 )
             )
 
@@ -137,6 +146,7 @@ def run_impact_study_fo(
     RUN_DIR: str,
     RESULT_DIR: str,
     max_processes: int = 1,
+    seed: int = 13612,
 ) -> ImpactStudyResults:
     """Run impact study with optional parallel processing"""
     obj_id = impactor_orbit.object_id[0]
@@ -164,7 +174,7 @@ def run_impact_study_fo(
     fo_input_file_base = f"fo_input_{RUN_NAME}_{obj_id}"
     fo_output_file_base = f"fo_output_{RUN_NAME}_{obj_id}"
 
-    phys_params = create_physical_params_single(run_config_file, obj_id)
+    phys_params = create_physical_params_single(run_config_file, obj_id, seed)
     phys_para_file_str = photometric_properties_to_sorcha_table(phys_params, "r")
     write_phys_params_file(phys_para_file_str, sorcha_physical_params_file)
 
