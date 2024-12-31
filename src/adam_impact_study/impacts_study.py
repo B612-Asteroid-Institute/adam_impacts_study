@@ -152,13 +152,18 @@ def run_impact_study_fo(
     os.makedirs(sorcha_output_dir, exist_ok=True)
 
     # Define file paths relative to result directory
-    sorcha_config_file_name = os.path.join(obj_result_dir, f"sorcha_config_{RUN_NAME}_{obj_id}.ini")
-    sorcha_orbits_file = os.path.join(obj_result_dir, f"sorcha_input_{RUN_NAME}_{obj_id}.csv")
-    sorcha_physical_params_file = os.path.join(obj_result_dir, f"sorcha_params_{RUN_NAME}_{obj_id}.csv")
+    sorcha_config_file_name = os.path.join(
+        obj_result_dir, f"sorcha_config_{RUN_NAME}_{obj_id}.ini"
+    )
+    sorcha_orbits_file = os.path.join(
+        obj_result_dir, f"sorcha_input_{RUN_NAME}_{obj_id}.csv"
+    )
+    sorcha_physical_params_file = os.path.join(
+        obj_result_dir, f"sorcha_params_{RUN_NAME}_{obj_id}.csv"
+    )
     sorcha_output_stem = f"{RUN_NAME}_{obj_id}"
     fo_input_file_base = f"fo_input_{RUN_NAME}_{obj_id}"
     fo_output_file_base = f"fo_output_{RUN_NAME}_{obj_id}"
-
 
     phys_params = create_physical_params_single(run_config_file, obj_id)
     phys_para_file_str = photometric_properties_to_sorcha_table(phys_params, "r")

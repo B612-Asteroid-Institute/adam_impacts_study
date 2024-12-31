@@ -11,6 +11,7 @@ from adam_impact_study.conversions import fo_to_adam_orbit_cov
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
+
 def run_fo_od(
     fo_input_file: str,
     obj_id: str,
@@ -43,15 +44,15 @@ def run_fo_od(
 
     # List of required files to copy from FO_DIR to current directory
     required_files = [
-        'ObsCodes.htm',
-        'jpl_eph.txt', 
-        'orbitdef.sof',
-        'rovers.txt',
-        'xdesig.txt',
-        'cospar.txt',
-        'efindorb.txt',
-        'odd_name.txt',
-        'sigma.txt'
+        "ObsCodes.htm",
+        "jpl_eph.txt",
+        "orbitdef.sof",
+        "rovers.txt",
+        "xdesig.txt",
+        "cospar.txt",
+        "efindorb.txt",
+        "odd_name.txt",
+        "sigma.txt",
     ]
 
     # Copy required files to the current directory
@@ -62,15 +63,14 @@ def run_fo_od(
         else:
             logger.warning(f"Required file not found: {src}")
 
-    #ls current directory to check files are copied
+    # ls current directory to check files are copied
     logger.info(f"Current directory files: {os.listdir()}")
 
     # Generate the find_orb commands
     fo_output_folder = os.path.join(RESULT_DIR, f"{obj_id}")
     os.makedirs(fo_output_folder, exist_ok=True)
     fo_command = (
-        f"{FO_DIR}/fo {fo_input_file} -O {fo_output_folder}"
-        f" -D {FO_DIR}/environ.def"
+        f"{FO_DIR}/fo {fo_input_file} -O {fo_output_folder}" f" -D {FO_DIR}/environ.def"
     )
     # fo_command = (
     #     f"cd {FO_DIR}; ./fo {fo_input_file} "
@@ -78,7 +78,7 @@ def run_fo_od(
     #     f"{RUN_DIR}/{RESULT_DIR}/; cd {RUN_DIR}"
     # )
     logger.info(f"Find Orb command: {fo_command}")
-    
+
     # Ensure the output directory exists and copy the input file
     # os.makedirs(f"{FO_DIR}/{fo_output_folder}", exist_ok=True)
     # shutil.copyfile(
