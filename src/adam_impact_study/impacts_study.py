@@ -70,6 +70,7 @@ def run_impact_study_all(
     impact_results : ImpactStudyResults
         Table containing the results of the impact study with columns 'object_id',
         'day', and 'impact_probability'. If no impacts were found, returns None.
+
     """
     propagator = ASSISTPropagator(
         initial_dt=0.001, min_dt=1e-12, adaptive_mode=1, epsilon=1e-9
@@ -218,11 +219,12 @@ def run_impact_study_fo(
                 impactor_orbit,
                 propagator,
                 fo_input_file_base,
-                fo_output_file_base,
                 FO_DIR,
                 RUN_DIR,
                 RESULT_DIR,
             )
+            if result.error is not None:
+                logger.info(f"Error: {result.error}")
             results = qv.concatenate([results, result])
             if results.fragmented():
                 results = qv.defragment(results)
@@ -234,7 +236,6 @@ def run_impact_study_fo(
                     impactor_orbit,
                     propagator,
                     fo_input_file_base,
-                    fo_output_file_base,
                     FO_DIR,
                     RUN_DIR,
                     RESULT_DIR,
@@ -244,12 +245,16 @@ def run_impact_study_fo(
             if len(futures) > max_processes * 1.5:
                 finished, futures = ray.wait(futures, num_returns=1)
                 result = ray.get(finished[0])
+                if result.error is not None:
+                    logger.info(f"Error: {result.error}")
                 results = qv.concatenate([results, result])
 
     # Get remaining results
     while len(futures) > 0:
         finished, futures = ray.wait(futures, num_returns=1)
         result = ray.get(finished[0])
+        if result.error is not None:
+            logger.info(f"Error: {result.error}")
         results = qv.concatenate([results, result])
 
     return results
@@ -311,11 +316,13 @@ def calculate_impact_probability(
     start_date_mjd = start_date.mjd()[0]
     end_date_mjd = end_date.mjd()[0]
     fo_file_name = f"{fo_input_file_base}_{start_date_mjd}_{end_date_mjd}.csv"
+    fo_file_path = f"{RESULT_DIR}/{fo_file_name}"
     od_observations_to_ades_file(observations, f"{RESULT_DIR}/{fo_file_name}")
 
     try:
         orbit, error = run_fo_od(
-            fo_file_name,
+            fo_file_path,
+            obj_id,
             FO_DIR,
             RESULT_DIR,
         )
@@ -344,7 +351,7 @@ def calculate_impact_probability(
             orbit,
             thirty_days_before_impact,
             covariance=True,
-            covariance_method="monte_carlo",
+            covariance_method="monte-carlo",
             num_samples=1000,
         )
         propagated_30_days_before_impact.to_parquet(
