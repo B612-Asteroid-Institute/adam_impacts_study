@@ -190,7 +190,7 @@ def analyze_round_trip_results(results: RoundTripResults):
             - df is the processed pandas DataFrame for further analysis
     """
     # Convert to pandas for easier analysis
-    df = results.to_pandas()
+    df = results.to_dataframe()
     # df['total_steps'] = df['forward_steps_done'] + df['backward_steps_done']
     
     # Correlation analysis
