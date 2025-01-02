@@ -32,8 +32,10 @@ class ImpactStudyResults(qv.Table):
     observation_start = Timestamp.as_column()
     observation_end = Timestamp.as_column()
     observation_count = qv.UInt64Column()
+    observations_rejected = qv.UInt64Column()
     observation_nights = qv.UInt64Column()
     impact_probability = qv.Float64Column(nullable=True)
+
     error = qv.LargeStringColumn(nullable=True)
 
 
@@ -163,7 +165,6 @@ def run_impact_study_fo(
     )
     sorcha_output_stem = f"{RUN_NAME}_{obj_id}"
     fo_input_file_base = f"fo_input_{RUN_NAME}_{obj_id}"
-    fo_output_file_base = f"fo_output_{RUN_NAME}_{obj_id}"
 
     phys_params = create_physical_params_single(run_config_file, obj_id)
     phys_para_file_str = photometric_properties_to_sorcha_table(phys_params, "r")
@@ -324,12 +325,15 @@ def calculate_impact_probability(
     fo_file_path = f"{RESULT_DIR}/{fo_file_name}"
     od_observations_to_ades_file(observations, f"{RESULT_DIR}/{fo_file_name}")
 
+    # Create a unique run name based on the object ID and the start and end date
+    run_name = f"{obj_id}_{start_date_mjd}_{end_date_mjd}"
+
     try:
-        orbit, error = run_fo_od(
-            fo_file_path,
-            obj_id,
+        orbit, rejected_observations, error = run_fo_od(
             FO_DIR,
             RESULT_DIR,
+            fo_file_path,
+            run_name,
         )
     except Exception as e:
         return ImpactStudyResults.from_kwargs(
@@ -338,6 +342,7 @@ def calculate_impact_probability(
             observation_end=end_date,
             observation_count=[observations_count],
             observation_nights=[observation_nights],
+            observations_rejected=[len(rejected_observations)],
             error=[str(e)],
         )
 
@@ -348,6 +353,7 @@ def calculate_impact_probability(
             observation_end=end_date,
             observation_count=[observations_count],
             observation_nights=[observation_nights],
+            observations_rejected=[len(rejected_observations)],
             error=[error],
         )
 
@@ -369,6 +375,7 @@ def calculate_impact_probability(
             observation_end=end_date,
             observation_count=[observations_count],
             observation_nights=[observation_nights],
+            observations_rejected=[len(rejected_observations)],
             error=[str(e)],
         )
 
@@ -385,6 +392,7 @@ def calculate_impact_probability(
             observation_end=end_date,
             observation_count=[observations_count],
             observation_nights=[observation_nights],
+            observations_rejected=[len(rejected_observations)],
             error=[str(e)],
         )
 
@@ -394,6 +402,7 @@ def calculate_impact_probability(
         observation_end=end_date,
         observation_count=[observations_count],
         observation_nights=[observation_nights],
+        observations_rejected=[len(rejected_observations)],
         impact_probability=[ip.cumulative_probability[0].as_py()],
     )
 

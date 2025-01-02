@@ -1,47 +1,27 @@
 import logging
 import os
+import pathlib
 import shutil
 import subprocess
 from typing import Optional, Tuple
 
+from adam_core.observations.ades import ADESObservations
 from adam_core.orbits import Orbits
 
-from adam_impact_study.conversions import fo_to_adam_orbit_cov
+from adam_impact_study.conversions import (
+    fo_to_adam_orbit_cov,
+    rejected_observations_from_fo,
+)
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
 
-def run_fo_od(
-    fo_input_file: str,
-    obj_id: str,
-    FO_DIR: str,
-    RESULT_DIR: str,
-) -> Tuple[Orbits, Optional[str]]:
-    """
-    Run the find_orb orbit determination process for each object
+LINUX_JPL_PATH = pathlib.Path(__file__).parent.parent.parent / "find_orb/linux_p1550p2650.430t"
 
-    Parameters
-    ----------
-    fo_input_file : str
-        Name of the find_orb input file.
-    obj_id : str
-        Object ID of the object to be processed.
-    FO_DIR : str
-        Directory path where the find_orb executable is located.
-    RUN_DIR : str
-        Directory path where the script is being run.
-    RESULT_DIR : str
-        Directory path where the results will be stored.
 
-    Returns
-    -------
-    orbit : `~adam_core.orbits.orbits.Orbits`
-        Orbit object containing the orbital elements and covariance matrix.
-    error : str
-        Error message if the orbit determination failed.
-    """
-
+def _create_fo_working_directory(FO_DIR: str, working_dir: str) -> str:
+    os.makedirs(working_dir, exist_ok=True)
     # List of required files to copy from FO_DIR to current directory
     required_files = [
         "ObsCodes.htm",
@@ -58,41 +38,82 @@ def run_fo_od(
     # Copy required files to the current directory
     for file in required_files:
         src = os.path.join(FO_DIR, file)
-        if os.path.exists(src):
-            shutil.copy2(src, file)  # Copy to current directory
-        else:
-            logger.warning(f"Required file not found: {src}")
+        dst = os.path.join(working_dir, file)
+        shutil.copy2(src, dst)  # Copy to current directory
 
-    # ls current directory to check files are copied
-    logger.info(f"Current directory files: {os.listdir()}")
+    # Template in the JPL path to environ.dat
+    environ_dat_template = pathlib.Path(__file__).parent / "environ.dat.tpl"
+    with open(environ_dat_template, "r") as file:
+        environ_dat_content = file.read()
+    environ_dat_content = environ_dat_content.format(LINUX_JPL_FILENAME=LINUX_JPL_PATH.absolute())
+    with open(os.path.join(working_dir, "environ.dat"), "w") as file:
+        file.write(environ_dat_content)
 
-    # Generate the find_orb commands
-    fo_output_folder = os.path.join(RESULT_DIR, f"{obj_id}")
-    os.makedirs(fo_output_folder, exist_ok=True)
+    return working_dir
+
+
+def run_fo_od(
+    FO_DIR: str,
+    RESULT_DIR: str,
+    fo_input_file: str,
+    run_name: str,
+) -> Tuple[Orbits, ADESObservations, Optional[str]]:
+    """
+    Run the find_orb orbit determination process for each object
+
+    Parameters
+    ----------
+    fo_input_file : str
+        Name of the find_orb input file.
+    run_name : str
+        Unique identifier for the fo run
+    FO_DIR : str
+        Directory path where the find_orb executable is located.
+    RESULT_DIR : str
+        Directory path where the results will be stored.
+
+    Returns
+    -------
+    orbit : `~adam_core.orbits.orbits.Orbits`
+        Orbit object containing the orbital elements and covariance matrix.
+    error : str
+        Error message if the orbit determination failed.
+    """
+
+    # We create a working directory, as fo generates files in the same
+    # directory as configuration files and we don't want our jobs to overwrite
+    # each other.
+    working_dir = os.path.join(RESULT_DIR, f"{run_name}")
+    working_dir = _create_fo_working_directory(FO_DIR, working_dir)
+
     fo_command = (
-        f"{FO_DIR}/fo {fo_input_file} -O {fo_output_folder}" f" -D {FO_DIR}/environ.def"
+        f"{FO_DIR}/fo {fo_input_file} "
+        f"-c " # Combine all observations as if you only had one object
+        f"-D {working_dir}/environ.dat"
     )
-    # fo_command = (
-    #     f"cd {FO_DIR}; ./fo {fo_input_file} "
-    #     f"-O {fo_output_folder}; cp -r {fo_output_folder} "
-    #     f"{RUN_DIR}/{RESULT_DIR}/; cd {RUN_DIR}"
-    # )
+
     logger.info(f"Find Orb command: {fo_command}")
-
-    # Ensure the output directory exists and copy the input file
-    # os.makedirs(f"{FO_DIR}/{fo_output_folder}", exist_ok=True)
-    # shutil.copyfile(
-    #     f"{RESULT_DIR}/{fo_input_file}",
-    #     f"{FO_DIR}/{fo_input_file}",
-    # )
-
-    # Run find_orb and check for output
-    subprocess.run(fo_command, shell=True)
-    if not os.path.exists(f"{fo_output_folder}/covar.json"):
-        logger.info(f"No find_orb output for: {fo_output_folder}")
-        return (Orbits.empty(), "No find_orb output")
+    # Run find_orb and capture output
+    output = subprocess.run(
+        fo_command,
+        shell=True,
+        cwd=working_dir,
+        text=True,  # Convert output to string
+        capture_output=True,  # Capture stdout and stderr
+    )
+    
+    # Log the output during debugging
+    logger.debug(f"{output.stdout}")
+    
+    if output.returncode != 0:
+        logger.info(f"Find_orb failed with return code: {output.returncode}")
+        logger.info(f"Error output: {output.stderr}")  # Log error output on failure
+        return (Orbits.empty(), ADESObservations.empty(), "Find_orb failed")
+    if not os.path.exists(f"{working_dir}/covar.json"):
+        logger.info(f"No find_orb output for: {working_dir}")
+        return (Orbits.empty(), ADESObservations.empty(), "No find_orb output")
 
     # Convert to ADAM Orbit objects
-    orbit = fo_to_adam_orbit_cov(f"{fo_output_folder}")
-
-    return (orbit, None)
+    orbit = fo_to_adam_orbit_cov(f"{working_dir}")
+    rejected_observations = rejected_observations_from_fo(f"{working_dir}")
+    return (orbit, rejected_observations, None)

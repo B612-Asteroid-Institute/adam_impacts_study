@@ -1,5 +1,5 @@
 #build and install find orb
-mkdir find_orb
+mkdir -p find_orb
 cd find_orb
 git clone https://github.com/Bill-Gray/lunar.git
 git clone https://github.com/Bill-Gray/sat_code.git
