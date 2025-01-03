@@ -449,6 +449,6 @@ def rejected_observations_from_fo(fo_output_folder: str) -> ADESObservations:
         band=pa.array([observation.get("MagBand") for observation in rejected_observations]),
         stn=pa.array([observation.get("obscode") for observation in rejected_observations]),
         mode=pa.repeat("NA", len(rejected_observations)),
-        astcat=pa.repeat("NA", len(rejected_observations)),
+        astCat=pa.repeat("NA", len(rejected_observations)),
     )
     return ades_rejected_observations

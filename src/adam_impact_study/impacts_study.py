@@ -8,11 +8,10 @@ import quivr as qv
 import ray
 from adam_assist import ASSISTPropagator
 from adam_core.dynamics.impacts import calculate_impact_probabilities, calculate_impacts
+from adam_core.observations.ades import ADESObservations
 from adam_core.observers.utils import calculate_observing_night
 from adam_core.orbit_determination import OrbitDeterminationObservations
 from adam_core.orbits import Orbits
-from adam_core.observations.ades import ADESObservations
-from adam_core.ray_cluster import initialize_use_ray
 from adam_core.time import Timestamp
 
 from adam_impact_study.conversions import Observations, od_observations_to_ades_file
@@ -100,7 +99,7 @@ def run_impact_study_all(
                 FO_DIR,
                 RUN_DIR,
                 RESULT_DIR,
-                max_processes,
+                max_processes=max_processes,
             )
             impact_results = qv.concatenate([impact_results, impact_result])
         else:
@@ -230,8 +229,9 @@ def run_impact_study_fo(
                 RUN_DIR,
                 RESULT_DIR,
             )
-            if result.error is not None:
-                logger.info(f"Error: {result.error}")
+            # Log if any error is present
+            if pc.any(pc.invert(pc.is_null(result.error))):
+                logger.warning(f"Error: {result.error}")
             results = qv.concatenate([results, result])
             if results.fragmented():
                 results = qv.defragment(results)
@@ -252,16 +252,16 @@ def run_impact_study_fo(
             if len(futures) > max_processes * 1.5:
                 finished, futures = ray.wait(futures, num_returns=1)
                 result = ray.get(finished[0])
-                if result.error is not None:
-                    logger.info(f"Error: {result.error}")
+                if pc.any(pc.invert(pc.is_null(result.error))):
+                    logger.warning(f"Error: {result.error}")
                 results = qv.concatenate([results, result])
 
     # Get remaining results
     while len(futures) > 0:
         finished, futures = ray.wait(futures, num_returns=1)
         result = ray.get(finished[0])
-        if result.error is not None:
-            logger.info(f"Error: {result.error}")
+        if pc.any(pc.invert(pc.is_null(result.error))):
+            logger.warning(f"Error: {result.error}")
         results = qv.concatenate([results, result])
 
     results.to_parquet(f"{RESULT_DIR}/impact_study_results_{obj_id}.parquet")
