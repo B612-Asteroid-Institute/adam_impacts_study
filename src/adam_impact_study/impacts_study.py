@@ -11,6 +11,7 @@ from adam_core.dynamics.impacts import calculate_impact_probabilities, calculate
 from adam_core.observers.utils import calculate_observing_night
 from adam_core.orbit_determination import OrbitDeterminationObservations
 from adam_core.orbits import Orbits
+from adam_core.observations.ades import ADESObservations
 from adam_core.ray_cluster import initialize_use_ray
 from adam_core.time import Timestamp
 
@@ -329,6 +330,8 @@ def calculate_impact_probability(
 
     # Create a unique run name based on the object ID and the start and end date
     run_name = f"{obj_id}_{start_date_mjd}_{end_date_mjd}"
+
+    rejected_observations = ADESObservations.empty()
 
     try:
         orbit, rejected_observations, error = run_fo_od(
