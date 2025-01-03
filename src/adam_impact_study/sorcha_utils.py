@@ -209,6 +209,8 @@ def run_sorcha(
         f"--orbits {orbits_file} --pointing-db {pointing_file} "
         f"-o {output_dir} --stem {output_stem} -f"
     )
+
+    logger.info(f"Running sorcha command: {sorcha_command}")
     
     subprocess.run(sorcha_command, shell=True)
     
