@@ -426,13 +426,17 @@ def rejected_observations_from_fo(fo_output_folder: str) -> ADESObservations:
     json_observations = []
     for object_id, object_data in objects.items():
         object_observations = object_data.get("observations", {}).get("residuals", [])
-        object_observations = [observation.update({"object_id": object_id}) for observation in object_observations]
+        for observation in object_observations:
+            observation.update({"object_id": object_id})
         json_observations.extend(object_observations)
 
     rejected_observations = []
     for observation in json_observations:
         if observation.get("incl") == 0:
             rejected_observations.append(observation)
+
+    if len(rejected_observations) == 0:
+        return ADESObservations.empty()
     
     ades_rejected_observations = ADESObservations.from_kwargs(
         trkSub=pa.array([observation.get("object_id") for observation in rejected_observations]),

@@ -263,6 +263,8 @@ def run_impact_study_fo(
             logger.info(f"Error: {result.error}")
         results = qv.concatenate([results, result])
 
+    results.to_parquet(f"{RESULT_DIR}/impact_study_results_{obj_id}.parquet")
+
     return results
 
 
@@ -363,10 +365,11 @@ def calculate_impact_probability(
             thirty_days_before_impact,
             covariance=True,
             covariance_method="monte-carlo",
+            #covariance_representation="keplerian", Would sample elements from keplerian space
             num_samples=1000,
         )
         propagated_30_days_before_impact.to_parquet(
-            f"{RESULT_DIR}/propagated_orbit_{obj_id}_{start_date}_{end_date}.parquet"
+            f"{RESULT_DIR}/propagated_orbit_{obj_id}_{start_date.mjd()[0]}_{end_date.mjd()[0]}.parquet"
         )
     except Exception as e:
         return ImpactStudyResults.from_kwargs(
@@ -380,8 +383,15 @@ def calculate_impact_probability(
         )
 
     try:
+        #Note: do we want to save the original variants here?
         final_orbit_states, impacts = calculate_impacts(
-            propagated_30_days_before_impact, 60, propagator, num_samples=10000
+            propagated_30_days_before_impact, 60, propagator, num_samples=10000, #covariance_representation="keplerian" ??
+        )
+        final_orbit_states.to_parquet( 
+            f"{RESULT_DIR}/monte_carlo_variant_states_{obj_id}_{start_date.mjd()[0]}_{end_date.mjd()[0]}.parquet"
+        )
+        impacts.to_parquet(
+            f"{RESULT_DIR}/monte_carlo_impacts_{obj_id}_{start_date.mjd()[0]}_{end_date.mjd()[0]}.parquet"
         )
 
         ip = calculate_impact_probabilities(final_orbit_states, impacts)

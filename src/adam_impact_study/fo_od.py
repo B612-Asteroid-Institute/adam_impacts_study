@@ -76,6 +76,8 @@ def run_fo_od(
     -------
     orbit : `~adam_core.orbits.orbits.Orbits`
         Orbit object containing the orbital elements and covariance matrix.
+    rejected_observations : `~adam_core.observations.ades.ADESObservations`
+        Rejected observations from the orbit determination.
     error : str
         Error message if the orbit determination failed.
     """
