@@ -60,8 +60,9 @@ def run_fo_od(
     paths: dict,
 ) -> Tuple[Orbits, ADESObservations, Optional[str]]:
     """Run Find_Orb orbit determination with directory-based paths"""
-    
 
+    #create a temporary directory not starting with /tmp
+    
     _create_fo_working_directory(paths['fo_working_dir'])
 
     # Create input file
@@ -71,8 +72,11 @@ def run_fo_od(
     # Run Find_Orb
     fo_command = (
         f"{FO_BINARY_DIR}/fo {input_file} -c "
-        f"-D {paths['fo_working_dir']}/environ.dat"
+        f"-D {paths['fo_working_dir']}/environ.dat "
+        f"-O {paths['fo_working_dir']}"
     )
+
+    logger.info(f"fo command: {fo_command}")
     
     result = subprocess.run(
         fo_command,
@@ -83,8 +87,10 @@ def run_fo_od(
     )
     logger.debug(f"{result.stdout}\n{result.stderr}")
     # list the files in the fo working directory
-    print(os.listdir(paths['fo_working_dir']))
     if result.returncode != 0 or not os.path.exists(f"{paths['fo_working_dir']}/covar.json"):
+        logger.info(f"return code = {result.returncode}")
+        logger.info(f"return code type = {type(result.returncode)}")
+        logger.info(f"total.json file location: {paths['fo_working_dir']}/covar.json")
         logger.warning(f"{result.stdout}\n{result.stderr}")
         return Orbits.empty(), ADESObservations.empty(), "Find_Orb failed"
         
