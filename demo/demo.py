@@ -13,22 +13,19 @@ logger = logging.getLogger(__name__)
 parser = argparse.ArgumentParser(description='Run impact study demo')
 parser.add_argument('--run-name', default="Impact_Study_Demo",
                    help='Name of the impact study run (default: Impact_Study_Demo)')
-parser.add_argument('--result-dir', 
-                   default=os.path.join(os.path.dirname(__file__), "results"),
-                   help='Directory for storing results (default: ./results)')
-parser.add_argument('--run-dir', default=os.getcwd(),
-                   help='Working directory for the run (default: current working directory)')
+parser.add_argument('--base-dir', default=os.getcwd(),
+                   help='Base directory for all results (default: current working directory)')
 parser.add_argument('--fo-dir', 
                    default=os.path.join(os.path.dirname(__file__), "../find_orb/find_orb"),
                    help='Find_Orb directory path (default: ../find_orb/find_orb)')
+parser.add_argument('--max-processes', type=int, default=1,
+                   help='Maximum number of processes to use for impact calculation (default: 1)')
 
 args = parser.parse_args()
 
 # Use the command line arguments or defaults
 RUN_NAME = args.run_name
-RESULT_DIR = args.result_dir
-RUN_DIR = args.run_dir
-FO_DIR = args.fo_dir
+BASE_DIR = args.base_dir
 
 # Define the input files
 impactors_file = os.path.join(os.path.dirname(__file__), "data/10_impactors.csv")
@@ -48,15 +45,13 @@ impact_study_results = run_impact_study_all(
     impactor_orbits,
     population_config_file,
     pointing_file,
+    BASE_DIR,
     RUN_NAME,
-    FO_DIR,
-    RUN_DIR,
-    RESULT_DIR,
-    max_processes=1
+    max_processes=args.max_processes
 )
 
 logger.info(impact_study_results)
 
 if impact_study_results is not None:
-    plot_ip_over_time(impact_study_results, RESULT_DIR)
+    plot_ip_over_time(impact_study_results, BASE_DIR, RUN_NAME)
 

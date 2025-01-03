@@ -20,10 +20,10 @@ logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
 
+FO_BINARY_DIR = pathlib.Path(__file__).parent.parent.parent / "find_orb/find_orb"
 LINUX_JPL_PATH = pathlib.Path(__file__).parent.parent.parent / "find_orb/linux_p1550p2650.430t"
 
-
-def _create_fo_working_directory(FO_DIR: str, working_dir: str) -> str:
+def _create_fo_working_directory(working_dir: str) -> str:
     os.makedirs(working_dir, exist_ok=True)
     # List of required files to copy from FO_DIR to current directory
     required_files = [
@@ -40,7 +40,7 @@ def _create_fo_working_directory(FO_DIR: str, working_dir: str) -> str:
 
     # Copy required files to the current directory
     for file in required_files:
-        src = os.path.join(FO_DIR, file)
+        src = os.path.join(FO_BINARY_DIR, file)
         dst = os.path.join(working_dir, file)
         shutil.copy2(src, dst)  # Copy to current directory
 
@@ -57,34 +57,38 @@ def _create_fo_working_directory(FO_DIR: str, working_dir: str) -> str:
 
 def run_fo_od(
     observations: Observations,
-    fo_dir: str,
     paths: dict,
 ) -> Tuple[Orbits, ADESObservations, Optional[str]]:
     """Run Find_Orb orbit determination with directory-based paths"""
     
+
+    _create_fo_working_directory(paths['fo_working_dir'])
+
     # Create input file
-    input_file = os.path.join(paths['fo_inputs'], "observations.csv")
+    input_file = os.path.join(paths['fo_working_dir'], "observations.csv")
     od_observations_to_ades_file(observations, input_file)
     
     # Run Find_Orb
     fo_command = (
-        f"{fo_dir}/fo {input_file} -c "
-        f"-D {paths['fo_outputs']}/environ.dat"
+        f"{FO_BINARY_DIR}/fo {input_file} -c "
+        f"-D {paths['fo_working_dir']}/environ.dat"
     )
     
     result = subprocess.run(
         fo_command,
         shell=True,
-        cwd=paths['fo_outputs'],
+        cwd=paths['fo_working_dir'],
         text=True,
         capture_output=True,
     )
     logger.debug(f"{result.stdout}\n{result.stderr}")
-    if result.returncode != 0 or not os.path.exists(f"{paths['fo_outputs']}/covar.json"):
+    # list the files in the fo working directory
+    print(os.listdir(paths['fo_working_dir']))
+    if result.returncode != 0 or not os.path.exists(f"{paths['fo_working_dir']}/covar.json"):
         logger.warning(f"{result.stdout}\n{result.stderr}")
         return Orbits.empty(), ADESObservations.empty(), "Find_Orb failed"
         
-    orbit = fo_to_adam_orbit_cov(paths['fo_outputs'])
-    rejected = rejected_observations_from_fo(paths['fo_outputs'])
+    orbit = fo_to_adam_orbit_cov(paths['fo_working_dir'])
+    rejected = rejected_observations_from_fo(paths['fo_working_dir'])
     
     return orbit, rejected, None

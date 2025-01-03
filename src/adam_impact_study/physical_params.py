@@ -279,6 +279,7 @@ def create_physical_params_single(
     phys_params : `~adam_impact_study.physical_params.PhotometricProperties`
         Physical parameters of the impactor.
     """
+    print(config_file)
     config = load_config(config_file)
     C_config = config.apply_mask(pc.equal(config.ast_class, "C"))
     S_config = config.apply_mask(pc.equal(config.ast_class, "S"))

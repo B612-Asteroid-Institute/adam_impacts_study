@@ -26,7 +26,7 @@ def get_study_paths(base_dir: str, run_name: str, object_id: str, time_range: Op
     obj_dir = os.path.join(run_dir, object_id)
     
     paths = {
-        'base': obj_dir,
+        'object_base_dir': obj_dir,
         'sorcha_inputs': os.path.join(obj_dir, 'sorcha_inputs'),
         'sorcha_outputs': os.path.join(obj_dir, 'sorcha_outputs'),
     }
@@ -34,10 +34,9 @@ def get_study_paths(base_dir: str, run_name: str, object_id: str, time_range: Op
     if time_range:
         time_dir = os.path.join(obj_dir, time_range)
         paths.update({
-            'fo_inputs': os.path.join(time_dir, 'fo_inputs'),
-            'fo_outputs': os.path.join(time_dir, 'fo_outputs'),
+            'time_dir': time_dir,
+            'fo_working_dir': os.path.join(time_dir, 'fo_working_dir'),
             'propagated': os.path.join(time_dir, 'propagated'),
-            'results': os.path.join(time_dir, 'results.parquet')
         })
     
     # Create directories

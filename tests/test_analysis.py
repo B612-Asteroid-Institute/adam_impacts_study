@@ -4,7 +4,7 @@ import pytest
 from adam_core.time import Timestamp
 
 from adam_impact_study.analysis import plot_ip_over_time
-from adam_impact_study.impacts_study import ImpactStudyResults
+from adam_impact_study.types import ImpactStudyResults
 
 
 @pytest.fixture
