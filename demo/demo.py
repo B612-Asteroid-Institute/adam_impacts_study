@@ -35,7 +35,7 @@ impactors_file = os.path.join(os.path.dirname(__file__), "data/10_impactors.csv"
 pointing_file = os.path.join(os.path.dirname(__file__), "data/baseline_v2.0_1yr.db")
 # pointing_file = os.path.join(os.path.dirname(__file__), "data/baseline_v3.6_10yrs.db")
 
-run_config_file = os.path.join(os.path.dirname(__file__), "impact_run_config.json")
+population_config_file = os.path.join(os.path.dirname(__file__), "impact_run_config.json")
 
 impactor_orbits = impactor_file_to_adam_orbit(impactors_file)
 
@@ -46,7 +46,7 @@ impactor_orbits = impactor_orbits.select("object_id", "I00007")
 # Run the impact study
 impact_study_results = run_impact_study_all(
     impactor_orbits,
-    run_config_file,
+    population_config_file,
     pointing_file,
     RUN_NAME,
     FO_DIR,

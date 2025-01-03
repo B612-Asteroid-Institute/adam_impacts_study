@@ -25,22 +25,10 @@ from adam_core.observers import Observers
 from adam_core.orbits import Orbits
 from adam_core.time import Timestamp
 
+from adam_impact_study.types import Observations, Photometry
+
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
-
-class Photometry(qv.Table):
-    mag = qv.Float64Column()
-    mag_sigma = qv.Float64Column(nullable=True)
-    filter = qv.LargeStringColumn()
-
-
-class Observations(qv.Table):
-    obs_id = qv.LargeStringColumn()
-    object_id = qv.LargeStringColumn()
-    coordinates = SphericalCoordinates.as_column()
-    observers = Observers.as_column()
-    photometry = Photometry.as_column(nullable=True)
-
 
 def impactor_file_to_adam_orbit(impactor_file: str) -> Orbits:
     """

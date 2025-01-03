@@ -10,8 +10,11 @@ from adam_core.orbits import Orbits
 
 from adam_impact_study.conversions import (
     fo_to_adam_orbit_cov,
+    od_observations_to_ades_file,
     rejected_observations_from_fo,
 )
+
+from .types import Observations
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -53,69 +56,35 @@ def _create_fo_working_directory(FO_DIR: str, working_dir: str) -> str:
 
 
 def run_fo_od(
-    FO_DIR: str,
-    RESULT_DIR: str,
-    fo_input_file: str,
-    run_name: str,
+    observations: Observations,
+    fo_dir: str,
+    paths: dict,
 ) -> Tuple[Orbits, ADESObservations, Optional[str]]:
-    """
-    Run the find_orb orbit determination process for each object
-
-    Parameters
-    ----------
-    fo_input_file : str
-        Name of the find_orb input file.
-    run_name : str
-        Unique identifier for the fo run
-    FO_DIR : str
-        Directory path where the find_orb executable is located.
-    RESULT_DIR : str
-        Directory path where the results will be stored.
-
-    Returns
-    -------
-    orbit : `~adam_core.orbits.orbits.Orbits`
-        Orbit object containing the orbital elements and covariance matrix.
-    rejected_observations : `~adam_core.observations.ades.ADESObservations`
-        Rejected observations from the orbit determination.
-    error : str
-        Error message if the orbit determination failed.
-    """
-
-    # We create a working directory, as fo generates files in the same
-    # directory as configuration files and we don't want our jobs to overwrite
-    # each other.
-    working_dir = os.path.join(RESULT_DIR, f"{run_name}")
-    working_dir = _create_fo_working_directory(FO_DIR, working_dir)
-
+    """Run Find_Orb orbit determination with directory-based paths"""
+    
+    # Create input file
+    input_file = os.path.join(paths['fo_inputs'], "observations.csv")
+    od_observations_to_ades_file(observations, input_file)
+    
+    # Run Find_Orb
     fo_command = (
-        f"{FO_DIR}/fo {fo_input_file} "
-        f"-c " # Combine all observations as if you only had one object
-        f"-D {working_dir}/environ.dat"
+        f"{fo_dir}/fo {input_file} -c "
+        f"-D {paths['fo_outputs']}/environ.dat"
     )
-
-    logger.info(f"Find Orb command: {fo_command}")
-    # Run find_orb and capture output
-    output = subprocess.run(
+    
+    result = subprocess.run(
         fo_command,
         shell=True,
-        cwd=working_dir,
-        text=True,  # Convert output to string
-        capture_output=True,  # Capture stdout and stderr
+        cwd=paths['fo_outputs'],
+        text=True,
+        capture_output=True,
     )
+    logger.debug(f"{result.stdout}\n{result.stderr}")
+    if result.returncode != 0 or not os.path.exists(f"{paths['fo_outputs']}/covar.json"):
+        logger.warning(f"{result.stdout}\n{result.stderr}")
+        return Orbits.empty(), ADESObservations.empty(), "Find_Orb failed"
+        
+    orbit = fo_to_adam_orbit_cov(paths['fo_outputs'])
+    rejected = rejected_observations_from_fo(paths['fo_outputs'])
     
-    # Log the output during debugging
-    logger.debug(f"{output.stdout}")
-    
-    if output.returncode != 0:
-        logger.info(f"Find_orb failed with return code: {output.returncode}")
-        logger.info(f"Error output: {output.stderr}")  # Log error output on failure
-        return (Orbits.empty(), ADESObservations.empty(), "Find_orb failed")
-    if not os.path.exists(f"{working_dir}/covar.json"):
-        logger.info(f"No find_orb output for: {working_dir}")
-        return (Orbits.empty(), ADESObservations.empty(), "No find_orb output")
-
-    # Convert to ADAM Orbit objects
-    orbit = fo_to_adam_orbit_cov(f"{working_dir}")
-    rejected_observations = rejected_observations_from_fo(f"{working_dir}")
-    return (orbit, rejected_observations, None)
+    return orbit, rejected, None

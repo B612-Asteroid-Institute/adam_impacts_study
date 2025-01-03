@@ -22,6 +22,7 @@ from adam_impact_study.physical_params import (
     write_phys_params_file,
 )
 from adam_impact_study.sorcha_utils import run_sorcha, write_config_file_timeframe
+from adam_impact_study.utils import get_study_paths
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -41,7 +42,7 @@ class ImpactStudyResults(qv.Table):
 
 def run_impact_study_all(
     impactor_orbits: Orbits,
-    run_config_file: str,
+    population_config_file: str,
     pointing_file: str,
     RUN_NAME: str,
     FO_DIR: str,
@@ -93,12 +94,11 @@ def run_impact_study_all(
             impact_result = run_impact_study_fo(
                 impactor_orbit,
                 propagator,
-                run_config_file,
+                population_config_file,
                 pointing_file,
+                RUN_DIR,
                 RUN_NAME,
                 FO_DIR,
-                RUN_DIR,
-                RESULT_DIR,
                 max_processes=max_processes,
             )
             impact_results = qv.concatenate([impact_results, impact_result])
@@ -107,13 +107,12 @@ def run_impact_study_all(
                 run_impact_study_fo_remote.remote(
                     impactor_orbit,
                     propagator,
-                    run_config_file,
+                    population_config_file,
                     pointing_file,
+                    RUN_DIR,
                     RUN_NAME,
                     FO_DIR,
-                    RUN_DIR,
-                    RESULT_DIR,
-                    max_processes,
+                    max_processes=max_processes,
                 )
             )
 
@@ -133,140 +132,54 @@ def run_impact_study_all(
 def run_impact_study_fo(
     impactor_orbit: Orbits,
     propagator: ASSISTPropagator,
-    run_config_file: str,
+    population_config_file: str,
     pointing_file: str,
-    RUN_NAME: str,
-    FO_DIR: str,
-    RUN_DIR: str,
-    RESULT_DIR: str,
+    base_dir: str,
+    run_name: str,
+    fo_dir: str,
     max_processes: int = 1,
 ) -> ImpactStudyResults:
-    """Run impact study with optional parallel processing"""
-    obj_id = impactor_orbit.object_id[0]
-    logger.info(f"Object ID: {obj_id}")
-
-    # Create object-specific result directory
-    obj_result_dir = os.path.join(RESULT_DIR, f"{RUN_NAME}_{obj_id}")
-    os.makedirs(obj_result_dir, exist_ok=True)
-
-    # Create Sorcha object output directory
-    sorcha_output_dir = os.path.join(RESULT_DIR, f"sorcha_output_{RUN_NAME}_{obj_id}")
-    os.makedirs(sorcha_output_dir, exist_ok=True)
-
-    # Define file paths relative to result directory
-    sorcha_config_file_name = os.path.join(
-        obj_result_dir, f"sorcha_config_{RUN_NAME}_{obj_id}.ini"
-    )
-    sorcha_orbits_file = os.path.join(
-        obj_result_dir, f"sorcha_input_{RUN_NAME}_{obj_id}.csv"
-    )
-    sorcha_physical_params_file = os.path.join(
-        obj_result_dir, f"sorcha_params_{RUN_NAME}_{obj_id}.csv"
-    )
-    sorcha_output_stem = f"{RUN_NAME}_{obj_id}"
-    fo_input_file_base = f"fo_input_{RUN_NAME}_{obj_id}"
-
-    phys_params = create_physical_params_single(run_config_file, obj_id)
-    phys_para_file_str = photometric_properties_to_sorcha_table(phys_params, "r")
-    write_phys_params_file(phys_para_file_str, sorcha_physical_params_file)
-
-    impact_date = impactor_orbit.coordinates.time.add_days(30)
-    sorcha_config_file = write_config_file_timeframe(
-        impact_date.mjd()[0], sorcha_config_file_name
-    )
-
-    # Run Sorcha to generate observational data
+    """Run impact study for a single object"""
+    assert len(impactor_orbit.object_id) == 1, "Impactor orbit must contain exactly one object"
+    obj_id = impactor_orbit.object_id[0].as_py()
+    logger.info(f"Processing object: {obj_id}")
+    
+    # Get paths for Sorcha
+    paths = get_study_paths(base_dir, run_name, obj_id)
+    
+    # Run Sorcha to generate observations
     observations = run_sorcha(
         impactor_orbit,
-        sorcha_config_file,
-        sorcha_orbits_file,
-        sorcha_physical_params_file,
+        population_config_file,
         pointing_file,
-        sorcha_output_dir,
-        sorcha_output_stem,
+        paths['sorcha_inputs'],
+        paths['sorcha_outputs'],
+        f"{run_name}_{obj_id}"
     )
+    
     if len(observations) == 0:
-        return ImpactStudyResults.from_kwargs(
-            object_id=[obj_id],
-            observation_start=Timestamp.from_mjd([0], scale="utc"),
-            observation_end=Timestamp.from_mjd([0], scale="utc"),
-            observation_count=[0],
-            observation_nights=[0],
-            error=["No observations recovered."],
-        )
-
-    # Sort the observations by time and origin code
-    observations = observations.sort_by(
-        ["coordinates.time.days", "coordinates.time.nanos", "coordinates.origin.code"]
-    )
-
-    # Select the unique nights of observations and
-    nights = calculate_observing_night(
-        observations.coordinates.origin.code, observations.coordinates.time
-    )
-    unique_nights = pc.unique(nights).sort()
-
-    if len(unique_nights) < 3:
-        # TODO: We might consider returning something else here.
         return ImpactStudyResults.empty()
 
-    # We iterate through unique nights and filter observations based on
-    # to everything below or equal to the current night number
-    # We start with a minimum of three unique nights
-    futures = []
-    results = ImpactStudyResults.empty()
-    for night in unique_nights[2:]:
-        mask = pc.less_equal(nights, night)
-        observations_window = observations.apply_mask(mask)
-
-        if max_processes == 1:
-            result = calculate_impact_probability(
-                observations_window,
-                impactor_orbit,
-                propagator,
-                fo_input_file_base,
-                FO_DIR,
-                RUN_DIR,
-                RESULT_DIR,
-            )
-            # Log if any error is present
-            if pc.any(pc.invert(pc.is_null(result.error))):
-                logger.warning(f"Error: {result.error}")
-            results = qv.concatenate([results, result])
-            if results.fragmented():
-                results = qv.defragment(results)
-
-        else:
-            futures.append(
-                calculate_impact_probability_remote.remote(
-                    observations_window,
-                    impactor_orbit,
-                    propagator,
-                    fo_input_file_base,
-                    FO_DIR,
-                    RUN_DIR,
-                    RESULT_DIR,
-                )
-            )
-
-            if len(futures) > max_processes * 1.5:
-                finished, futures = ray.wait(futures, num_returns=1)
-                result = ray.get(finished[0])
-                if pc.any(pc.invert(pc.is_null(result.error))):
-                    logger.warning(f"Error: {result.error}")
-                results = qv.concatenate([results, result])
-
-    # Get remaining results
-    while len(futures) > 0:
-        finished, futures = ray.wait(futures, num_returns=1)
-        result = ray.get(finished[0])
-        if pc.any(pc.invert(pc.is_null(result.error))):
-            logger.warning(f"Error: {result.error}")
-        results = qv.concatenate([results, result])
-
-    results.to_parquet(f"{RESULT_DIR}/impact_study_results_{obj_id}.parquet")
-
-    return results
+    # Process each time window
+    results = []
+    for obs_window in get_observation_windows(observations):
+        start_mjd = obs_window.coordinates.time.mjd()[0]
+        end_mjd = obs_window.coordinates.time.mjd()[-1]
+        time_range = f"{start_mjd}__{end_mjd}"
+        
+        # Get paths for this time window
+        window_paths = get_study_paths(base_dir, run_name, obj_id, time_range)
+        
+        result = process_observation_window(
+            obs_window,
+            impactor_orbit,
+            propagator,
+            fo_dir,
+            window_paths
+        )
+        results.append(result)
+    
+    return qv.concatenate(results) if results else ImpactStudyResults.empty()
 
 
 run_impact_study_fo_remote = ray.remote(run_impact_study_fo)
