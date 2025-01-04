@@ -62,7 +62,7 @@ def run_fo_od(
 ) -> Tuple[Orbits, ADESObservations, Optional[str]]:
     """Run Find_Orb orbit determination with directory-based paths"""
 
-    # Create a unique temporary directory using first 8 chars of UUID
+    # Create a unique temporary directory
     unique_id = str(uuid.uuid4())[:8]
     fo_tmp_dir = os.path.join(paths['object_base_dir'], f"fo_tmp_{unique_id}")
     

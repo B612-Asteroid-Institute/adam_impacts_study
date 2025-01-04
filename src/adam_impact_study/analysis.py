@@ -37,19 +37,25 @@ def plot_ip_over_time(impact_study_results: ImpactStudyResults, base_dir: str, r
         object_dir = paths["object_base_dir"]
         logger.info(f"Object ID Plotting: {object_id}")
         plt.figure()
+        
+        # Get data for this object
         ips = impact_study_results.apply_mask(
             pc.equal(impact_study_results.object_id, object_id)
         )
-        plt.scatter(
-            ips.observation_end.mjd().to_numpy(zero_copy_only=False),
-            ips.impact_probability.to_numpy(zero_copy_only=False),
-        )
+        
+        # Sort by observation end time
+        mjd_times = ips.observation_end.mjd().to_numpy(zero_copy_only=False)
+        probabilities = ips.impact_probability.to_numpy(zero_copy_only=False)
+        sort_indices = mjd_times.argsort()
+        mjd_times = mjd_times[sort_indices]
+        probabilities = probabilities[sort_indices]
+        
+        # Plot sorted data
+        plt.scatter(mjd_times, probabilities)
         plt.title(object_id)
         plt.xlabel("Day")
         plt.ylabel("Impact Probability")
-        plt.plot(
-            ips.observation_end.mjd().to_numpy(zero_copy_only=False),
-            ips.impact_probability.to_numpy(zero_copy_only=False),
-        )
+        plt.plot(mjd_times, probabilities)
+        
         plt.savefig(os.path.join(object_dir, f"IP_{object_id}.png"))
         plt.close()
