@@ -293,7 +293,8 @@ def calculate_impact_probability(
     obj_id = impactor_orbit.object_id[0].as_py()
     start_date = observations.coordinates.time.min()
     end_date = observations.coordinates.time.max()
-    window_name = f"{start_date.mjd()[0]}_{end_date.mjd()[0]}"
+    #window_name = f"{start_date.mjd()[0]}_{end_date.mjd()[0]}"
+    window_name = f"{int(start_date.mjd()[0].as_py())}_{int(end_date.mjd()[0].as_py())}"
     paths = get_study_paths(base_dir, run_name, obj_id, window_name)
 
     thirty_days_before_impact = impactor_orbit.coordinates.time

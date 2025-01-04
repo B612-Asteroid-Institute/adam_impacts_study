@@ -4,6 +4,7 @@ import pathlib
 import shutil
 import subprocess
 from typing import Optional, Tuple
+import uuid
 
 from adam_core.observations.ades import ADESObservations
 from adam_core.orbits import Orbits
@@ -61,19 +62,21 @@ def run_fo_od(
 ) -> Tuple[Orbits, ADESObservations, Optional[str]]:
     """Run Find_Orb orbit determination with directory-based paths"""
 
-    #create a temporary directory not starting with /tmp
+    # Create a unique temporary directory using first 8 chars of UUID
+    unique_id = str(uuid.uuid4())[:8]
+    fo_tmp_dir = os.path.join(paths['object_base_dir'], f"fo_tmp_{unique_id}")
     
-    _create_fo_working_directory(paths['fo_working_dir'])
+    _create_fo_working_directory(fo_tmp_dir)
 
     # Create input file
-    input_file = os.path.join(paths['fo_working_dir'], "observations.csv")
+    input_file = os.path.join(fo_tmp_dir, "observations.csv")
     od_observations_to_ades_file(observations, input_file)
     
     # Run Find_Orb
     fo_command = (
         f"{FO_BINARY_DIR}/fo {input_file} -c "
-        f"-D {paths['fo_working_dir']}/environ.dat "
-        f"-O {paths['fo_working_dir']}"
+        f"-D {fo_tmp_dir}/environ.dat "
+        f"-O {fo_tmp_dir}"
     )
 
     logger.info(f"fo command: {fo_command}")
@@ -81,20 +84,30 @@ def run_fo_od(
     result = subprocess.run(
         fo_command,
         shell=True,
-        cwd=paths['fo_working_dir'],
+        cwd=fo_tmp_dir,
         text=True,
         capture_output=True,
     )
     logger.debug(f"{result.stdout}\n{result.stderr}")
-    # list the files in the fo working directory
-    if result.returncode != 0 or not os.path.exists(f"{paths['fo_working_dir']}/covar.json"):
+
+    if result.returncode != 0 or not os.path.exists(f"{fo_tmp_dir}/covar.json"):
         logger.info(f"return code = {result.returncode}")
         logger.info(f"return code type = {type(result.returncode)}")
-        logger.info(f"total.json file location: {paths['fo_working_dir']}/covar.json")
+        logger.info(f"total.json file location: {fo_tmp_dir}/covar.json")
         logger.warning(f"{result.stdout}\n{result.stderr}")
         return Orbits.empty(), ADESObservations.empty(), "Find_Orb failed"
         
-    orbit = fo_to_adam_orbit_cov(paths['fo_working_dir'])
-    rejected = rejected_observations_from_fo(paths['fo_working_dir'])
+    orbit = fo_to_adam_orbit_cov(fo_tmp_dir)
+    rejected = rejected_observations_from_fo(fo_tmp_dir)
     
+    # After FO completes, copy results back to original directory
+    os.makedirs(paths['fo_working_dir'], exist_ok=True)
+    for file in os.listdir(fo_tmp_dir):
+        src = os.path.join(fo_tmp_dir, file)
+        dst = os.path.join(paths['fo_working_dir'], file)
+        shutil.copy2(src, dst)
+
+    # Clean up temporary directory
+    shutil.rmtree(fo_tmp_dir)
+
     return orbit, rejected, None
