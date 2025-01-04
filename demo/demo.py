@@ -1,37 +1,57 @@
+import argparse
+import logging
 import os
 
 from adam_impact_study.analysis import plot_ip_over_time
+from adam_impact_study.conversions import impactor_file_to_adam_orbit
 from adam_impact_study.impacts_study import run_impact_study_all
-from adam_impacts_study.conversions import impactor_file_to_adam_orbit
 
-# Define the run name and directories
-RUN_NAME = "Impact_Study_Demo"
-RESULT_DIR = "results"
-RUN_DIR = os.getcwd()
-FO_DIR = "../find_orb/find_orb"
+logging.basicConfig(level=logging.DEBUG)
+logger = logging.getLogger(__name__)
+
+# Set up command line arguments
+parser = argparse.ArgumentParser(description='Run impact study demo')
+parser.add_argument('--run-name', default="Impact_Study_Demo",
+                   help='Name of the impact study run (default: Impact_Study_Demo)')
+parser.add_argument('--base-dir', default=os.getcwd(),
+                   help='Base directory for all results (default: current working directory)')
+parser.add_argument('--fo-dir', 
+                   default=os.path.join(os.path.dirname(__file__), "../find_orb/find_orb"),
+                   help='Find_Orb directory path (default: ../find_orb/find_orb)')
+parser.add_argument('--max-processes', type=int, default=1,
+                   help='Maximum number of processes to use for impact calculation (default: 1)')
+
+args = parser.parse_args()
+
+# Use the command line arguments or defaults
+RUN_NAME = args.run_name
+BASE_DIR = args.base_dir
 
 # Define the input files
-impactors_file = "data/10_impactors.csv"
-pointing_file = "data/baseline_v2.0_1yr.db"
-chunk_size = 1
+impactors_file = os.path.join(os.path.dirname(__file__), "data/10_impactors.csv")
+pointing_file = os.path.join(os.path.dirname(__file__), "data/baseline_v2.0_1yr.db")
+# pointing_file = os.path.join(os.path.dirname(__file__), "data/baseline_v3.6_10yrs.db")
 
-run_config_file = "impact_run_config.json"
+population_config_file = os.path.join(os.path.dirname(__file__), "impact_run_config.json")
 
 impactor_orbits = impactor_file_to_adam_orbit(impactors_file)
+
+# impactor_orbits = impactor_orbits[0:20]
+impactor_orbits = impactor_orbits.select("object_id", "I00007")
+
 
 # Run the impact study
 impact_study_results = run_impact_study_all(
     impactor_orbits,
-    run_config_file,
+    population_config_file,
     pointing_file,
+    BASE_DIR,
     RUN_NAME,
-    FO_DIR,
-    RUN_DIR,
-    RESULT_DIR,
-    chunk_size,
+    max_processes=args.max_processes
 )
 
-print(impact_study_results)
+logger.info(impact_study_results)
 
 if impact_study_results is not None:
-    plot_ip_over_time(impact_study_results)
+    plot_ip_over_time(impact_study_results, BASE_DIR, RUN_NAME)
+

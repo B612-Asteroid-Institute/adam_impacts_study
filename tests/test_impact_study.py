@@ -1,13 +1,17 @@
+import logging
 from unittest.mock import patch
 
 import pandas as pd
 import pytest
+from adam_assist import ASSISTPropagator
 from adam_core.coordinates import CartesianCoordinates, Origin, SphericalCoordinates
 from adam_core.dynamics.impacts import ImpactProbabilities
 from adam_core.observers import Observers
 from adam_core.orbits import Orbits
-from adam_assist import ASSISTPropagator
 from adam_core.time import Timestamp
+
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
 
 from adam_impact_study.conversions import (
     Observations,
@@ -136,21 +140,18 @@ I00001,0.9125315468414172,0.3841166640887326,2.1597232256169803,42.1290789217616
         orbit_id=["Object1"], object_id=["Object1"], coordinates=cartesian_coords
     )
 
-    mock_run_fo_od.return_value = orbits
+    mock_run_fo_od.return_value = (orbits, None)
 
     # Call the function with the mocked inputs
-    try:
-        run_impact_study_all(
-            orbits,
-            str(run_config_file),
-            str(pointing_file),
-            str(RUN_NAME),
-            str(FO_DIR),
-            str(RUN_DIR),
-            str(RESULT_DIR),
-        )
-    except Exception as e:
-        pytest.fail(f"run_impact_study_fo raised an exception: {e}")
+    results = run_impact_study_all(
+        orbits,
+        str(run_config_file),
+        str(pointing_file),
+        str(RUN_NAME),
+        str(FO_DIR),
+        str(RUN_DIR),
+        str(RESULT_DIR),
+    )
 
     mock_run_sorcha.assert_called()
     mock_run_fo_od.assert_called()

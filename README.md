@@ -98,7 +98,7 @@ impact_study_results = run_impact_study_fo(
     RESULT_DIR,
 )
 
-print(impact_study_results)
+logger.info(impact_study_results)
 
 plot_ip_over_time(impact_study_results)
 ```

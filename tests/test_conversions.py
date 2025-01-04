@@ -8,14 +8,13 @@ from adam_core.orbits import Orbits
 from adam_core.time import Timestamp
 
 from adam_impact_study.conversions import (
-    Observations,
-    Photometry,
     fo_to_adam_orbit_cov,
     impactor_file_to_adam_orbit,
     od_observations_to_ades_file,
     read_fo_output,
     sorcha_output_to_od_observations,
 )
+from adam_impact_study.types import Observations, Photometry
 
 
 @pytest.fixture
