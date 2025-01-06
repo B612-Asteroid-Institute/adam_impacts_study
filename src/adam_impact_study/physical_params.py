@@ -162,7 +162,7 @@ def select_asteroid_size(min_diam: float, max_diam: float, seed: int = 13612) ->
     return rng.uniform(min_diam, max_diam)
 
 
-def determine_ast_class(percent_C: float, percent_S: float) -> str:
+def determine_ast_class(percent_C: float, percent_S: float, seed: int = 13612) -> str:
     """
     Determine the asteroid class based on the percentage of C and S asteroids.
 
@@ -263,7 +263,7 @@ def load_config(file_path: str, run_id: str = None) -> ImpactorConfig:
 
 
 def create_physical_params_single(
-    config_file: str, obj_id: str
+    config_file: str, obj_id: str, seed: int = 13612
 ) -> PhotometricProperties:
     """
     Create physical parameters for a single impactor.
@@ -285,7 +285,7 @@ def create_physical_params_single(
     S_config = config.apply_mask(pc.equal(config.ast_class, "S"))
 
     ast_class = determine_ast_class(
-        C_config.percentage.to_numpy()[0], S_config.percentage.to_numpy()[0]
+        C_config.percentage.to_numpy()[0], S_config.percentage.to_numpy()[0], seed
     )
 
     if ast_class == "C":
@@ -294,10 +294,10 @@ def create_physical_params_single(
         config = S_config
 
     d = select_asteroid_size(
-        config.min_diam.to_numpy()[0], config.max_diam.to_numpy()[0]
+        config.min_diam.to_numpy()[0], config.max_diam.to_numpy()[0], seed
     )
     albedo = select_albedo_from_range(
-        config.albedo_min.to_numpy()[0], config.albedo_max.to_numpy()[0]
+        config.albedo_min.to_numpy()[0], config.albedo_max.to_numpy()[0], seed
     )
     H = calculate_H(d, albedo)
     phys_params = PhotometricProperties.from_kwargs(

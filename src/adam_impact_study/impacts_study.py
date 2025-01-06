@@ -3,6 +3,7 @@ import os
 import shutil
 from typing import Iterator, Optional, Type
 
+import numpy as np
 import pyarrow as pa
 import pyarrow.compute as pc
 import quivr as qv
@@ -31,7 +32,7 @@ def run_impact_study_all(
     run_dir: str,
     max_processes: Optional[int] = 1,
     overwrite: bool = True,
-    seed: Optional[int] = None,
+    seed: Optional[int] = 13612,
 ) -> Optional[ImpactStudyResults]:
     """
     Run an impact study for all impactors in the input file.
@@ -85,8 +86,13 @@ def run_impact_study_all(
 
     impact_results = ImpactStudyResults.empty()
 
+    # randomly seed the physical parameters based on the supplied seed
+    # create ints of length object_ids
+    rng = np.random.default_rng(seed)
+    seed_ints = rng.integers(0, 1000000, len(object_ids))
+
     futures = []
-    for obj_id in object_ids:
+    for obj_id, object_seed in zip(object_ids, seed_ints):
         impactor_orbit = impactor_orbits.select("object_id", obj_id)
 
         if max_processes == 1:
@@ -97,7 +103,7 @@ def run_impact_study_all(
                 pointing_file,
                 run_dir,
                 max_processes=max_processes,
-                seed=seed,
+                seed=object_seed,
             )
             impact_results = qv.concatenate([impact_results, impact_result])
         else:
@@ -109,7 +115,7 @@ def run_impact_study_all(
                     pointing_file,
                     run_dir,
                     max_processes=max_processes,
-                    seed=seed,
+                    seed=object_seed,
                 )
             )
 

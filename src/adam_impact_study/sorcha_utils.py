@@ -150,6 +150,7 @@ def generate_physical_params_file(
     object_id: str,
     output_file: str,
     filter_band: str = "r",
+    seed: int = 13612,
 ) -> None:
     """
     Generate a physical parameters file for Sorcha from a population config file.
@@ -170,7 +171,7 @@ def generate_physical_params_file(
     None
         The function writes the physical parameters to the specified output file.
     """
-    phys_params = create_physical_params_single(population_config_file, object_id)
+    phys_params = create_physical_params_single(population_config_file, object_id, seed)
     phys_para_file_str = photometric_properties_to_sorcha_table(
         phys_params, filter_band
     )
@@ -195,7 +196,7 @@ def run_sorcha(
     generate_sorcha_orbits(adam_orbits, orbits_file)
 
     generate_physical_params_file(
-        population_config_file, adam_orbits.object_id[0].as_py(), params_file
+        population_config_file, adam_orbits.object_id[0].as_py(), params_file, seed=seed
     )
 
     impact_date = adam_orbits.coordinates.time.add_days(30)
