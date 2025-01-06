@@ -30,6 +30,7 @@ from adam_impact_study.types import Observations, Photometry
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
+
 def impactor_file_to_adam_orbit(impactor_file: str) -> Orbits:
     """
     Generate an ADAM Orbit object from an impactor data file.
@@ -378,7 +379,7 @@ def fo_to_adam_orbit_cov(fo_output_folder: str) -> Orbits:
         covariances_cartesian = CoordinateCovariances.from_matrix(covar_matrix)
         # After a lot of searching, we mostly believe that the epoch
         # is defined in TT (TD in find_orb). During reading of the
-        # ADES files, find_orb converts the jd times in its struct to 
+        # ADES files, find_orb converts the jd times in its struct to
         # TD and does not appear to rescale it again before writing
         # out the total.json and covar.json files.
         times = Timestamp.from_jd([covar_dict["epoch"]], scale="tt")
@@ -425,17 +426,32 @@ def rejected_observations_from_fo(fo_output_folder: str) -> ADESObservations:
 
     if len(rejected_observations) == 0:
         return ADESObservations.empty()
-    
+
     ades_rejected_observations = ADESObservations.from_kwargs(
-        trkSub=pa.array([observation.get("object_id") for observation in rejected_observations]),
-        obsTime=Timestamp.from_jd([observation.get("JD") for observation in rejected_observations], scale="utc"),
+        trkSub=pa.array(
+            [observation.get("object_id") for observation in rejected_observations]
+        ),
+        obsTime=Timestamp.from_jd(
+            [observation.get("JD") for observation in rejected_observations],
+            scale="utc",
+        ),
         ra=pa.array([observation.get("RA") for observation in rejected_observations]),
         dec=pa.array([observation.get("Dec") for observation in rejected_observations]),
-        mag=pa.array([observation.get("MagObs") for observation in rejected_observations]),
-        rmsRA=pa.array([observation.get("sigma_1") for observation in rejected_observations]),
-        rmsDec=pa.array([observation.get("sigma_2") for observation in rejected_observations]),
-        band=pa.array([observation.get("MagBand") for observation in rejected_observations]),
-        stn=pa.array([observation.get("obscode") for observation in rejected_observations]),
+        mag=pa.array(
+            [observation.get("MagObs") for observation in rejected_observations]
+        ),
+        rmsRA=pa.array(
+            [observation.get("sigma_1") for observation in rejected_observations]
+        ),
+        rmsDec=pa.array(
+            [observation.get("sigma_2") for observation in rejected_observations]
+        ),
+        band=pa.array(
+            [observation.get("MagBand") for observation in rejected_observations]
+        ),
+        stn=pa.array(
+            [observation.get("obscode") for observation in rejected_observations]
+        ),
         mode=pa.repeat("NA", len(rejected_observations)),
         astCat=pa.repeat("NA", len(rejected_observations)),
     )

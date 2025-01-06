@@ -15,30 +15,20 @@ from adam_core.orbit_determination import OrbitDeterminationObservations
 from adam_core.orbits import Orbits
 from adam_core.time import Timestamp
 
-from adam_impact_study.conversions import Observations, od_observations_to_ades_file
+from adam_impact_study.conversions import Observations
 from adam_impact_study.fo_od import run_fo_od
-from adam_impact_study.physical_params import (
-    create_physical_params_single,
-    photometric_properties_to_sorcha_table,
-    write_phys_params_file,
-)
-from adam_impact_study.sorcha_utils import run_sorcha, write_config_file_timeframe
+from adam_impact_study.sorcha_utils import run_sorcha
 from adam_impact_study.types import ImpactStudyResults
 from adam_impact_study.utils import get_study_paths
 
-logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
-
-
-
 
 
 def run_impact_study_all(
     impactor_orbits: Orbits,
     population_config_file: str,
     pointing_file: str,
-    base_dir: str,
-    run_name: str,
+    run_dir: str,
     max_processes: Optional[int] = 1,
     overwrite: bool = True,
 ) -> Optional[ImpactStudyResults]:
@@ -53,10 +43,8 @@ def run_impact_study_all(
         Path to the population config file
     pointing_file : str
         Path to the file containing pointing data for Sorcha.
-    base_dir : str
-        Base directory for all results
-    run_name : str
-        Name of the run.
+    run_dir : str
+        Directory for this specific study run
     max_processes : int, optional
         Maximum number of processes to use for impact calculation (default: 1)
     overwrite : bool, optional
@@ -69,6 +57,7 @@ def run_impact_study_all(
         'day', and 'impact_probability'. If no impacts were found, returns None.
 
     """
+
     class ImpactASSISTPropagator(ASSISTPropagator):
         def __init__(self, *args, **kwargs):
             super().__init__(*args, **kwargs)
@@ -79,13 +68,15 @@ def run_impact_study_all(
 
     # If the run directory already exists, throw an exception
     # unless the user has specified the overwrite flag
-    if os.path.exists(f"{base_dir}/{run_name}"):
+    if os.path.exists(f"{run_dir}"):
         if not overwrite:
-            raise ValueError(f"Run directory {base_dir}/{run_name} already exists. Set overwrite=True to overwrite.")
-        logger.warning(f"Overwriting run directory {base_dir}/{run_name}")
-        shutil.rmtree(f"{base_dir}/{run_name}")
+            raise ValueError(
+                f"Run directory {run_dir} already exists. Set overwrite=True to overwrite."
+            )
+        logger.warning(f"Overwriting run directory {run_dir}")
+        shutil.rmtree(f"{run_dir}")
 
-    os.makedirs(f"{base_dir}/{run_name}", exist_ok=True)
+    os.makedirs(f"{run_dir}", exist_ok=True)
 
     logger.info(f"Impactor Orbits: {impactor_orbits}")
     object_ids = impactor_orbits.object_id.unique()
@@ -103,8 +94,7 @@ def run_impact_study_all(
                 ImpactASSISTPropagator,
                 population_config_file,
                 pointing_file,
-                base_dir,
-                run_name,
+                run_dir,
                 max_processes=max_processes,
             )
             impact_results = qv.concatenate([impact_results, impact_result])
@@ -115,8 +105,7 @@ def run_impact_study_all(
                     ImpactASSISTPropagator,
                     population_config_file,
                     pointing_file,
-                    base_dir,
-                    run_name,
+                    run_dir,
                     max_processes=max_processes,
                 )
             )
@@ -159,29 +148,44 @@ def run_impact_study_fo(
     propagator_class: Type[ASSISTPropagator],
     population_config_file: str,
     pointing_file: str,
-    base_dir: str,
-    run_name: str,
-    max_processes: int = 1,
+    run_dir: str,
+    max_processes: Optional[int] = 1,
 ) -> ImpactStudyResults:
-    """Run impact study for a single object"""
-    assert (
-        len(impactor_orbit.object_id) == 1
-    ), "Impactor orbit must contain exactly one object"
-    obj_id = impactor_orbit.object_id[0].as_py()
-    logger.info(f"Processing object: {obj_id}")
+    """Run an impact study for a single impactor.
 
-    # Get paths for Sorcha
-    paths = get_study_paths(base_dir, run_name, obj_id)
+    Parameters
+    ----------
+    impactor_orbit : Orbits
+        Orbit of the impactor to study
+    propagator_class : Type[ASSISTPropagator]
+        Class to use for propagation
+    population_config_file : str
+        Path to the population config file
+    pointing_file : str
+        Path to the file containing pointing data for Sorcha
+    run_dir : str
+        Directory for this study run
+    max_processes : Optional[int]
+        Maximum number of processes to use for impact calculation
 
-    # Run Sorcha to generate observations
+    Returns
+    -------
+    ImpactStudyResults
+        Table containing the results of the impact study
+    """
+    assert len(impactor_orbit) == 1, "Only one object supported at a time"
+    object_id = impactor_orbit.object_id[0].as_py()
+
+    paths = get_study_paths(run_dir, object_id)
+
+    # Run Sorcha to generate synthetic observations
     observations = run_sorcha(
         impactor_orbit,
         pointing_file,
         population_config_file,
-        paths["sorcha_inputs"],
-        paths["sorcha_outputs"],
-        f"{run_name}_{obj_id}",
+        paths["sorcha_dir"],
     )
+
 
     if len(observations) == 0:
         return ImpactStudyResults.empty()
@@ -191,11 +195,16 @@ def run_impact_study_fo(
         ["coordinates.time.days", "coordinates.time.nanos", "coordinates.origin.code"]
     )
 
-    # Select the unique nights of observations and
-    nights = calculate_observing_night(
-        observations.coordinates.origin.code, observations.coordinates.time
+    # Add the observing night column to the observations
+    observations = observations.set_column(
+        "observing_night",
+        calculate_observing_night(
+            observations.coordinates.origin.code, observations.coordinates.time
+        ),
     )
-    unique_nights = pc.unique(nights).sort()
+
+    # Select the unique nights of observations and
+    unique_nights = pc.unique(observations.observing_night).sort()
 
     if len(unique_nights) < 3:
         # TODO: We might consider returning something else here.
@@ -208,7 +217,7 @@ def run_impact_study_fo(
     futures = []
     results = ImpactStudyResults.empty()
     for night in unique_nights[2:]:
-        mask = pc.less_equal(nights, night)
+        mask = pc.less_equal(observations.observing_night, night)
         observations_window = observations.apply_mask(mask)
 
         if max_processes == 1:
@@ -216,8 +225,8 @@ def run_impact_study_fo(
                 observations_window,
                 impactor_orbit,
                 propagator_class,
-                base_dir,
-                run_name,
+                run_dir,
+                max_processes,
             )
             # Log if any error is present
             if pc.any(pc.invert(pc.is_null(result.error))).as_py():
@@ -232,8 +241,8 @@ def run_impact_study_fo(
                     observations_window,
                     impactor_orbit,
                     propagator_class,
-                    base_dir,
-                    run_name,
+                    run_dir,
+                    max_processes,
                 )
             )
 
@@ -252,7 +261,7 @@ def run_impact_study_fo(
             logger.warning(f"Error: {result.error}")
         results = qv.concatenate([results, result])
 
-    results.to_parquet(f"{paths['object_base_dir']}/impact_results_{obj_id}.parquet")
+    results.to_parquet(f"{paths['object_base_dir']}/impact_results_{object_id}.parquet")
 
     return results
 
@@ -264,11 +273,10 @@ def calculate_impact_probability(
     observations: Observations,
     impactor_orbit: Orbits,
     propagator_class: Type[ASSISTPropagator],
-    base_dir: str,
-    run_name: str,
+    run_dir: str,
     max_processes: int = 1,
 ) -> ImpactStudyResults:
-    """Calculate impact probability for a s of observations.
+    """Calculate impact probability for a set of observations.
 
     Parameters
     ----------
@@ -278,10 +286,8 @@ def calculate_impact_probability(
         Original impactor orbit
     propagator_class : Type[ASSISTPropagator]
         Propagator class
-    base_dir : str
-        Base directory for all results
-    run_name : str
-        Name of the study run
+    run_dir : str
+        Directory for this study run
     max_processes : int
         Maximum number of processes to use for impact calculation
 
@@ -290,19 +296,27 @@ def calculate_impact_probability(
     ImpactStudyResults
         Impact probability results for this day if successful
     """
-    obj_id = impactor_orbit.object_id[0].as_py()
+    # if observing_night is null, we need to add it
+    if pc.any(pc.is_null(observations.observing_night)).as_py():
+        observations = observations.set_column(
+            "observing_night",
+            calculate_observing_night(
+                observations.coordinates.origin.code, observations.coordinates.time
+            ),
+        )
+
+    object_id = impactor_orbit.object_id[0].as_py()
+    start_night = pc.min(observations.observing_night)
+    end_night = pc.max(observations.observing_night)
     start_date = observations.coordinates.time.min()
     end_date = observations.coordinates.time.max()
-    #window_name = f"{start_date.mjd()[0]}_{end_date.mjd()[0]}"
-    window_name = f"{int(start_date.mjd()[0].as_py())}_{int(end_date.mjd()[0].as_py())}"
-    paths = get_study_paths(base_dir, run_name, obj_id, window_name)
+    window_name = f"{start_night.as_py()}_{end_night.as_py()}"
+    paths = get_study_paths(run_dir, object_id, window_name)
 
     thirty_days_before_impact = impactor_orbit.coordinates.time
 
     # Get the start and end date of the observations, the number of
     # observations, and the number of unique nights
-    start_date = observations.coordinates.time.min()
-    end_date = observations.coordinates.time.max()
     observations_count = len(observations)
     nights = calculate_observing_night(
         observations.coordinates.origin.code, observations.coordinates.time
@@ -319,18 +333,17 @@ def calculate_impact_probability(
         )
     except Exception as e:
         return ImpactStudyResults.from_kwargs(
-            object_id=[obj_id],
+            object_id=[object_id],
             observation_start=start_date,
             observation_end=end_date,
             observation_count=[observations_count],
             observation_nights=[observation_nights],
-            observations_rejected=[len(rejected_observations)],
             error=[str(e)],
         )
 
     if error is not None:
         return ImpactStudyResults.from_kwargs(
-            object_id=[obj_id],
+            object_id=[object_id],
             observation_start=start_date,
             observation_end=end_date,
             observation_count=[observations_count],
@@ -354,7 +367,7 @@ def calculate_impact_probability(
     except Exception as e:
         logger.error(f"Error propagating orbits: {e}")
         return ImpactStudyResults.from_kwargs(
-            object_id=[obj_id],
+            object_id=[object_id],
             observation_start=start_date,
             observation_end=end_date,
             observation_count=[observations_count],
@@ -364,7 +377,6 @@ def calculate_impact_probability(
         )
 
     try:
-        # Note: do we want to save the original variants here?
         propagator = propagator_class()
         final_orbit_states, impacts = calculate_impacts(
             propagated_30_days_before_impact,
@@ -376,12 +388,11 @@ def calculate_impact_probability(
         final_orbit_states.to_parquet(
             f"{paths['propagated']}/monte_carlo_variant_states.parquet"
         )
-        impacts.to_parquet(f"{paths['propagated']}/monte_carlo_impacts.parquet")
 
         ip = calculate_impact_probabilities(final_orbit_states, impacts)
     except Exception as e:
         return ImpactStudyResults.from_kwargs(
-            object_id=[obj_id],
+            object_id=[object_id],
             observation_start=start_date,
             observation_end=end_date,
             observation_count=[observations_count],
@@ -391,13 +402,13 @@ def calculate_impact_probability(
         )
 
     return ImpactStudyResults.from_kwargs(
-        object_id=[obj_id],
+        object_id=[object_id],
         observation_start=start_date,
         observation_end=end_date,
         observation_count=[observations_count],
         observation_nights=[observation_nights],
         observations_rejected=[len(rejected_observations)],
-        impact_probability=[ip.cumulative_probability[0].as_py()],
+        impact_probability=ip.cumulative_probability,
     )
 
 

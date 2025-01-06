@@ -15,7 +15,9 @@ class Observations(qv.Table):
     object_id = qv.LargeStringColumn()
     coordinates = SphericalCoordinates.as_column()
     observers = Observers.as_column()
-    photometry = Photometry.as_column(nullable=True) 
+    photometry = Photometry.as_column(nullable=True)
+    observing_night = qv.Int64Column(nullable=True)
+
 
 class ImpactStudyResults(qv.Table):
     object_id = qv.LargeStringColumn()

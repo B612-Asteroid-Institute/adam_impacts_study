@@ -10,6 +10,7 @@ import quivr as qv
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
+
 class ImpactorConfig(qv.Table):
     config_id = qv.LargeStringColumn()
     ast_class = qv.LargeStringColumn()
@@ -279,7 +280,6 @@ def create_physical_params_single(
     phys_params : `~adam_impact_study.physical_params.PhotometricProperties`
         Physical parameters of the impactor.
     """
-    print(config_file)
     config = load_config(config_file)
     C_config = config.apply_mask(pc.equal(config.ast_class, "C"))
     S_config = config.apply_mask(pc.equal(config.ast_class, "S"))

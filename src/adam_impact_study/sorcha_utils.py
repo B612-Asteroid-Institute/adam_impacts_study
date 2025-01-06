@@ -148,7 +148,7 @@ def generate_physical_params_file(
     population_config_file: str,
     object_id: str,
     output_file: str,
-    filter_band: str = "r"
+    filter_band: str = "r",
 ) -> None:
     """
     Generate a physical parameters file for Sorcha from a population config file.
@@ -170,7 +170,9 @@ def generate_physical_params_file(
         The function writes the physical parameters to the specified output file.
     """
     phys_params = create_physical_params_single(population_config_file, object_id)
-    phys_para_file_str = photometric_properties_to_sorcha_table(phys_params, filter_band)
+    phys_para_file_str = photometric_properties_to_sorcha_table(
+        phys_params, filter_band
+    )
     write_phys_params_file(phys_para_file_str, output_file)
 
 
@@ -178,52 +180,46 @@ def run_sorcha(
     adam_orbits: Orbits,
     pointing_file: str,
     population_config_file: str,
-    input_dir: str,
-    output_dir: str,
-    output_stem: str,
+    working_dir: str,
 ) -> Observations:
     """Run Sorcha with directory-based paths"""
     assert len(adam_orbits) == 1, "Currently only one object is supported"
     # Generate input files
-    orbits_file = os.path.join(input_dir, "orbits.csv")
-    params_file = os.path.join(input_dir, "params.csv")
-    config_file = os.path.join(input_dir, "config.ini")
-    
+    orbits_file = os.path.join(working_dir, "orbits.csv")
+    params_file = os.path.join(working_dir, "params.csv")
+    config_file = os.path.join(working_dir, "config.ini")
+    output_stem = "observations"
+
     generate_sorcha_orbits(adam_orbits, orbits_file)
 
     generate_physical_params_file(
-        population_config_file,
-        adam_orbits.object_id[0].as_py(),
-        params_file
+        population_config_file, adam_orbits.object_id[0].as_py(), params_file
     )
 
     impact_date = adam_orbits.coordinates.time.add_days(30)
 
-    write_config_file_timeframe(
-        impact_date.mjd()[0], config_file
-    )
+    write_config_file_timeframe(impact_date.mjd()[0], config_file)
 
     # Run Sorcha to generate observational data
     sorcha_command = (
         f"sorcha run -c {config_file} -p {params_file} "
         f"--orbits {orbits_file} --pointing-db {pointing_file} "
-        f"-o {output_dir} --stem {output_stem} -f"
+        f"-o {working_dir} --stem {output_stem} -f"
     )
 
     logger.info(f"Running sorcha command: {sorcha_command}")
-    
+
     subprocess.run(sorcha_command, shell=True)
-    
+
     # Process results
-    result_files = glob.glob(f"{output_dir}/*.csv")
+    result_files = glob.glob(f"{working_dir}/{output_stem}*.csv")
     if not result_files:
         return Observations.empty()
-        
+
     observations = Observations.empty()
     for result_file in result_files:
-        observations = qv.concatenate([
-            observations, 
-            sorcha_output_to_od_observations(result_file)
-        ])
-        
+        observations = qv.concatenate(
+            [observations, sorcha_output_to_od_observations(result_file)]
+        )
+
     return observations

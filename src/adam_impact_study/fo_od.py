@@ -3,8 +3,9 @@ import os
 import pathlib
 import shutil
 import subprocess
-from typing import Optional, Tuple
+import tempfile
 import uuid
+from typing import Optional, Tuple
 
 from adam_core.observations.ades import ADESObservations
 from adam_core.orbits import Orbits
@@ -17,14 +18,16 @@ from adam_impact_study.conversions import (
 
 from .types import Observations
 
-logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
 
 FO_BINARY_DIR = pathlib.Path(__file__).parent.parent.parent / "find_orb/find_orb"
-LINUX_JPL_PATH = pathlib.Path(__file__).parent.parent.parent / "find_orb/linux_p1550p2650.430t"
+LINUX_JPL_PATH = (
+    pathlib.Path(__file__).parent.parent.parent / "find_orb/linux_p1550p2650.430t"
+)
 
-def _create_fo_working_directory(working_dir: str) -> str:
+
+def _populate_fo_directory(working_dir: str) -> str:
     os.makedirs(working_dir, exist_ok=True)
     # List of required files to copy from FO_DIR to current directory
     required_files = [
@@ -49,29 +52,58 @@ def _create_fo_working_directory(working_dir: str) -> str:
     environ_dat_template = pathlib.Path(__file__).parent / "environ.dat.tpl"
     with open(environ_dat_template, "r") as file:
         environ_dat_content = file.read()
-    environ_dat_content = environ_dat_content.format(LINUX_JPL_FILENAME=LINUX_JPL_PATH.absolute())
+    environ_dat_content = environ_dat_content.format(
+        LINUX_JPL_FILENAME=LINUX_JPL_PATH.absolute()
+    )
     with open(os.path.join(working_dir, "environ.dat"), "w") as file:
         file.write(environ_dat_content)
 
     return working_dir
 
 
+def _create_fo_tmp_directory() -> str:
+    """
+    Creates a temporary directory that avoids /tmp to handle fo locking and directory length limits.
+    Uses ~/.cache/adam_impact_study/ftmp to avoid Find_Orb's special handling of paths containing /tmp/.
+
+    Returns:
+        str: The absolute path to the temporary directory populated with necessary FO files
+    """
+    base_tmp_dir = os.path.expanduser("~/.cache/adam_impact_study/ftmp")
+    os.makedirs(base_tmp_dir, mode=0o770, exist_ok=True)
+    tmp_dir = tempfile.mkdtemp(dir=base_tmp_dir)
+    os.chmod(tmp_dir, 0o770)
+    tmp_dir = _populate_fo_directory(tmp_dir)
+    return tmp_dir
+
+
 def run_fo_od(
     observations: Observations,
     paths: dict,
 ) -> Tuple[Orbits, ADESObservations, Optional[str]]:
-    """Run Find_Orb orbit determination with directory-based paths"""
+    """Run Find_Orb orbit determination with directory-based paths
 
-    # Create a unique temporary directory
-    unique_id = str(uuid.uuid4())[:8]
-    fo_tmp_dir = os.path.join(paths['object_base_dir'], f"fo_tmp_{unique_id}")
-    
-    _create_fo_working_directory(fo_tmp_dir)
+    Parameters
+    ----------
+    observations : Observations
+        Observations to process
+    paths : dict
+        Dictionary containing paths for input/output files, as returned by get_study_paths()
+
+    Returns
+    -------
+    Tuple[Orbits, ADESObservations, Optional[str]]
+        Tuple containing:
+        - Determined orbit
+        - Processed observations
+        - Error message (if any)
+    """
+    fo_tmp_dir = _create_fo_tmp_directory()
 
     # Create input file
     input_file = os.path.join(fo_tmp_dir, "observations.csv")
     od_observations_to_ades_file(observations, input_file)
-    
+
     # Run Find_Orb
     fo_command = (
         f"{FO_BINARY_DIR}/fo {input_file} -c "
@@ -80,7 +112,7 @@ def run_fo_od(
     )
 
     logger.info(f"fo command: {fo_command}")
-    
+
     result = subprocess.run(
         fo_command,
         shell=True,
@@ -90,24 +122,24 @@ def run_fo_od(
     )
     logger.debug(f"{result.stdout}\n{result.stderr}")
 
-    if result.returncode != 0 or not os.path.exists(f"{fo_tmp_dir}/covar.json"):
-        logger.info(f"return code = {result.returncode}")
-        logger.info(f"return code type = {type(result.returncode)}")
-        logger.info(f"total.json file location: {fo_tmp_dir}/covar.json")
+    # copy all the files to our fo_dir
+    shutil.copytree(fo_tmp_dir, paths["fo_dir"], dirs_exist_ok=True)
+    if result.returncode != 0:
+        logger.warning(f"Find_Orb failed with return code {result.returncode}")
         logger.warning(f"{result.stdout}\n{result.stderr}")
         return Orbits.empty(), ADESObservations.empty(), "Find_Orb failed"
-        
-    orbit = fo_to_adam_orbit_cov(fo_tmp_dir)
-    rejected = rejected_observations_from_fo(fo_tmp_dir)
-    
-    # After FO completes, copy results back to original directory
-    os.makedirs(paths['fo_working_dir'], exist_ok=True)
-    for file in os.listdir(fo_tmp_dir):
-        src = os.path.join(fo_tmp_dir, file)
-        dst = os.path.join(paths['fo_working_dir'], file)
-        shutil.copy2(src, dst)
 
-    # Clean up temporary directory
-    shutil.rmtree(fo_tmp_dir)
+    if not os.path.exists(f"{paths['fo_dir']}/covar.json") or not os.path.exists(
+        f"{paths['fo_dir']}/total.json"
+    ):
+        logger.warning("Find_Orb failed, covar.json or total.json file not found")
+        return (
+            Orbits.empty(),
+            ADESObservations.empty(),
+            "Find_Orb failed, covar.json or total.json file not found",
+        )
+
+    orbit = fo_to_adam_orbit_cov(paths["fo_dir"])
+    rejected = rejected_observations_from_fo(paths["fo_dir"])
 
     return orbit, rejected, None

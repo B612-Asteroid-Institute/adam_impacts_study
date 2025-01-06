@@ -64,7 +64,6 @@ from adam_impact_study.impacts_study import run_impact_study_fo
 RUN_NAME = "Impact_Study_Demo"
 RESULT_DIR = "results"
 RUN_DIR = os.getcwd()
-FO_DIR = "../find_orb/find_orb"
 
 # Define the input files
 impactors_file = "data/10_impactors.csv"
@@ -93,7 +92,6 @@ impact_study_results = run_impact_study_fo(
     sorcha_output_name,
     fo_input_file_base,
     fo_output_file_base,
-    FO_DIR,
     RUN_DIR,
     RESULT_DIR,
 )
