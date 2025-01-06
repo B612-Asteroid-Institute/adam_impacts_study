@@ -27,6 +27,11 @@ def plot_ip_over_time(impact_study_results: ImpactStudyResults, run_dir: str) ->
     None
         This function does not return any value. It generates and displays plots for each object.
     """
+
+    # Filter out objects with errors
+    impact_study_results = impact_study_results.apply_mask(
+        pc.is_null(impact_study_results.error)
+    )
     object_ids = impact_study_results.object_id.unique().to_pylist()
 
     for object_id in object_ids:
