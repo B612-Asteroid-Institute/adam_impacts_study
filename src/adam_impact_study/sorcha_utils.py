@@ -2,6 +2,7 @@ import glob
 import logging
 import os
 import subprocess
+from typing import Optional
 
 import pandas as pd
 import quivr as qv
@@ -181,6 +182,7 @@ def run_sorcha(
     pointing_file: str,
     population_config_file: str,
     working_dir: str,
+    seed: Optional[int] = None,
 ) -> Observations:
     """Run Sorcha with directory-based paths"""
     assert len(adam_orbits) == 1, "Currently only one object is supported"
@@ -202,6 +204,7 @@ def run_sorcha(
 
     # Run Sorcha to generate observational data
     sorcha_command = (
+        f"SORCHA_SEED={seed} "
         f"sorcha run -c {config_file} -p {params_file} "
         f"--orbits {orbits_file} --pointing-db {pointing_file} "
         f"-o {working_dir} --stem {output_stem} -f"

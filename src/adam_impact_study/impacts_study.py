@@ -31,6 +31,7 @@ def run_impact_study_all(
     run_dir: str,
     max_processes: Optional[int] = 1,
     overwrite: bool = True,
+    seed: Optional[int] = None,
 ) -> Optional[ImpactStudyResults]:
     """
     Run an impact study for all impactors in the input file.
@@ -96,6 +97,7 @@ def run_impact_study_all(
                 pointing_file,
                 run_dir,
                 max_processes=max_processes,
+                seed=seed,
             )
             impact_results = qv.concatenate([impact_results, impact_result])
         else:
@@ -107,6 +109,7 @@ def run_impact_study_all(
                     pointing_file,
                     run_dir,
                     max_processes=max_processes,
+                    seed=seed,
                 )
             )
 
@@ -150,6 +153,7 @@ def run_impact_study_fo(
     pointing_file: str,
     run_dir: str,
     max_processes: Optional[int] = 1,
+    seed: Optional[int] = None,
 ) -> ImpactStudyResults:
     """Run an impact study for a single impactor.
 
@@ -184,8 +188,8 @@ def run_impact_study_fo(
         pointing_file,
         population_config_file,
         paths["sorcha_dir"],
+        seed=seed,
     )
-
 
     if len(observations) == 0:
         return ImpactStudyResults.empty()
@@ -227,6 +231,7 @@ def run_impact_study_fo(
                 propagator_class,
                 run_dir,
                 max_processes,
+                seed=seed,
             )
             # Log if any error is present
             if pc.any(pc.invert(pc.is_null(result.error))).as_py():
@@ -243,6 +248,7 @@ def run_impact_study_fo(
                     propagator_class,
                     run_dir,
                     max_processes,
+                    seed=seed,
                 )
             )
 
@@ -275,6 +281,7 @@ def calculate_impact_probability(
     propagator_class: Type[ASSISTPropagator],
     run_dir: str,
     max_processes: int = 1,
+    seed: Optional[int] = None,
 ) -> ImpactStudyResults:
     """Calculate impact probability for a set of observations.
 
@@ -360,6 +367,7 @@ def calculate_impact_probability(
             covariance=True,
             covariance_method="monte-carlo",
             num_samples=1000,
+            seed=seed,
         )
         propagated_30_days_before_impact.to_parquet(
             f"{paths['propagated']}/orbits.parquet"
@@ -384,6 +392,7 @@ def calculate_impact_probability(
             propagator,
             num_samples=10000,
             processes=max_processes,
+            seed=seed,
         )
         final_orbit_states.to_parquet(
             f"{paths['propagated']}/monte_carlo_variant_states.parquet"

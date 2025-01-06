@@ -10,6 +10,7 @@ from adam_impact_study.impacts_study import run_impact_study_all
 
 logger = logging.getLogger(__name__)
 
+
 def run_impact_study(
     orbit_file: str,
     run_dir: str,
@@ -17,6 +18,7 @@ def run_impact_study(
     pointing_file: Optional[str] = None,
     population_config: Optional[str] = None,
     object_id: Optional[str] = None,
+    seed: Optional[int] = None,
 ) -> None:
     """Run impact study on provided orbits."""
     # Load orbits directly from parquet
@@ -40,11 +42,13 @@ def run_impact_study(
         pointing_file,
         run_dir,
         max_processes=max_processes,
+        seed=seed,
     )
 
     logger.info("Generating plots...")
     plot_ip_over_time(impact_study_results, run_dir)
     logger.info(f"Results saved to {run_dir}")
+
 
 def main():
     """Main entry point for CLI."""
@@ -52,31 +56,21 @@ def main():
     parser.add_argument("orbit_file", help="Path to orbit file (parquet format)")
     parser.add_argument("run_dir", help="Directory for this study run")
     parser.add_argument(
-        "--max-processes", 
-        type=int, 
+        "--max-processes",
+        type=int,
         default=1,
-        help="Maximum number of processes to use"
+        help="Maximum number of processes to use",
     )
+    parser.add_argument("--pointing-file", help="Path to pointing database file")
     parser.add_argument(
-        "--pointing-file",
-        help="Path to pointing database file"
+        "--population-config", help="Path to population configuration file"
     )
-    parser.add_argument(
-        "--population-config",
-        help="Path to population configuration file"
-    )
-    parser.add_argument(
-        "--object-id",
-        help="Specific object ID to process"
-    )
-    parser.add_argument(
-        "--debug",
-        action="store_true",
-        help="Enable debug logging"
-    )
+    parser.add_argument("--object-id", help="Specific object ID to process")
+    parser.add_argument("--debug", action="store_true", help="Enable debug logging")
+    parser.add_argument("--seed", type=int, help="Seed for Sorcha", default=None)
 
     args = parser.parse_args()
-    
+
     if args.debug:
         logging.basicConfig(level=logging.DEBUG)
     else:
@@ -89,7 +83,9 @@ def main():
         pointing_file=args.pointing_file,
         population_config=args.population_config,
         object_id=args.object_id,
+        seed=args.seed,
     )
+
 
 if __name__ == "__main__":
     main()

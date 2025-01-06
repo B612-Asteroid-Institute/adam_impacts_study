@@ -5,7 +5,7 @@
 groups = ["default", "dev"]
 strategy = ["inherit_metadata"]
 lock_version = "4.5.0"
-content_hash = "sha256:79709a1a644e4c7a359f54e2ef507d72fd2412c7a29b14016d1f489b14da5d58"
+content_hash = "sha256:fd88263aa8f6ba2127898bb117dc6affa764a3f52a1ec6837e290a9a0cbc9075"
 
 [[metadata.targets]]
 requires_python = ">=3.11,<3.13"
@@ -31,8 +31,11 @@ dependencies = [
 
 [[package]]
 name = "adam-core"
-version = "0.3.4"
+version = "0.3.5.dev1"
 requires_python = "<3.13,>=3.10"
+git = "https://github.com/B612-Asteroid-Institute/adam_core.git"
+ref = "5e5bfa46afa4c727638e82f9cf49f6d9b18fed03"
+revision = "5e5bfa46afa4c727638e82f9cf49f6d9b18fed03"
 summary = "Core libraries for the ADAM platform"
 groups = ["default", "dev"]
 dependencies = [
@@ -59,10 +62,6 @@ dependencies = [
     "scipy",
     "spiceypy",
     "timezonefinder",
-]
-files = [
-    {file = "adam_core-0.3.4-py3-none-any.whl", hash = "sha256:a9b7b258ff2fe9a213990955331a6b0123148e26a462f0af806e11def1338f6e"},
-    {file = "adam_core-0.3.4.tar.gz", hash = "sha256:3cb335366abb2771bf01551bf40f654c51047ea523232739b15910abf034897a"},
 ]
 
 [[package]]
