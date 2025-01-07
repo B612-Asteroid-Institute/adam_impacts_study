@@ -273,6 +273,9 @@ def run_impact_study_fo(
             logger.warning(f"Error: {result.error}")
         results = qv.concatenate([results, result])
 
+    # Sort the results by observation_end for consistency.
+    results = results.sort_by("observation_end")
+
     results.to_parquet(f"{paths['object_base_dir']}/impact_results_{object_id}.parquet")
 
     return results
@@ -367,11 +370,13 @@ def calculate_impact_probability(
 
     try:
         propagator = propagator_class()
+        orbit.to_parquet(f"{paths['propagated']}/not_propagated.parquet")
         propagated_30_days_before_impact = propagator.propagate_orbits(
             orbit,
             thirty_days_before_impact,
             covariance=True,
             covariance_method="monte-carlo",
+            max_processes=max_processes,
             num_samples=1000,
             seed=seed,
         )

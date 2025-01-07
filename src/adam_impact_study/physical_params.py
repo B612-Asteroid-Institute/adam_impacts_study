@@ -179,7 +179,7 @@ def determine_ast_class(percent_C: float, percent_S: float, seed: int = 13612) -
         Asteroid class.
     """
     assert percent_C + percent_S == 1, "Percentage of C and S asteroids must equal 1"
-    rng = np.random.default_rng()
+    rng = np.random.default_rng(seed)
     return "C" if rng.random() < percent_C else "S"
 
 

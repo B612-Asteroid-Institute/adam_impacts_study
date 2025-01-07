@@ -3,14 +3,17 @@ name = "adam_impact_study"
 version = "0.1.0"
 description = ""
 authors = [
-    {name = "Kathleen Kiker", email = "kathleen@b612foundation.orgm"},
+    {name = "Kathleen Kiker", email = "kathleen@b612foundation.org"},
+    {name = "Alec Koumjian", email = "alec@b612foundation.org"},
+    {name = "Nate Tellis", email = "nate@b612foundation.org"},
+    {name = "Joachim Moeyens", email = "moeyensj@uw.edu"},
 ]
 dependencies = [
     "matplotlib",
-    "adam-core @ git+https://github.com/B612-Asteroid-Institute/adam_core.git@5e5bfa46afa4c727638e82f9cf49f6d9b18fed03",
     "adam_assist>=0.2.0",
     "ray[default]==2.39.0",
     "sorcha @ git+https://github.com/B612-Asteroid-Institute/sorcha.git@cd5be9a06c6d24e1277cf2345bda9984f7097ede",
+    "adam_core @ git+https://github.com/B612-Asteroid-Institute/adam_core@5e5bfa46afa4c727638e82f9cf49f6d9b18fed03",
 ]
 requires-python = "<3.13,>=3.11"
 readme = "README.md"
