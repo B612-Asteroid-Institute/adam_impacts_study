@@ -7,6 +7,7 @@ from typing import Optional
 import pandas as pd
 import quivr as qv
 from adam_core.orbits import Orbits
+from adam_core.time import Timestamp
 from jpl_small_bodies_de441_n16 import de441_n16
 from naif_de440 import de440
 
@@ -22,7 +23,7 @@ logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
 
-def write_config_file_timeframe(impact_date, config_file):
+def write_config_file_timeframe(impact_date: Timestamp, config_file: str) -> str:
     """
     Write a Sorcha configuration file for a given impact date.
 
@@ -42,7 +43,11 @@ def write_config_file_timeframe(impact_date, config_file):
     assist_planets = de440
     assist_small_bodies = de441_n16
 
-    pointing_command = f"SELECT observationId, observationStartMJD as observationStartMJD_TAI, visitTime, visitExposureTime, filter, seeingFwhmGeom as seeingFwhmGeom_arcsec, seeingFwhmEff as seeingFwhmEff_arcsec, fiveSigmaDepth as fieldFiveSigmaDepth_mag , fieldRA as fieldRA_deg, fieldDec as fieldDec_deg, rotSkyPos as fieldRotSkyPos_deg FROM observations WHERE observationStartMJD < {impact_date} ORDER BY observationId"
+    # Ensure impact_date is in TAI before serializing to mjd
+    impact_date_tai = impact_date.rescale("tai")
+    impact_date_mjd = impact_date_tai.mjd()[0]
+
+    pointing_command = f"SELECT observationId, observationStartMJD as observationStartMJD_TAI, visitTime, visitExposureTime, filter, seeingFwhmGeom as seeingFwhmGeom_arcsec, seeingFwhmEff as seeingFwhmEff_arcsec, fiveSigmaDepth as fieldFiveSigmaDepth_mag , fieldRA as fieldRA_deg, fieldDec as fieldDec_deg, rotSkyPos as fieldRotSkyPos_deg FROM observations WHERE observationStartMJD < {impact_date_mjd} ORDER BY observationId"
     config_text = f"""
 [Sorcha Configuration File]
 
@@ -201,7 +206,7 @@ def run_sorcha(
 
     impact_date = adam_orbits.coordinates.time.add_days(30)
 
-    write_config_file_timeframe(impact_date.mjd()[0], config_file)
+    write_config_file_timeframe(impact_date, config_file)
 
     # Run Sorcha to generate observational data
     sorcha_command = (

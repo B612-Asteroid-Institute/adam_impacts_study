@@ -1,9 +1,11 @@
 import argparse
 import logging
 import os
+import sqlite3
 from typing import Optional
 
 from adam_core.orbits import Orbits
+from adam_core.time import Timestamp
 
 from adam_impact_study.analysis import plot_ip_over_time
 from adam_impact_study.impacts_study import run_impact_study_all
@@ -45,8 +47,20 @@ def run_impact_study(
         seed=seed,
     )
 
+    # Extract the date of the first pointing from the pointing file
+    conn = sqlite3.connect(pointing_file)
+    cursor = conn.cursor()
+    cursor.execute(
+        f"SELECT observationStartMJD as observationStartMJD_TAI FROM observations ORDER BY observationStartMJD_TAI LIMIT 1"
+    )
+    survey_start = cursor.fetchone()[0]
+    survey_start = Timestamp.from_mjd([survey_start], scale="tai")
+    conn.close()
+
     logger.info("Generating plots...")
-    plot_ip_over_time(impact_study_results, run_dir)
+    plot_ip_over_time(
+        impact_study_results, run_dir, impactor_orbits, survey_start
+    )
     logger.info(f"Results saved to {run_dir}")
 
 
