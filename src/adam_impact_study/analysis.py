@@ -69,16 +69,24 @@ def plot_ip_over_time(
         ax1.scatter(mjd_times, probabilities)
         ax1.set_xlabel("MJD")
         ax1.set_ylabel("Impact Probability")
-        line = ax1.plot(mjd_times, probabilities)[0]
+        ax1.plot(mjd_times, probabilities)
+        
+        # Create x-axis labels, 10 in total over the range of mjd_times (to the nearest integers)
+        # make the number of labels dynamic for when we have less than 10 days of data  
+        num_x_ticks = min(10, len(mjd_times))
+        x_ticks = np.linspace(mjd_times[0], mjd_times[-1], num_x_ticks)
+        ax1.set_xticks(x_ticks)
+        ax1.set_xticklabels([f"{tick:.0f}" for tick in x_ticks])
         
         # Set the y-axis range to be from 0 to 1.1
-        ax1.set_ylim(0, 1.1)
+        ax1.set_ylim(0, 1.05)
 
         # Set the y-axis tick labels to stop at 1.0
-        ax1.set_yticks(np.arange(0, 1.1, 0.1))
-        ax1.set_yticklabels(np.arange(0, 1.1, 0.1))
-        # Format the ticks to 1 decimal place
-        ax1.tick_params(axis='y', which='major', labelsize=10)
+        y_ticks = np.arange(0, 1.1, 0.1)
+        ax1.set_yticks(y_ticks)
+        ax1.set_yticklabels([
+            f"{y_tick:.1f}" for y_tick in y_ticks
+        ])
         # Get impact time for this object (30 days after coordinates.time)
         impact_orbit = impacting_orbits.apply_mask(
             pc.equal(impacting_orbits.object_id, object_id)

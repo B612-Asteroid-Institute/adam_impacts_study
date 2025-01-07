@@ -54,19 +54,20 @@ def impacting_orbits():
 
 
 def test_plot_ip_over_time(impact_study_results, impacting_orbits, tmpdir):
-    tmpdir_path = tmpdir.mkdir("plots")
-    os.chdir(tmpdir_path)
+    # tmpdir_path = tmpdir.mkdir("plots")
+    tmpdir_path = os.path.join(os.getcwd(), "test_plots")
+    os.makedirs(tmpdir_path, exist_ok=True)
     
     # Test without survey_start
     plot_ip_over_time(impact_study_results, tmpdir_path, impacting_orbits)
     object_ids = impact_study_results.object_id.unique()
     for obj_id in object_ids:
-        assert os.path.exists(os.path.join(tmpdir_path, f"IP_{obj_id}.png"))
+        assert os.path.exists(os.path.join(tmpdir_path, f"{obj_id}/IP_{obj_id}.png"))
     
     # Test with survey_start
-    survey_start = Timestamp.from_mjd(59790.0, scale="utc")  # 10 days before first observation
+    survey_start = Timestamp.from_mjd([59790.0], scale="utc")  # 10 days before first observation
     plot_ip_over_time(impact_study_results, tmpdir_path, impacting_orbits, survey_start)
-    print(f"Files in directory: {os.listdir(tmpdir_path)}")
-    # open the image
     for obj_id in object_ids:
-        assert os.path.exists(os.path.join(tmpdir_path, f"IP_{obj_id}.png"))
+        assert os.path.exists(os.path.join(tmpdir_path, f"{obj_id}/IP_{obj_id}.png"))
+    
+    print(tmpdir_path)

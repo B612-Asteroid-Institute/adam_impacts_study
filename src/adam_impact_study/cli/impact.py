@@ -31,6 +31,23 @@ def run_impact_study(
         impactor_orbits = impactor_orbits.select("object_id", object_id)
         logger.info(f"Filtered to single object: {object_id}")
 
+    # Extract the date of the first pointing from the pointing file
+    conn = sqlite3.connect(pointing_file)
+    cursor = conn.cursor()
+    cursor.execute(
+        f"SELECT observationStartMJD as observationStartMJD_TAI FROM observations ORDER BY observationStartMJD_TAI LIMIT 1"
+    )
+    survey_start = cursor.fetchone()[0]
+    survey_start = Timestamp.from_mjd([survey_start], scale="tai")
+    conn.close()
+
+    # Note, we want to remove this hard-coded value and replace with a superclass that includes impact date
+    # If any orbits impact date is before the survey start, throw a ValueError
+    impact_date = impactor_orbits.coordinates.time.add_days(30)
+    if impact_date.min().mjd()[0].as_py() < survey_start.mjd()[0].as_py():
+        raise ValueError(f"Orbit impact date is before survey start: {impact_date.min().mjd()[0].as_py()} < {survey_start.mjd()[0].as_py()}")
+
+
     logger.info(f"Processing {len(impactor_orbits)} orbits")
 
     # Create output directory
@@ -47,15 +64,7 @@ def run_impact_study(
         seed=seed,
     )
 
-    # Extract the date of the first pointing from the pointing file
-    conn = sqlite3.connect(pointing_file)
-    cursor = conn.cursor()
-    cursor.execute(
-        f"SELECT observationStartMJD as observationStartMJD_TAI FROM observations ORDER BY observationStartMJD_TAI LIMIT 1"
-    )
-    survey_start = cursor.fetchone()[0]
-    survey_start = Timestamp.from_mjd([survey_start], scale="tai")
-    conn.close()
+
 
     logger.info("Generating plots...")
     plot_ip_over_time(
