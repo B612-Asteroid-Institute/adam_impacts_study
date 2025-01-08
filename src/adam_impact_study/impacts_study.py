@@ -1,3 +1,4 @@
+import hashlib
 import logging
 import os
 import shutil
@@ -23,6 +24,29 @@ from adam_impact_study.types import ImpactStudyResults
 from adam_impact_study.utils import get_study_paths
 
 logger = logging.getLogger(__name__)
+
+
+def seed_from_object_id(object_id: str, seed: Optional[int] = None) -> int:
+    """
+    Generate a random seed integer from an object ID.
+
+    Parameters
+    ----------
+    object_id : str
+        Object ID to generate a seed from.
+    seed : int, optional
+        Seed to add to the generated seed (default: 0).
+
+    Returns
+    -------
+    int
+        Seed integer generated from the object ID.
+    """
+    if seed is None:
+        seed = 0
+    hash_object = hashlib.sha256(object_id.encode())
+    hash_int = int(hash_object.hexdigest(), 16)
+    return (hash_int + seed) % 2**32
 
 
 def run_impact_study_all(
@@ -86,14 +110,11 @@ def run_impact_study_all(
 
     impact_results = ImpactStudyResults.empty()
 
-    # randomly seed the physical parameters based on the supplied seed
-    # create ints of length object_ids
-    rng = np.random.default_rng(seed)
-    seed_ints = rng.integers(0, 1000000, len(object_ids))
-
     futures = []
-    for obj_id, object_seed in zip(object_ids, seed_ints):
+    for obj_id in object_ids:
         impactor_orbit = impactor_orbits.select("object_id", obj_id)
+
+        object_seed = seed_from_object_id(obj_id, seed)
 
         if max_processes == 1:
             impact_result = run_impact_study_fo(
