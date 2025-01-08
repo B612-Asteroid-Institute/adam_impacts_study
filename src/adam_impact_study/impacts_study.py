@@ -114,7 +114,7 @@ def run_impact_study_all(
     for obj_id in object_ids:
         impactor_orbit = impactor_orbits.select("object_id", obj_id)
 
-        object_seed = seed_from_object_id(obj_id, seed)
+        object_seed = seed_from_object_id(obj_id.as_py(), seed)
 
         if max_processes == 1:
             impact_result = run_impact_study_fo(

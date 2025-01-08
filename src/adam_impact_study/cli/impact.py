@@ -4,6 +4,8 @@ import os
 import sqlite3
 from typing import Optional
 
+import pyarrow as pa
+import pyarrow.compute as pc
 from adam_core.orbits import Orbits
 from adam_core.time import Timestamp
 
@@ -28,8 +30,11 @@ def run_impact_study(
     impactor_orbits = Orbits.from_parquet(orbit_file)
 
     if object_id:
-        impactor_orbits = impactor_orbits.select("object_id", object_id)
-        logger.info(f"Filtered to single object: {object_id}")
+        object_ids = object_id.split(",")
+        impactor_orbits = impactor_orbits.apply_mask(
+            pc.is_in(impactor_orbits.object_id, pa.array(object_ids))
+        )
+        logger.info(f"Filtered objects: {object_ids}")
 
     # Extract the date of the first pointing from the pointing file
     conn = sqlite3.connect(pointing_file)
@@ -45,8 +50,9 @@ def run_impact_study(
     # If any orbits impact date is before the survey start, throw a ValueError
     impact_date = impactor_orbits.coordinates.time.add_days(30)
     if impact_date.min().mjd()[0].as_py() < survey_start.mjd()[0].as_py():
-        raise ValueError(f"Orbit impact date is before survey start: {impact_date.min().mjd()[0].as_py()} < {survey_start.mjd()[0].as_py()}")
-
+        raise ValueError(
+            f"Orbit impact date is before survey start: {impact_date.min().mjd()[0].as_py()} < {survey_start.mjd()[0].as_py()}"
+        )
 
     logger.info(f"Processing {len(impactor_orbits)} orbits")
 
@@ -64,12 +70,8 @@ def run_impact_study(
         seed=seed,
     )
 
-
-
     logger.info("Generating plots...")
-    plot_ip_over_time(
-        impact_study_results, run_dir, impactor_orbits, survey_start
-    )
+    plot_ip_over_time(impact_study_results, run_dir, impactor_orbits, survey_start)
     logger.info(f"Results saved to {run_dir}")
 
 
