@@ -50,3 +50,20 @@ class ImpactStudyResults(qv.Table):
     impact_probability = qv.Float64Column(nullable=True)
     impact_time = Timestamp.as_column(nullable=True)
     error = qv.LargeStringColumn(nullable=True)
+
+
+class ImpactorResults(qv.Table):
+    object_id = qv.LargeStringColumn()
+    impact_time = Timestamp.as_column()
+    windows = qv.Int64Column()
+    nights = qv.Int64Column()
+    observations = qv.Int64Column()
+    singletons = qv.Int64Column()
+    tracklets = qv.Int64Column()
+    observed = qv.BooleanColumn(default=False)
+    discovered = qv.BooleanColumn(default=False)
+    discovery_time = Timestamp.as_column(nullable=True)
+    warning_time = qv.Float64Column(nullable=True)
+    realization_time = qv.Float64Column(nullable=True)
+    maximum_impact_probability = qv.Float64Column(nullable=True)
+    error = qv.LargeStringColumn(nullable=True)
