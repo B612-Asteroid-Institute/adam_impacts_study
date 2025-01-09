@@ -11,6 +11,7 @@ from adam_core.time import Timestamp
 
 from adam_impact_study.analysis import plot_ip_over_time
 from adam_impact_study.impacts_study import run_impact_study_all
+from adam_impact_study.types import ImpactorOrbits
 
 logger = logging.getLogger(__name__)
 
@@ -21,20 +22,20 @@ def run_impact_study(
     max_processes: int = 1,
     pointing_file: Optional[str] = None,
     population_config: Optional[str] = None,
-    object_id: Optional[str] = None,
+    orbit_id: Optional[str] = None,
     seed: Optional[int] = None,
 ) -> None:
     """Run impact study on provided orbits."""
     # Load orbits directly from parquet
     logger.info(f"Loading orbits from {orbit_file}")
-    impactor_orbits = Orbits.from_parquet(orbit_file)
+    impactor_orbits = ImpactorOrbits.from_parquet(orbit_file)
 
-    if object_id:
-        object_ids = object_id.split(",")
+    if orbit_id:
+        orbit_ids = orbit_id.split(",")
         impactor_orbits = impactor_orbits.apply_mask(
-            pc.is_in(impactor_orbits.object_id, pa.array(object_ids))
+            pc.is_in(impactor_orbits.object_id, pa.array(orbit_ids))
         )
-        logger.info(f"Filtered objects: {object_ids}")
+        logger.info(f"Filtered to orbit IDs: {orbit_ids}")
 
     # Extract the date of the first pointing from the pointing file
     conn = sqlite3.connect(pointing_file)
@@ -48,7 +49,7 @@ def run_impact_study(
 
     # Note, we want to remove this hard-coded value and replace with a superclass that includes impact date
     # If any orbits impact date is before the survey start, throw a ValueError
-    impact_date = impactor_orbits.coordinates.time.add_days(30)
+    impact_date = impactor_orbits.impact_time
     if impact_date.min().mjd()[0].as_py() < survey_start.mjd()[0].as_py():
         raise ValueError(
             f"Orbit impact date is before survey start: {impact_date.min().mjd()[0].as_py()} < {survey_start.mjd()[0].as_py()}"

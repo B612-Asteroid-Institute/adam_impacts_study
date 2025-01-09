@@ -5,6 +5,7 @@ import subprocess
 from typing import Optional
 
 import pandas as pd
+import pyarrow as pa
 import quivr as qv
 from adam_core.orbits import Orbits
 from adam_core.time import Timestamp
@@ -12,15 +13,41 @@ from jpl_small_bodies_de441_n16 import de441_n16
 from naif_de440 import de440
 
 from adam_impact_study.conversions import sorcha_output_to_od_observations
-from adam_impact_study.physical_params import (
-    create_physical_params_single,
-    photometric_properties_to_sorcha_table,
-    write_phys_params_file,
-)
-from adam_impact_study.types import Observations
+from adam_impact_study.types import ImpactorOrbits, Observations
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
+
+
+class PhotometricProperties(qv.Table):
+    orbit_id = qv.LargeStringColumn()
+    H_mf = qv.Float64Column()
+    u_mf = qv.Float64Column()
+    g_mf = qv.Float64Column()
+    i_mf = qv.Float64Column()
+    z_mf = qv.Float64Column()
+    y_mf = qv.Float64Column()
+    GS = qv.Float64Column()
+
+
+def remove_quotes(file_path: str) -> None:
+    """
+    Remove quotes from a file.
+
+    Parameters
+    ----------
+    file_path : str
+        Path to the file to remove quotes from.
+    """
+    temp_file_path = file_path + ".tmp"
+    with open(file_path, "rb") as infile, open(temp_file_path, "wb") as outfile:
+        while True:
+            chunk = infile.read(65536)
+            if not chunk:
+                break
+            chunk = chunk.replace(b'"', b"")
+            outfile.write(chunk)
+    os.replace(temp_file_path, file_path)
 
 
 def write_config_file_timeframe(impact_date: Timestamp, config_file: str) -> str:
@@ -115,14 +142,14 @@ ar_use_integrate = True
     return config_file
 
 
-def generate_sorcha_orbits(adam_orbits: Orbits, sorcha_orbits_file: str) -> None:
+def write_sorcha_orbits_file(orbits: Orbits, sorcha_orbits_file: str) -> None:
     """
     Generate a Sorcha orbit file from a DataFrame of impactor data.
 
     Parameters
     ----------
-    adam_orbits : `~adam_core.orbits.orbits.Orbits`
-        ADAM Orbits object containing orbital parameters for the impactors.
+    orbits : `~adam_core.orbits.orbits.Orbits`
+        ADAM core Orbits object containing orbital parameters for the impactors.
 
     sorcha_orbits_file : str
         Path to the file where the Sorcha orbit data will be saved.
@@ -132,10 +159,10 @@ def generate_sorcha_orbits(adam_orbits: Orbits, sorcha_orbits_file: str) -> None
     None
         The function writes the Sorcha orbit data to a file.
     """
-    coord_kep = adam_orbits.coordinates.to_keplerian()
+    coord_kep = orbits.coordinates.to_keplerian()
     sorcha_df = pd.DataFrame(
         {
-            "ObjID": adam_orbits.object_id,
+            "ObjID": adam_orbits.orbit_id,
             "FORMAT": ["KEP"] * len(adam_orbits),
             "a": coord_kep.a,
             "e": coord_kep.e,
@@ -150,62 +177,93 @@ def generate_sorcha_orbits(adam_orbits: Orbits, sorcha_orbits_file: str) -> None
     return
 
 
-def generate_physical_params_file(
-    population_config_file: str,
-    object_id: str,
-    output_file: str,
-    filter_band: str = "r",
-    seed: int = 13612,
-) -> None:
+def photometric_properties_to_sorcha_table(
+    properties: PhotometricProperties, main_filter: str
+) -> pa.Table:
     """
-    Generate a physical parameters file for Sorcha from a population config file.
+    Convert a PhotometricProperties table to a Sorcha table.
 
     Parameters
     ----------
-    population_config_file : str
-        Path to the population configuration file.
-    object_id : str
-        Object identifier to generate parameters for.
-    output_file : str
-        Path where the physical parameters file should be written.
-    filter_band : str, optional
-        Filter band to use for photometric properties (default: "r").
+    properties : `~adam_impact_study.physical_params.PhotometricProperties`
+        Table containing the physical parameters of the impactors.
+    main_filter : str
+        Name of the main filter.
 
     Returns
     -------
-    None
-        The function writes the physical parameters to the specified output file.
+    table : `pyarrow.Table`
+        Table containing the physical parameters of the impactors.
     """
-    phys_params = create_physical_params_single(population_config_file, object_id, seed)
-    phys_para_file_str = photometric_properties_to_sorcha_table(
-        phys_params, filter_band
+    table = properties.table
+    column_names = table.column_names
+    new_names = []
+    for c in column_names:
+        if c == "orbit_id":
+            new_name = "ObjID"
+        if c.endswith("_mf"):
+            new_name = (
+                f"H_{main_filter}"
+                if c == "H_mf"
+                else c.replace("_mf", f"-{main_filter}")
+            )
+        else:
+            new_name = c
+        new_names.append(new_name)
+    table = table.rename_columns(new_names)
+    return table
+
+
+def write_phys_params_file(
+    photometric_properties: PhotometricProperties,
+    properties_file: str,
+    filter_band: str = "r",
+) -> None:
+    """
+    Write the physical parameters to a file.
+
+    Parameters
+    ----------
+    photometric_properties : `PhotometricProperties`
+        Table containing the physical parameters of the impactors.
+    properties_file : str
+        Path to the file where the physical parameters will be saved.
+    filter_band : str, optional
+        Filter band to use for the photometric properties (default: "r").
+    """
+    properties_table = photometric_properties_to_sorcha_table(properties, filter_band)
+    pa.csv.write_csv(
+        properties_table,
+        properties_file,
+        write_options=pa.csv.WriteOptions(
+            include_header=True,
+            delimiter=" ",
+            quoting_style="needed",
+        ),
     )
-    write_phys_params_file(phys_para_file_str, output_file)
+    remove_quotes(properties_file)
+    return
 
 
 def run_sorcha(
-    adam_orbits: Orbits,
+    impactor_orbit: ImpactorOrbits,
     pointing_file: str,
-    population_config_file: str,
     working_dir: str,
     seed: Optional[int] = None,
 ) -> Observations:
     """Run Sorcha with directory-based paths"""
-    assert len(adam_orbits) == 1, "Currently only one object is supported"
+    assert len(impactor_orbit) == 1, "Currently only one object is supported"
     # Generate input files
     orbits_file = os.path.join(working_dir, "orbits.csv")
     params_file = os.path.join(working_dir, "params.csv")
     config_file = os.path.join(working_dir, "config.ini")
     output_stem = "observations"
 
-    generate_sorcha_orbits(adam_orbits, orbits_file)
-
-    generate_physical_params_file(
-        population_config_file, adam_orbits.object_id[0].as_py(), params_file, seed=seed
+    impact_date = adam_orbits.impact_time
+    write_sorcha_orbits_file(impactor_orbit.orbits(), orbits_file)
+    write_phys_params_file(
+        impactor_orbit.photometric_properties(), params_file, main_filter="r"
     )
-
-    impact_date = adam_orbits.coordinates.time.add_days(30)
-
     write_config_file_timeframe(impact_date, config_file)
 
     # Run Sorcha to generate observational data

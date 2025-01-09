@@ -4,8 +4,6 @@ from adam_core.observers import Observers
 from adam_core.orbits import Orbits
 from adam_core.time import Timestamp
 
-from .physical_params import PhotometricProperties
-
 
 class Photometry(qv.Table):
     mag = qv.Float64Column()
@@ -27,16 +25,37 @@ class ImpactorOrbits(qv.Table):
     object_id = qv.LargeStringColumn()
     coordinates = CartesianCoordinates.as_column()
     impact_time = Timestamp.as_column()
-    dynamical_class = qv.LargeStringColumn()  # AMOR / ATEN / APO
-    photometric_properties = PhotometricProperties.as_column()
-    ast_class = qv.LargeStringColumn(nullable=True)  # not nullable in production
-    albedo = qv.Float64Column(nullable=True)  # not nullable in production
+    dynamical_class = qv.LargeStringColumn()
+    ast_class = qv.LargeStringColumn()
+    diameter = qv.Float64Column()
+    albedo = qv.Float64Column()
+    H_r = qv.Float64Column()
+    u_r = qv.Float64Column()
+    g_r = qv.Float64Column()
+    i_r = qv.Float64Column()
+    z_r = qv.Float64Column()
+    y_r = qv.Float64Column()
+    GS = qv.Float64Column()
 
-    def to_orbits(self) -> Orbits:
+    def orbits(self) -> Orbits:
         return Orbits.from_kwargs(
             orbit_id=self.orbit_id,
             object_id=self.object_id,
             coordinates=self.coordinates,
+        )
+
+    def photometric_properties(self) -> "PhotometricProperties":
+        from .physical_params import PhotometricProperties
+
+        return PhotometricProperties.from_kwargs(
+            orbit_id=self.orbit_id,
+            H_mf=self.H_r,
+            u_mf=self.u_r,
+            g_mf=self.g_r,
+            i_mf=self.i_r,
+            z_mf=self.z_r,
+            y_mf=self.y_r,
+            GS=self.GS,
         )
 
 

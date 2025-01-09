@@ -14,10 +14,11 @@ def sample_random_rows(orbits, sample_size=1000):
     mask = np.zeros(len(orbits), dtype=bool)
     mask[random_indices] = True
     sampled_orbits = orbits.apply_mask(mask)
-    
+
     return sampled_orbits
 
-inputdir = './Impactors_Outputs/'
+
+inputdir = "./Impactors_Outputs/"
 
 for file in os.listdir(inputdir):
     if "impacting_objects" not in file:

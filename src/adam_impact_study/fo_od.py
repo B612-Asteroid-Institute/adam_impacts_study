@@ -23,7 +23,8 @@ logger = logging.getLogger(__name__)
 
 FO_BINARY_DIR = pathlib.Path(__file__).parent.parent.parent / "find_orb/find_orb"
 LINUX_JPL_PATH = (
-    pathlib.Path(__file__).parent.parent.parent / "find_orb/.find_orb/linux_p1550p2650.430t"
+    pathlib.Path(__file__).parent.parent.parent
+    / "find_orb/.find_orb/linux_p1550p2650.430t"
 )
 
 

@@ -10,10 +10,11 @@ from adam_core.orbits import Orbits
 from adam_core.time import Timestamp
 
 from adam_impact_study.sorcha_utils import (
-    generate_physical_params_file,
-    generate_sorcha_orbits,
+    PhotometricProperties,
     run_sorcha,
     write_config_file_timeframe,
+    write_phys_params_file,
+    write_sorcha_orbits_file,
 )
 
 
@@ -55,9 +56,9 @@ def mock_orbits():
     return orbits
 
 
-def test_generate_sorcha_orbits(mock_orbits, tmpdir):
+def test_write_sorcha_orbits_file(mock_orbits, tmpdir):
     sorcha_orbits_file = tmpdir.join("sorcha_orbits.csv")
-    generate_sorcha_orbits(mock_orbits, sorcha_orbits_file)
+    write_sorcha_orbits_file(mock_orbits, sorcha_orbits_file)
     impactor_table = pa.csv.read_csv(
         sorcha_orbits_file, parse_options=pa.csv.ParseOptions(delimiter=" ")
     )
@@ -92,26 +93,27 @@ def test_generate_sorcha_orbits(mock_orbits, tmpdir):
 
 
 @pytest.fixture
-def mock_physical_params_df():
+def mock_photometric_properties() -> PhotometricProperties:
     data = {
         "ObjID": ["ObjA", "ObjB", "ObjC"],
-        "H_r": [15.01, 16.012, 17.03],
-        "u-r": [1.71, 1.72, 1.73],
-        "g-r": [0.50, 0.51, 0.52],
-        "i-r": [-0.11, -0.12, -0.13],
-        "z-r": [-0.11, -0.12, -0.13],
-        "y-r": [-0.11, -0.12, -0.13],
+        "H_mf": [15.01, 16.012, 17.03],
+        "u_mf": [1.71, 1.72, 1.73],
+        "g_mf": [0.50, 0.51, 0.52],
+        "i_mf": [-0.11, -0.12, -0.13],
+        "z_mf": [-0.11, -0.12, -0.13],
+        "y_mf": [-0.11, -0.12, -0.13],
         "GS": [0.15, 0.16, 0.17],
     }
-    return pd.DataFrame(data)
+    return PhotometricProperties.from_kwargs(**data)
 
 
-def test_generate_sorcha_physical_params(tmpdir, mock_physical_params_df):
+def test_write_phys_params_file(tmpdir, mock_photometric_properties):
     sorcha_physical_params_file = os.path.join(tmpdir, "physical_params.txt")
-    generate_physical_params_file(
-        sorcha_physical_params_file, mock_physical_params_df
+    write_phys_params_file(
+        mock_photometric_properties, sorcha_physical_params_file, main_filter="r"
     )
     assert os.path.exists(sorcha_physical_params_file)
+
     read_table = pa.csv.read_csv(
         sorcha_physical_params_file, parse_options=pa.csv.ParseOptions(delimiter=" ")
     )

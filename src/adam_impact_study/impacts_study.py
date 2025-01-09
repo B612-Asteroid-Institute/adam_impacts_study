@@ -1,4 +1,3 @@
-import hashlib
 import logging
 import os
 import shutil
@@ -20,38 +19,14 @@ from adam_core.time import Timestamp
 from adam_impact_study.conversions import Observations
 from adam_impact_study.fo_od import run_fo_od
 from adam_impact_study.sorcha_utils import run_sorcha
-from adam_impact_study.types import ImpactStudyResults
+from adam_impact_study.types import ImpactorOrbits, ImpactStudyResults
 from adam_impact_study.utils import get_study_paths
 
 logger = logging.getLogger(__name__)
 
 
-def seed_from_object_id(object_id: str, seed: Optional[int] = None) -> int:
-    """
-    Generate a random seed integer from an object ID.
-
-    Parameters
-    ----------
-    object_id : str
-        Object ID to generate a seed from.
-    seed : int, optional
-        Seed to add to the generated seed (default: 0).
-
-    Returns
-    -------
-    int
-        Seed integer generated from the object ID.
-    """
-    if seed is None:
-        seed = 0
-    hash_object = hashlib.sha256(object_id.encode())
-    hash_int = int(hash_object.hexdigest(), 16)
-    return (hash_int + seed) % 2**32
-
-
 def run_impact_study_all(
-    impactor_orbits: Orbits,
-    population_config_file: str,
+    impactor_orbits: ImpactorOrbits,
     pointing_file: str,
     run_dir: str,
     max_processes: Optional[int] = 1,
@@ -63,10 +38,8 @@ def run_impact_study_all(
 
     Parameters
     ----------
-    impactor_orbits : Orbits
+    impactor_orbits : ImpactorOrbits
         Orbits of the impactors to study
-    population_config_file : str
-        Path to the population config file
     pointing_file : str
         Path to the file containing pointing data for Sorcha.
     run_dir : str
@@ -105,26 +78,25 @@ def run_impact_study_all(
     os.makedirs(f"{run_dir}", exist_ok=True)
 
     logger.info(f"Impactor Orbits: {impactor_orbits}")
-    object_ids = impactor_orbits.object_id.unique()
-    logger.info(f"Object IDs: {object_ids.to_pylist()}")
+    orbit_ids = impactor_orbits.orbit_id.unique()
+    logger.info(f"Object IDs: {orbit_ids.to_pylist()}")
 
     impact_results = ImpactStudyResults.empty()
 
     futures = []
-    for obj_id in object_ids:
-        impactor_orbit = impactor_orbits.select("object_id", obj_id)
+    for orbit_id in orbit_ids:
+        impactor_orbit = impactor_orbits.select("orbit_id", orbit_id)
 
-        object_seed = seed_from_object_id(obj_id.as_py(), seed)
+        orbit_seed = seed_from_string(orbit_id.as_py(), seed)
 
         if max_processes == 1:
             impact_result = run_impact_study_fo(
                 impactor_orbit,
                 ImpactASSISTPropagator,
-                population_config_file,
                 pointing_file,
                 run_dir,
                 max_processes=max_processes,
-                seed=object_seed,
+                seed=orbit_seed,
             )
             impact_results = qv.concatenate([impact_results, impact_result])
         else:
@@ -132,7 +104,6 @@ def run_impact_study_all(
                 run_impact_study_fo_remote.remote(
                     impactor_orbit,
                     ImpactASSISTPropagator,
-                    population_config_file,
                     pointing_file,
                     run_dir,
                     max_processes=max_processes,
@@ -174,9 +145,8 @@ def get_observation_windows(
 
 
 def run_impact_study_fo(
-    impactor_orbit: Orbits,
+    impactor_orbit: ImpactorOrbits,
     propagator_class: Type[ASSISTPropagator],
-    population_config_file: str,
     pointing_file: str,
     run_dir: str,
     max_processes: Optional[int] = 1,
@@ -186,12 +156,10 @@ def run_impact_study_fo(
 
     Parameters
     ----------
-    impactor_orbit : Orbits
+    impactor_orbit : ImpactorOrbits
         Orbit of the impactor to study
     propagator_class : Type[ASSISTPropagator]
         Class to use for propagation
-    population_config_file : str
-        Path to the population config file
     pointing_file : str
         Path to the file containing pointing data for Sorcha
     run_dir : str
@@ -205,15 +173,14 @@ def run_impact_study_fo(
         Table containing the results of the impact study
     """
     assert len(impactor_orbit) == 1, "Only one object supported at a time"
-    object_id = impactor_orbit.object_id[0].as_py()
+    orbit_id = impactor_orbit.orbit_id[0].as_py()
 
-    paths = get_study_paths(run_dir, object_id)
+    paths = get_study_paths(run_dir, orbit_id)
 
     # Run Sorcha to generate synthetic observations
     observations = run_sorcha(
         impactor_orbit,
         pointing_file,
-        population_config_file,
         paths["sorcha_dir"],
         seed=seed,
     )
@@ -297,7 +264,7 @@ def run_impact_study_fo(
     # Sort the results by observation_end for consistency.
     results = results.sort_by("observation_end")
 
-    results.to_parquet(f"{paths['object_base_dir']}/impact_results_{object_id}.parquet")
+    results.to_parquet(f"{paths['object_base_dir']}/impact_results_{orbit_id}.parquet")
 
     return results
 

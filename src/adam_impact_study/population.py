@@ -6,12 +6,17 @@ import numpy as np
 import pyarrow as pa
 import pyarrow.compute as pc
 import quivr as qv
+from adam_core.orbits import Orbits
+from adam_core.time import Timestamp
+
+from .types import ImpactorOrbits
+from .utils import seed_from_string
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
 
-class ImpactorConfig(qv.Table):
+class PopulationConfig(qv.Table):
     config_id = qv.LargeStringColumn()
     ast_class = qv.LargeStringColumn()
     albedo_min = qv.Float64Column()
@@ -26,94 +31,11 @@ class ImpactorConfig(qv.Table):
     z_r = qv.Float64Column()
     y_r = qv.Float64Column()
 
-
-class PhotometricProperties(qv.Table):
-    ObjID = qv.LargeStringColumn()
-    H_mf = qv.Float64Column()
-    u_mf = qv.Float64Column()
-    g_mf = qv.Float64Column()
-    i_mf = qv.Float64Column()
-    z_mf = qv.Float64Column()
-    y_mf = qv.Float64Column()
-    GS = qv.Float64Column()
-
-
-def photometric_properties_to_sorcha_table(
-    properties: PhotometricProperties, main_filter: str
-) -> pa.Table:
-    """
-    Convert a PhotometricProperties table to a Sorcha table.
-
-    Parameters
-    ----------
-    properties : `~adam_impact_study.physical_params.PhotometricProperties`
-        Table containing the physical parameters of the impactors.
-    main_filter : str
-        Name of the main filter.
-
-    Returns
-    -------
-    table : `pyarrow.Table`
-        Table containing the physical parameters of the impactors.
-    """
-    table = properties.table
-    column_names = table.column_names
-    new_names = []
-    for c in column_names:
-        if c.endswith("_mf"):
-            new_name = (
-                f"H_{main_filter}"
-                if c == "H_mf"
-                else c.replace("_mf", f"-{main_filter}")
-            )
-        else:
-            new_name = c
-        new_names.append(new_name)
-    table = table.rename_columns(new_names)
-    return table
-
-
-def remove_quotes(file_path: str) -> None:
-    """
-    Remove quotes from a file.
-
-    Parameters
-    ----------
-    file_path : str
-        Path to the file to remove quotes from.
-    """
-    temp_file_path = file_path + ".tmp"
-    with open(file_path, "rb") as infile, open(temp_file_path, "wb") as outfile:
-        while True:
-            chunk = infile.read(65536)
-            if not chunk:
-                break
-            chunk = chunk.replace(b'"', b"")
-            outfile.write(chunk)
-    os.replace(temp_file_path, file_path)
-
-
-def write_phys_params_file(properties_table: pa.Table, properties_file: str) -> None:
-    """
-    Write the physical parameters to a file.
-
-    Parameters
-    ----------
-    properties_table : `pyarrow.Table`
-        Table containing the physical parameters of the impactors.
-    properties_file : str
-        Path to the file where the physical parameters will be saved.
-    """
-    pa.csv.write_csv(
-        properties_table,
-        properties_file,
-        write_options=pa.csv.WriteOptions(
-            include_header=True,
-            delimiter=" ",
-            quoting_style="needed",
-        ),
-    )
-    remove_quotes(properties_file)
+    @classmethod
+    def load(cls, file_path: str) -> "PopulationConfig":
+        with open(file_path, "r") as file:
+            config_data = json.load(file)
+        return PopulationConfig.from_kwargs(**config_data)
 
 
 def select_albedo_from_range(
@@ -202,7 +124,7 @@ def calculate_H(diameter: float, albedo: float) -> float:
     return 15.618 - 5 * np.log10(diameter) - 2.5 * np.log10(albedo)
 
 
-def load_config(file_path: str, run_id: str = None) -> ImpactorConfig:
+def load_config(file_path: str, run_id: str = None) -> PopulationConfig:
     """
     Load the impact study configuration from a file.
 
@@ -215,7 +137,7 @@ def load_config(file_path: str, run_id: str = None) -> ImpactorConfig:
 
     Returns
     -------
-    config : `~adam_impact_study.physical_params.ImpactorConfig`
+    config : `~adam_impact_study.physical_params.PopulationConfig`
         Configuration object.
     """
 
@@ -225,7 +147,7 @@ def load_config(file_path: str, run_id: str = None) -> ImpactorConfig:
     with open(file_path, "r") as file:
         config_data = json.load(file)
 
-    S_type = ImpactorConfig.from_kwargs(
+    S_type = PopulationConfig.from_kwargs(
         config_id=[f"S_type_{run_id}"],
         ast_class=["S"],
         albedo_min=[config_data.get("S_albedo_min", 0.10)],
@@ -241,7 +163,7 @@ def load_config(file_path: str, run_id: str = None) -> ImpactorConfig:
         y_r=[config_data.get("y_r_S", -0.151)],
     )
 
-    C_type = ImpactorConfig.from_kwargs(
+    C_type = PopulationConfig.from_kwargs(
         config_id=[f"C_type_{run_id}"],
         ast_class=["C"],
         albedo_min=[config_data.get("C_albedo_min", 0.03)],
@@ -262,53 +184,95 @@ def load_config(file_path: str, run_id: str = None) -> ImpactorConfig:
     return config
 
 
-def create_physical_params_single(
-    config_file: str, obj_id: str, seed: int = 13612
-) -> PhotometricProperties:
+def generate_population(
+    orbits: Orbits,
+    impact_dates: Timestamp,
+    population_config: PopulationConfig,
+    seed: int = 0,
+    variants: int = 1,
+) -> ImpactorOrbits:
     """
-    Create physical parameters for a single impactor.
+    Generate a population of impactors from a set of orbits and impact dates. Optionally, generate multiple variants of each orbit with
+    different physical parameters.
 
     Parameters
     ----------
-    config_file : str
-        Path to the configuration file.
-    obj_id : str
-        Object ID of the impactor.
+    orbits : Orbits
+        The orbits to generate the population from.
+    impact_dates : Timestamp
+        The impact dates to generate the population for.
+    population_config : PopulationConfig
+        The population configuration to use.
+    seed : int, optional
+        The seed to use for the population generation.
+    variants : int, optional
+        The number of variants to generate for each orbit.
 
     Returns
     -------
-    phys_params : `~adam_impact_study.physical_params.PhotometricProperties`
-        Physical parameters of the impactor.
+    ImpactorOrbits
+        The generated population of impactors.
     """
-    config = load_config(config_file)
-    C_config = config.apply_mask(pc.equal(config.ast_class, "C"))
-    S_config = config.apply_mask(pc.equal(config.ast_class, "S"))
+    # TODO: Add support for more than just C and S-type asteroids
+    S_type = population_config.select("ast_class", "S")
+    C_type = population_config.select("ast_class", "C")
 
-    ast_class = determine_ast_class(
-        C_config.percentage.to_numpy()[0], S_config.percentage.to_numpy()[0], seed
-    )
+    impactor_orbits = ImpactorOrbits.empty()
+    for orbit, impact_date in zip(orbits, impact_dates):
 
-    if ast_class == "C":
-        config = C_config
-    elif ast_class == "S":
-        config = S_config
+        for variant in range(variants):
+            # Create a unique identifier for the variant
+            variant_id = f"{orbit.orbit_id[0].as_py()}_v{variant:08d}"
 
-    d = select_asteroid_size(
-        config.min_diam.to_numpy()[0], config.max_diam.to_numpy()[0], seed
-    )
-    albedo = select_albedo_from_range(
-        config.albedo_min.to_numpy()[0], config.albedo_max.to_numpy()[0], seed
-    )
-    H = calculate_H(d, albedo)
-    phys_params = PhotometricProperties.from_kwargs(
-        H_mf=[H],
-        u_mf=config.u_r,
-        g_mf=config.g_r,
-        i_mf=config.i_r,
-        z_mf=config.z_r,
-        y_mf=config.y_r,
-        GS=[0.15],
-        ObjID=[obj_id],
-    )
+            # Generate a random seed based on on object id
+            variant_seed = seed_from_string(variant_id, seed)
 
-    return phys_params
+            # Determine the asteroid's taxonomic type
+            ast_class = determine_ast_class(
+                C_type.percentage[0].as_py(), S_type.percentage[0].as_py(), variant_seed
+            )
+
+            if ast_class == "C":
+                config = C_type
+            elif ast_class == "S":
+                config = S_type
+
+            # Randomly generate the asteroid's diameter and albedo
+            diameter = select_asteroid_size(
+                config.min_diam.to_numpy()[0],
+                config.max_diam.to_numpy()[0],
+                variant_seed,
+            )
+            albedo = select_albedo_from_range(
+                config.albedo_min.to_numpy()[0],
+                config.albedo_max.to_numpy()[0],
+                variant_seed,
+            )
+
+            # Determine the asteroid's absolute magnitude
+            H = calculate_H(diameter, albedo)
+
+            # Create the impactor orbits table
+            impactor_orbit = ImpactorOrbits.from_kwargs(
+                orbit_id=[variant_id],
+                object_id=orbit.object_id,
+                coordinates=orbit.coordinates,
+                impact_time=impact_date,
+                dynamical_class=orbit.dynamical_class().astype("object"),
+                ast_class=[ast_class],
+                diameter=[diameter],
+                albedo=[albedo],
+                H_r=[H],
+                u_r=config.u_r,
+                g_r=config.g_r,
+                i_r=config.i_r,
+                z_r=config.z_r,
+                y_r=config.y_r,
+                GS=[0.15],
+            )
+
+            impactor_orbits = qv.concatenate([impactor_orbits, impactor_orbit])
+            if impactor_orbits.fragmented():
+                impactor_orbits = qv.defragment(impactor_orbits)
+
+    return impactor_orbits

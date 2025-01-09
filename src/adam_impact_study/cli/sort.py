@@ -11,8 +11,8 @@ from adam_core.time import Timestamp
 
 from adam_impact_study.conversions import impactor_file_to_adam_orbit
 
-inputdir = './results_raw/'
-outputdir = './processed_results/'
+inputdir = "./results_raw/"
+outputdir = "./processed_results/"
 files = []
 
 if not os.path.exists(outputdir):
@@ -30,7 +30,7 @@ for file in os.listdir(inputdir):
     back_propagated_orbits = Orbits.empty()
     round_trip_orbits = Orbits.empty()
 
-#    download_jpl_ephemeris_files()
+    #    download_jpl_ephemeris_files()
     propagator = ASSISTPropagator()
     initial_orbit_objects = impactor_file_to_adam_orbit(f"{inputdir}/{file}")
 
@@ -51,7 +51,9 @@ for file in os.listdir(inputdir):
             logger.info(f"No 30 day impact for object {obj_id.orbit_id}")
             continue
         else:
-            logger.info(impactor_orbit_object.coordinates.time.add_days(30).to_numpy()[0])
+            logger.info(
+                impactor_orbit_object.coordinates.time.add_days(30).to_numpy()[0]
+            )
             logger.info(impacts.coordinates.time.to_numpy()[0])
             logger.info(
                 abs(
@@ -59,22 +61,35 @@ for file in os.listdir(inputdir):
                     - impacts.coordinates.time.to_numpy()[0]
                 )
             )
-            if abs(
-                impactor_orbit_object.coordinates.time.add_days(30).to_numpy()[0]
-                - impacts.coordinates.time.to_numpy()[0]
-            ) > 1:
+            if (
+                abs(
+                    impactor_orbit_object.coordinates.time.add_days(30).to_numpy()[0]
+                    - impacts.coordinates.time.to_numpy()[0]
+                )
+                > 1
+            ):
                 logger.info("#### Unusually large time difference ####")
         time_start = Timestamp.from_jd([2460800.5])
-        results_back = propagator.propagate_orbits(impactor_orbit_object, time_start, covariance=True)
+        results_back = propagator.propagate_orbits(
+            impactor_orbit_object, time_start, covariance=True
+        )
         logger.info("Orbit at start:", results_back[0].coordinates.values)
-        logger.info("Orbit at start Time:", results_back[0].coordinates.time.to_numpy()[0])
+        logger.info(
+            "Orbit at start Time:", results_back[0].coordinates.time.to_numpy()[0]
+        )
         if back_propagated_orbits is None:
             back_propagated_orbits = results_back
         else:
-            back_propagated_orbits = qv.concatenate([back_propagated_orbits, results_back])
-        results_forward = propagator.propagate_orbits(results_back, impactor_orbit_object.coordinates.time, covariance=True)
+            back_propagated_orbits = qv.concatenate(
+                [back_propagated_orbits, results_back]
+            )
+        results_forward = propagator.propagate_orbits(
+            results_back, impactor_orbit_object.coordinates.time, covariance=True
+        )
         logger.info("Orbit forward:", results_forward[0].coordinates.values)
-        logger.info("Orbit forward Time:", results_forward[0].coordinates.time.to_numpy()[0])
+        logger.info(
+            "Orbit forward Time:", results_forward[0].coordinates.time.to_numpy()[0]
+        )
         if round_trip_orbits is None:
             round_trip_orbits = results_forward
         else:
@@ -85,7 +100,9 @@ for file in os.listdir(inputdir):
             no_impact.append(obj_id.orbit_id.to_numpy(zero_copy_only=False)[0])
         else:
             impact_orb.append(obj_id.orbit_id.to_numpy(zero_copy_only=False)[0])
-            logger.info(impactor_orbit_object.coordinates.time.add_days(30).to_numpy()[0])
+            logger.info(
+                impactor_orbit_object.coordinates.time.add_days(30).to_numpy()[0]
+            )
             logger.info(impacts.coordinates.time.to_numpy()[0])
             logger.info(
                 abs(
@@ -93,10 +110,13 @@ for file in os.listdir(inputdir):
                     - impacts.coordinates.time.to_numpy()[0]
                 )
             )
-            if abs(
-                impactor_orbit_object.coordinates.time.add_days(30).to_numpy()[0]
-                - impacts.coordinates.time.to_numpy()[0]
-            ) > 1:
+            if (
+                abs(
+                    impactor_orbit_object.coordinates.time.add_days(30).to_numpy()[0]
+                    - impacts.coordinates.time.to_numpy()[0]
+                )
+                > 1
+            ):
                 logger.info("#### Unusually large time difference ####")
 
     logger.info("No impact for objects:", no_impact)
@@ -105,7 +125,9 @@ for file in os.listdir(inputdir):
 
     logger.info("Number of objects with no impact:", len(no_impact))
     logger.info("Number of objects with impact:", len(impact_orb))
-    logger.info("Number of objects with no impact for initial objects:", len(no_impact_initial))
+    logger.info(
+        "Number of objects with no impact for initial objects:", len(no_impact_initial)
+    )
 
     impact_orb_pa = pa.array(impact_orb)
     impacting_mask = pc.is_in(initial_orbit_objects.orbit_id, impact_orb_pa)
@@ -113,9 +135,17 @@ for file in os.listdir(inputdir):
     no_impact_pa = pa.array(no_impact)
     non_impacting_mask = pc.is_in(initial_orbit_objects.orbit_id, no_impact_pa)
     non_impacting_objects = initial_orbit_objects.apply_mask(non_impacting_mask)
-    impacting_objects.to_parquet(f"{outputdir}/{file.split('.csv')[0]}_impacting_objects.parquet")
-    non_impacting_objects.to_parquet(f"{outputdir}/{file.split('.csv')[0]}_non_impacting.parquet")
-    back_propagated_orbits.to_parquet(f"{outputdir}/{file.split('.csv')[0]}_back_propagated_orbits.parquet")
-    round_trip_orbits.to_parquet(f"{outputdir}/{file.split('.csv')[0]}_round_trip_orbits.parquet")
+    impacting_objects.to_parquet(
+        f"{outputdir}/{file.split('.csv')[0]}_impacting_objects.parquet"
+    )
+    non_impacting_objects.to_parquet(
+        f"{outputdir}/{file.split('.csv')[0]}_non_impacting.parquet"
+    )
+    back_propagated_orbits.to_parquet(
+        f"{outputdir}/{file.split('.csv')[0]}_back_propagated_orbits.parquet"
+    )
+    round_trip_orbits.to_parquet(
+        f"{outputdir}/{file.split('.csv')[0]}_round_trip_orbits.parquet"
+    )
 
-print (files)
+print(files)
