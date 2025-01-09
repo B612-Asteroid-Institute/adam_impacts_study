@@ -26,7 +26,7 @@ def seed_from_string(s: str, seed: Optional[int] = None) -> int:
 
 
 def get_study_paths(
-    run_dir: str, object_id: str, time_range: Optional[str] = None
+    run_dir: str, orbit_id: str, time_range: Optional[str] = None
 ) -> dict:
     """Get standardized paths for impact study results.
 
@@ -34,8 +34,8 @@ def get_study_paths(
     ----------
     run_dir : str
         Directory for this specific study run
-    object_id : str
-        Object identifier
+    orbit_id : str
+        Orbit identifier
     time_range : str, optional
         Time range in format "mjd_start__mjd_end"
 
@@ -46,7 +46,7 @@ def get_study_paths(
     """
     import os
 
-    obj_dir = os.path.join(run_dir, object_id)
+    obj_dir = os.path.join(run_dir, orbit_id)
 
     paths = {
         "object_base_dir": obj_dir,

@@ -7,6 +7,7 @@ import tempfile
 import uuid
 from typing import Optional, Tuple
 
+import pyarrow.compute as pc
 from adam_core.observations.ades import ADESObservations
 from adam_core.orbits import Orbits
 
@@ -103,6 +104,10 @@ def run_fo_od(
 
     # Create input file
     input_file = os.path.join(fo_tmp_dir, "observations.csv")
+    # Truncate object_id to 8 characters
+    observations = observations.set_column(
+        "object_id", pc.utf8_slice_codeunits(observations.object_id, 0, 8)
+    )
     od_observations_to_ades_file(observations, input_file)
 
     # Run Find_Orb

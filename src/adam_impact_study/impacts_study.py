@@ -22,6 +22,8 @@ from adam_impact_study.sorcha_utils import run_sorcha
 from adam_impact_study.types import ImpactorOrbits, ImpactStudyResults
 from adam_impact_study.utils import get_study_paths
 
+from .utils import seed_from_string
+
 logger = logging.getLogger(__name__)
 
 
@@ -107,7 +109,7 @@ def run_impact_study_all(
                     pointing_file,
                     run_dir,
                     max_processes=max_processes,
-                    seed=object_seed,
+                    seed=orbit_seed,
                 )
             )
 
@@ -309,15 +311,16 @@ def calculate_impact_probability(
             ),
         )
 
+    orbit_id = impactor_orbit.orbit_id[0].as_py()
     object_id = impactor_orbit.object_id[0].as_py()
     start_night = pc.min(observations.observing_night)
     end_night = pc.max(observations.observing_night)
     start_date = observations.coordinates.time.min()
     end_date = observations.coordinates.time.max()
     window_name = f"{start_night.as_py()}_{end_night.as_py()}"
-    paths = get_study_paths(run_dir, object_id, window_name)
+    paths = get_study_paths(run_dir, orbit_id, window_name)
 
-    thirty_days_before_impact = impactor_orbit.coordinates.time
+    thirty_days_before_impact = impactor_orbit.impact_time.add_days(-30)
 
     # Get the start and end date of the observations, the number of
     # observations, and the number of unique nights
@@ -337,6 +340,7 @@ def calculate_impact_probability(
         )
     except Exception as e:
         return ImpactStudyResults.from_kwargs(
+            orbit_id=[orbit_id],
             object_id=[object_id],
             observation_start=start_date,
             observation_end=end_date,
@@ -347,6 +351,7 @@ def calculate_impact_probability(
 
     if error is not None:
         return ImpactStudyResults.from_kwargs(
+            orbit_id=[orbit_id],
             object_id=[object_id],
             observation_start=start_date,
             observation_end=end_date,
@@ -374,6 +379,7 @@ def calculate_impact_probability(
     except Exception as e:
         logger.error(f"Error propagating orbits: {e}")
         return ImpactStudyResults.from_kwargs(
+            orbit_id=[orbit_id],
             object_id=[object_id],
             observation_start=start_date,
             observation_end=end_date,
@@ -400,6 +406,7 @@ def calculate_impact_probability(
         ip = calculate_impact_probabilities(final_orbit_states, impacts)
     except Exception as e:
         return ImpactStudyResults.from_kwargs(
+            orbit_id=[orbit_id],
             object_id=[object_id],
             observation_start=start_date,
             observation_end=end_date,
@@ -410,6 +417,7 @@ def calculate_impact_probability(
         )
 
     return ImpactStudyResults.from_kwargs(
+        orbit_id=[orbit_id],
         object_id=[object_id],
         observation_start=start_date,
         observation_end=end_date,

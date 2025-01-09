@@ -45,7 +45,7 @@ class ImpactorOrbits(qv.Table):
         )
 
     def photometric_properties(self) -> "PhotometricProperties":
-        from .physical_params import PhotometricProperties
+        from .sorcha_utils import PhotometricProperties
 
         return PhotometricProperties.from_kwargs(
             orbit_id=self.orbit_id,
@@ -60,7 +60,8 @@ class ImpactorOrbits(qv.Table):
 
 
 class ImpactStudyResults(qv.Table):
-    object_id = qv.LargeStringColumn()
+    orbit_id = qv.LargeStringColumn()
+    object_id = qv.LargeStringColumn(nullable=True)
     observation_start = Timestamp.as_column()
     observation_end = Timestamp.as_column()
     observation_count = qv.UInt64Column()
@@ -72,7 +73,8 @@ class ImpactStudyResults(qv.Table):
 
 
 class ImpactorResults(qv.Table):
-    object_id = qv.LargeStringColumn()
+    orbit_id = qv.LargeStringColumn()
+    object_id = qv.LargeStringColumn(nullable=True)
     impact_time = Timestamp.as_column()
     windows = qv.Int64Column()
     nights = qv.Int64Column()

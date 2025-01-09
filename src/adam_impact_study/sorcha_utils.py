@@ -162,8 +162,8 @@ def write_sorcha_orbits_file(orbits: Orbits, sorcha_orbits_file: str) -> None:
     coord_kep = orbits.coordinates.to_keplerian()
     sorcha_df = pd.DataFrame(
         {
-            "ObjID": adam_orbits.orbit_id,
-            "FORMAT": ["KEP"] * len(adam_orbits),
+            "ObjID": orbits.orbit_id,
+            "FORMAT": ["KEP"] * len(orbits),
             "a": coord_kep.a,
             "e": coord_kep.e,
             "inc": coord_kep.i,
@@ -201,7 +201,7 @@ def photometric_properties_to_sorcha_table(
     for c in column_names:
         if c == "orbit_id":
             new_name = "ObjID"
-        if c.endswith("_mf"):
+        elif c.endswith("_mf"):
             new_name = (
                 f"H_{main_filter}"
                 if c == "H_mf"
@@ -231,7 +231,9 @@ def write_phys_params_file(
     filter_band : str, optional
         Filter band to use for the photometric properties (default: "r").
     """
-    properties_table = photometric_properties_to_sorcha_table(properties, filter_band)
+    properties_table = photometric_properties_to_sorcha_table(
+        photometric_properties, filter_band
+    )
     pa.csv.write_csv(
         properties_table,
         properties_file,
@@ -259,10 +261,10 @@ def run_sorcha(
     config_file = os.path.join(working_dir, "config.ini")
     output_stem = "observations"
 
-    impact_date = adam_orbits.impact_time
+    impact_date = impactor_orbit.impact_time
     write_sorcha_orbits_file(impactor_orbit.orbits(), orbits_file)
     write_phys_params_file(
-        impactor_orbit.photometric_properties(), params_file, main_filter="r"
+        impactor_orbit.photometric_properties(), params_file, filter_band="r"
     )
     write_config_file_timeframe(impact_date, config_file)
 

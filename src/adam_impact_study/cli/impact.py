@@ -64,7 +64,6 @@ def run_impact_study(
     logger.info("Starting impact study...")
     impact_study_results = run_impact_study_all(
         impactor_orbits,
-        population_config,
         pointing_file,
         run_dir,
         max_processes=max_processes,
@@ -91,7 +90,7 @@ def main():
     parser.add_argument(
         "--population-config", help="Path to population configuration file"
     )
-    parser.add_argument("--object-id", help="Specific object ID to process")
+    parser.add_argument("--orbit_id", help="Specific orbit ID to process")
     parser.add_argument("--debug", action="store_true", help="Enable debug logging")
     parser.add_argument("--seed", type=int, help="Seed for Sorcha", default=None)
 
@@ -107,8 +106,7 @@ def main():
         args.run_dir,
         max_processes=args.max_processes,
         pointing_file=args.pointing_file,
-        population_config=args.population_config,
-        object_id=args.object_id,
+        orbit_id=args.orbit_id,
         seed=args.seed,
     )
 
