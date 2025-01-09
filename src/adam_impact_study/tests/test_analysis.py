@@ -1,19 +1,24 @@
 import os
 
+import pyarrow.compute as pc
 import pytest
 from adam_core.coordinates import CartesianCoordinates, Origin
 from adam_core.orbits import Orbits
 from adam_core.time import Timestamp
 
-from adam_impact_study.analysis import plot_ip_over_time
-from adam_impact_study.types import ImpactStudyResults
+from adam_impact_study.analysis import compute_warning_time, plot_ip_over_time
+from adam_impact_study.types import ImpactorOrbits, ImpactStudyResults
 
 
 @pytest.fixture
 def impact_study_results():
     object_ids = ["obj1", "obj1", "obj1", "obj2", "obj2", "obj2"]
-    start_dates = Timestamp.from_mjd([59800.0, 59800.0, 59800.0, 59800.0, 59800.0, 59800.0])
-    end_dates = Timestamp.from_mjd([59801.0, 59802.0, 59803.0, 59801.0, 59802.0, 59803.0])
+    start_dates = Timestamp.from_mjd(
+        [59800.0, 59800.0, 59800.0, 59800.0, 59800.0, 59800.0]
+    )
+    end_dates = Timestamp.from_mjd(
+        [59801.0, 59802.0, 59803.0, 59801.0, 59802.0, 59803.0]
+    )
     observation_counts = [10, 20, 30, 10, 20, 30]
     observation_nights = [1.0, 2.0, 3.0, 1.0, 2.0, 3.0]
     observations_rejected = [0, 0, 0, 0, 0, 0]
@@ -41,14 +46,16 @@ def impacting_orbits():
         vx=[0.01, 0.02],
         vy=[0.005, 0.015],
         vz=[0.001, 0.002],
-        time=Timestamp.from_mjd([59831.0, 59831.0], scale="tdb"),  # 30 days after last observation
+        time=Timestamp.from_mjd(
+            [59831.0, 59831.0], scale="tdb"
+        ),  # 30 days after last observation
         origin=Origin.from_kwargs(code=["SUN", "SUN"]),
         frame="ecliptic",
     )
     orbits = Orbits.from_kwargs(
         orbit_id=["obj1", "obj2"],
         object_id=["obj1", "obj2"],
-        coordinates=cartesian_coords
+        coordinates=cartesian_coords,
     )
     return orbits
 
@@ -57,17 +64,131 @@ def test_plot_ip_over_time(impact_study_results, impacting_orbits, tmpdir):
     # tmpdir_path = tmpdir.mkdir("plots")
     tmpdir_path = os.path.join(os.getcwd(), "test_plots")
     os.makedirs(tmpdir_path, exist_ok=True)
-    
+
     # Test without survey_start
     plot_ip_over_time(impact_study_results, tmpdir_path, impacting_orbits)
     object_ids = impact_study_results.object_id.unique()
     for obj_id in object_ids:
         assert os.path.exists(os.path.join(tmpdir_path, f"{obj_id}/IP_{obj_id}.png"))
-    
+
     # Test with survey_start
-    survey_start = Timestamp.from_mjd([59790.0], scale="utc")  # 10 days before first observation
+    survey_start = Timestamp.from_mjd(
+        [59790.0], scale="utc"
+    )  # 10 days before first observation
     plot_ip_over_time(impact_study_results, tmpdir_path, impacting_orbits, survey_start)
     for obj_id in object_ids:
         assert os.path.exists(os.path.join(tmpdir_path, f"{obj_id}/IP_{obj_id}.png"))
-    
+
     print(tmpdir_path)
+
+
+def test_compute_warning_time():
+    # Create test impactor orbits
+    impactor_orbits = ImpactorOrbits.from_kwargs(
+        orbit_id=["test1", "test2", "test3"],
+        object_id=["obj1", "obj2", "obj3"],
+        coordinates=CartesianCoordinates.from_kwargs(
+            x=[1, 1, 1],
+            y=[1, 1, 1],
+            z=[1, 1, 1],
+            vx=[0, 0, 0],
+            vy=[0, 0, 0],
+            vz=[0, 0, 0],
+            time=Timestamp.from_mjd([60000, 60000, 60000]),
+        ),
+        impact_time=Timestamp.from_mjd([60100, 60200, 60300]),  # Different impact times
+        dynamical_class=["APO", "APO", "APO"],
+        photometric_properties=None,  # Not needed for this test
+    )
+
+    # Create test results
+    results = ImpactStudyResults.from_kwargs(
+        object_id=["obj1", "obj1", "obj2", "obj3"],
+        observation_start=Timestamp.from_mjd([60000, 60010, 60000, 60000]),
+        observation_end=Timestamp.from_mjd([60050, 60060, 60150, 60250]),
+        observation_count=[10, 15, 5, 20],
+        observations_rejected=[0, 0, 0, 0],
+        observation_nights=[1, 1, 1, 1],
+        impact_probability=[
+            0.2,
+            0.3,
+            0.00001,
+            0.5,
+        ],  # obj1 has two entries, obj2 below threshold
+    )
+
+    # Compute warning times
+    warning_times = compute_warning_time(impactor_orbits, results, threshold=1e-4)
+
+    assert len(warning_times) == 3
+
+    # Check object IDs are present
+    assert pc.any(pc.equal(warning_times.object_id, "obj1")).as_py()
+    assert pc.any(pc.equal(warning_times.object_id, "obj2")).as_py()
+    assert pc.any(pc.equal(warning_times.object_id, "obj3")).as_py()
+
+    # Check warning time
+    warning_time_obj1 = warning_times.select("object_id", "obj1")
+    assert warning_time_obj1.warning_time[0].as_py() == 50.0  # 60100 - 60050
+
+    warning_time_obj2 = warning_times.select("object_id", "obj2")
+    assert pc.all(pc.is_null(warning_time_obj2.warning_time)).as_py()
+
+    warning_time_obj3 = warning_times.select("object_id", "obj3")
+    assert warning_time_obj3.warning_time[0].as_py() == 50.0  # 60300 - 60250
+
+
+def test_compute_warning_time_edge_cases():
+    # Test empty impact study results
+    impactor_orbits = ImpactorOrbits.from_kwargs(
+        orbit_id=["test1", "test2", "test3"],
+        object_id=["obj1", "obj2", "obj3"],
+        coordinates=CartesianCoordinates.from_kwargs(
+            x=[1, 1, 1],
+            y=[1, 1, 1],
+            z=[1, 1, 1],
+            vx=[0, 0, 0],
+            vy=[0, 0, 0],
+            vz=[0, 0, 0],
+            time=Timestamp.from_mjd([60000, 60000, 60000]),
+        ),
+        impact_time=Timestamp.from_mjd([60100, 60200, 60300]),  # Different impact times
+        dynamical_class=["APO", "APO", "APO"],
+        photometric_properties=None,  # Not needed for this test
+    )
+    empty_results = ImpactStudyResults.empty()
+
+    empty_warning_times = compute_warning_time(impactor_orbits, empty_results)
+    assert len(empty_warning_times) == 3
+    assert pc.all(pc.is_null(empty_warning_times.column("warning_time"))).as_py()
+
+    # Test all probabilities below threshold
+    low_prob_results = ImpactStudyResults.from_kwargs(
+        object_id=["obj1"],
+        observation_start=Timestamp.from_mjd([60000]),
+        observation_end=Timestamp.from_mjd([60050]),
+        observation_count=[10],
+        observations_rejected=[0],
+        observation_nights=[1],
+        impact_probability=[0.00001],  # Below default threshold
+    )
+
+    low_prob_orbits = ImpactorOrbits.from_kwargs(
+        orbit_id=["test1"],
+        object_id=["obj1"],
+        coordinates=CartesianCoordinates.from_kwargs(
+            x=[1],
+            y=[1],
+            z=[1],
+            vx=[0],
+            vy=[0],
+            vz=[0],
+            time=Timestamp.from_mjd([60000]),
+        ),
+        impact_time=Timestamp.from_mjd([60100]),
+        dynamical_class=["APO"],
+        photometric_properties=None,
+    )
+
+    low_prob_warning_times = compute_warning_time(low_prob_orbits, low_prob_results)
+    assert len(low_prob_warning_times) == 1
