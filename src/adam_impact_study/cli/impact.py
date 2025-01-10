@@ -92,12 +92,14 @@ def main():
     parser.add_argument(
         "--population-config", help="Path to population configuration file"
     )
-    parser.add_argument("--orbit-id", help="One or more orbit IDs to select out of input orbits, sepearated by commas")
+    parser.add_argument(
+        "--orbit-id",
+        help="One or more orbit IDs to select out of input orbits, sepearated by commas",
+    )
     parser.add_argument("--debug", action="store_true", help="Enable debug logging")
     parser.add_argument("--seed", type=int, help="Seed for Sorcha", default=None)
 
     args = parser.parse_args()
-
 
     if args.debug:
         print("Debug mode enabled")

@@ -60,14 +60,18 @@ def compute_warning_time(
     filtered_results = filtered_results.drop_duplicates(subset=["orbit_id"])
 
     # Convert last observation time to an MJD
-    filtered_results = filtered_results.flattened_table().append_column(
-        "observation_end_mjd", filtered_results.observation_end.mjd()
+    filtered_results = (
+        filtered_results.flattened_table()
+        .append_column("observation_end_mjd", filtered_results.observation_end.mjd())
+        .select(["orbit_id", "observation_end_mjd"])
     )
 
     # Join with impactor orbits to get impact time
-    impactors_table_time = impactor_orbits.table.append_column(
-        "impact_time_mjd", impactor_orbits.impact_time.mjd()
-    ).select(["orbit_id", "impact_time_mjd"])
+    impactors_table_time = (
+        impactor_orbits.flattened_table()
+        .append_column("impact_time_mjd", impactor_orbits.impact_time.mjd())
+        .select(["orbit_id", "impact_time_mjd"])
+    )
     impactors_table_time = impactors_table_time.join(
         filtered_results, "orbit_id", "orbit_id"
     )
@@ -97,19 +101,28 @@ def compute_discovery_dates(
     Return when each object is considered to be discoverable.
 
     TODO: Define what "discoverable" means in more detail.
+
+    Parameters
+    ----------
+    impactor_orbits: ImpactorOrbits
+        The impactor orbits to compute the discovery dates for.
+    results: ImpactStudyResults
+        The impact study results to compute the discovery dates for.
+
+    Returns
+    -------
+    DiscoveryDates
+        The discovery dates for each object.
     """
     # For now, we will consider an object discoverable if it has 3 unique nights of data
     results_sorted = results.sort_by(
         ["orbit_id", "observation_end.days", "observation_end.nanos"]
     )
 
-
-    
     # only consider the first 3 nights of data
     results_sorted = results_sorted.apply_mask(
         pc.greater_equal(results_sorted.observation_nights, 3)
     )
-
 
     results_sorted = results_sorted.drop_duplicates(subset=["orbit_id"], keep="first")
 
@@ -119,14 +132,16 @@ def compute_discovery_dates(
     )
 
     # get the orbit_ids which did not have 3 unique nights of data
-    orbit_ids_without_3_nights = set(results.orbit_id.unique().to_pylist()) - set(results_sorted.orbit_id.unique().to_pylist())
+    orbit_ids_without_3_nights = set(results.orbit_id.unique().to_pylist()) - set(
+        results_sorted.orbit_id.unique().to_pylist()
+    )
 
     non_discovery_dates = DiscoveryDates.from_kwargs(
         orbit_id=list(orbit_ids_without_3_nights),
         discovery_date=Timestamp.nulls(
             len(orbit_ids_without_3_nights),
             scale="utc",
-        )
+        ),
     )
 
     discovery_dates = qv.concatenate([discovery_dates, non_discovery_dates])
@@ -150,7 +165,71 @@ def compute_realization_time(
 
     Realization time is defined as the time between discovery and the first window where the orbit's
     impact probability is above the threshold.
+
+    If the object is not discoverable, the realization time is set to null.
+
+    Parameters
+    ----------
+    impactor_orbits: ImpactorOrbits
+        The impactor orbits to compute the realization time for.
+    results: ImpactStudyResults
+        The impact study results to compute the realization time for.
+    discovery_dates: DiscoveryDates
+        The discovery dates for each object.
+    threshold: float, optional
+        The threshold for the impact probability. Default is 1e-9.
+
+    Returns
+    -------
+    RealizationTimes
+        The realization times for each object.
     """
+    results_sorted = results.sort_by(
+        ["orbit_id", "observation_end.days", "observation_end.nanos"]
+    )
+
+    # Filter results to cases where impact probability is above threshold
+    filtered_results = results_sorted.apply_mask(
+        pc.greater_equal(pc.fill_null(results.impact_probability, 0), threshold)
+    )
+
+    # Drop duplicates and keep the first instance
+    filtered_results = filtered_results.drop_duplicates(subset=["orbit_id"])
+
+    # Convert last observation time to an MJD
+    filtered_results_table = filtered_results.flattened_table().append_column(
+        "observation_end_mjd", filtered_results.observation_end.mjd()
+    )
+
+    # Convert discovery date to an MJD
+    discovery_dates_table = discovery_dates.flattened_table().append_column(
+        "discovery_date_mjd", discovery_dates.discovery_date.mjd()
+    )
+
+    # Join with discovery dates to get discovery_time
+    realization_table = (
+        impactor_orbits.flattened_table()
+        .select(["orbit_id"])
+        .join(
+            filtered_results_table.select(["orbit_id", "observation_end_mjd"]),
+            "orbit_id",
+            "orbit_id",
+        )
+    )
+    realization_table = realization_table.join(
+        discovery_dates_table, "orbit_id", "orbit_id"
+    )
+    realization_table = realization_table.append_column(
+        "realization_time",
+        pc.subtract(
+            realization_table["observation_end_mjd"],
+            realization_table["discovery_date_mjd"],
+        ),
+    ).sort_by([("orbit_id", "ascending")])
+
+    return RealizationTimes.from_pyarrow(
+        realization_table.select(["orbit_id", "realization_time"]).combine_chunks()
+    )
 
 
 def plot_ip_over_time(

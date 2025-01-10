@@ -87,6 +87,7 @@ def _create_fo_tmp_directory() -> str:
     tmp_dir = _populate_fo_directory(tmp_dir)
     return tmp_dir
 
+
 def _copy_files_from_tmp_to_fo_dir(fo_tmp_dir: str, fo_dir: str):
     # Selectively copy files from fo_tmp_dir to paths["fo_dir"]
     # Explicitly remove the tmp directory after copying
@@ -106,7 +107,6 @@ def _copy_files_from_tmp_to_fo_dir(fo_tmp_dir: str, fo_dir: str):
     for file in files_to_copy:
         if os.path.exists(os.path.join(fo_tmp_dir, file)):
             shutil.copy2(os.path.join(fo_tmp_dir, file), os.path.join(fo_dir, file))
-
 
 
 def _de440t_exists():
