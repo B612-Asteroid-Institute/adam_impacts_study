@@ -63,7 +63,13 @@ class ImpactorOrbits(qv.Table):
         )
 
 
-class ImpactStudyResults(qv.Table):
+class WindowResult(qv.Table):
+    """
+    Impact results from a select set of observations for a single orbit
+
+    This is the result of fitting an orbit to a subset of observations and
+    then running the impact probability calculation on the orbit.
+    """
     orbit_id = qv.LargeStringColumn()
     object_id = qv.LargeStringColumn(nullable=True)
     observation_start = Timestamp.as_column()

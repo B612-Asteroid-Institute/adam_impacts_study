@@ -166,7 +166,8 @@ BC405_ASTEROIDS=300
    ASTEROID_PERT_LIST=1,2,3,4,10,15,16,31,48,52,65,87,88,451,511,704
    (the order doesn't matter.)  See
    ftp://ssd.jpl.nasa.gov/pub/xfr/gm_Horizons.pck.
-ASTEROID_PERT_LIST=1,2,3,4,10,15,16,31,48,52,65,87,88,451,511,704
+# Using same 16 from sb441-n16.bsp, which ASSIST uses:
+ASTEROID_PERT_LIST=1,3,4,7,10,15,16,31,52,65,70,87,88,107,511,704
 
    By default,  geocentric elements are referred to the J2000 _equator_.
    Everything else (heliocentric and other non-earth-centric) is referred
@@ -258,7 +259,7 @@ IOD_TIMEOUT=20
    directory,  then the local directory.  But using the following line,  you
    can move the 'asteroid_ephemeris.txt' file to a different directory,  and/or
    rename it.
-# BC405_FILENAME=/home/phred/big/asteroid_ephemeris.txt
+# BC405_FILENAME=
 
    I had a request (https://groups.yahoo.com/neo/groups/find_orb/conversations/messages/35)
    for an option to output planetary state vectors at the epoch of the orbital

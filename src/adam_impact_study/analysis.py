@@ -7,7 +7,7 @@ import pyarrow.compute as pc
 import quivr as qv
 from adam_core.time import Timestamp
 
-from adam_impact_study.types import ImpactorOrbits, ImpactStudyResults
+from adam_impact_study.types import ImpactorOrbits, WindowResult
 from adam_impact_study.utils import get_study_paths
 
 logging.basicConfig(level=logging.INFO)
@@ -21,7 +21,7 @@ class WarningTimes(qv.Table):
 
 def compute_warning_time(
     impactor_orbits: ImpactorOrbits,
-    results: ImpactStudyResults,
+    results: WindowResult,
     threshold: float = 1e-4,
 ) -> WarningTimes:
     """
@@ -85,9 +85,9 @@ def compute_warning_time(
 
 
 def plot_ip_over_time(
-    impact_study_results: ImpactStudyResults,
+    impacting_orbits: ImpactorOrbits,
+    impact_study_results: WindowResult,
     run_dir: str,
-    impacting_orbits: "Orbits",
     survey_start: Timestamp | None = None,
 ) -> None:
     """
@@ -114,19 +114,19 @@ def plot_ip_over_time(
     impact_study_results = impact_study_results.apply_mask(
         pc.is_null(impact_study_results.error)
     )
-    object_ids = impact_study_results.object_id.unique().to_pylist()
+    orbit_ids = impact_study_results.orbit_id.unique().to_pylist()
 
-    for object_id in object_ids:
-        paths = get_study_paths(run_dir, object_id)
-        object_dir = paths["object_base_dir"]
-        logger.info(f"Object ID Plotting: {object_id}")
+    for orbit_id in orbit_ids:
+        paths = get_study_paths(run_dir, orbit_id)
+        orbit_dir = paths["orbit_base_dir"]
+        logger.info(f"Orbit ID Plotting: {orbit_id}")
 
         # Create figure with multiple x-axes
         fig, ax1 = plt.subplots()
 
         # Get data for this object
         ips = impact_study_results.apply_mask(
-            pc.equal(impact_study_results.object_id, object_id)
+            pc.equal(impact_study_results.orbit_id, orbit_id)
         )
 
         # Sort by observation end time
@@ -158,7 +158,7 @@ def plot_ip_over_time(
         ax1.set_yticklabels([f"{y_tick:.1f}" for y_tick in y_ticks])
         # Get impact time for this object (30 days after coordinates.time)
         impact_orbit = impacting_orbits.apply_mask(
-            pc.equal(impacting_orbits.object_id, object_id)
+            pc.equal(impacting_orbits.orbit_id, orbit_id)
         )
         if len(impact_orbit) > 0:
             impact_time = impact_orbit.coordinates.time.add_days(30).mjd()[0].as_py()
@@ -211,7 +211,7 @@ def plot_ip_over_time(
             )
             ax3.set_xlabel("Days Since Survey Start")
 
-        plt.title(object_id)
+        plt.title(orbit_id)
         plt.tight_layout()
-        plt.savefig(os.path.join(object_dir, f"IP_{object_id}.png"))
+        plt.savefig(os.path.join(orbit_dir, f"IP_{orbit_id}.png"))
         plt.close()

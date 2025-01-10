@@ -7,7 +7,7 @@ from adam_core.orbits import Orbits
 from adam_core.time import Timestamp
 
 from adam_impact_study.analysis import compute_warning_time, plot_ip_over_time
-from adam_impact_study.types import ImpactorOrbits, ImpactStudyResults
+from adam_impact_study.types import ImpactorOrbits, WindowResult
 
 
 @pytest.fixture
@@ -23,7 +23,7 @@ def impact_study_results():
     observation_nights = [1.0, 2.0, 3.0, 1.0, 2.0, 3.0]
     observations_rejected = [0, 0, 0, 0, 0, 0]
     impact_probabilities = [0.01, 0.02, 0.03, 0.04, 0.05, 0.06]
-    impact_result = ImpactStudyResults.from_kwargs(
+    impact_result = WindowResult.from_kwargs(
         object_id=object_ids,
         observation_start=start_dates,
         observation_end=end_dates,
@@ -102,7 +102,7 @@ def test_compute_warning_time():
     )
 
     # Create test results
-    results = ImpactStudyResults.from_kwargs(
+    results = WindowResult.from_kwargs(
         object_id=["obj1", "obj1", "obj2", "obj3"],
         observation_start=Timestamp.from_mjd([60000, 60010, 60000, 60000]),
         observation_end=Timestamp.from_mjd([60050, 60060, 60150, 60250]),
@@ -156,14 +156,14 @@ def test_compute_warning_time_edge_cases():
         dynamical_class=["APO", "APO", "APO"],
         photometric_properties=None,  # Not needed for this test
     )
-    empty_results = ImpactStudyResults.empty()
+    empty_results = WindowResult.empty()
 
     empty_warning_times = compute_warning_time(impactor_orbits, empty_results)
     assert len(empty_warning_times) == 3
     assert pc.all(pc.is_null(empty_warning_times.column("warning_time"))).as_py()
 
     # Test all probabilities below threshold
-    low_prob_results = ImpactStudyResults.from_kwargs(
+    low_prob_results = WindowResult.from_kwargs(
         object_id=["obj1"],
         observation_start=Timestamp.from_mjd([60000]),
         observation_end=Timestamp.from_mjd([60050]),

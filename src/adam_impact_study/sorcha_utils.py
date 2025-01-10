@@ -15,8 +15,8 @@ from naif_de440 import de440
 from adam_impact_study.conversions import sorcha_output_to_od_observations
 from adam_impact_study.types import ImpactorOrbits, Observations
 
-logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
+logger.setLevel(os.environ.get("ADAM_LOG_LEVEL", "INFO"))
 
 
 class PhotometricProperties(qv.Table):

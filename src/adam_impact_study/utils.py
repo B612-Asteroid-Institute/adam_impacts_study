@@ -49,7 +49,7 @@ def get_study_paths(
     obj_dir = os.path.join(run_dir, orbit_id)
 
     paths = {
-        "object_base_dir": obj_dir,
+        "orbit_base_dir": obj_dir,
         "sorcha_dir": os.path.join(obj_dir, "sorcha"),
     }
 

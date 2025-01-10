@@ -1,11 +1,14 @@
+import os
+
+os.environ["RAY_DEDUP_LOGS"] = "0"
 import argparse
 import logging
-import os
 import sqlite3
 from typing import Optional
 
 import pyarrow as pa
 import pyarrow.compute as pc
+import ray
 from adam_core.orbits import Orbits
 from adam_core.time import Timestamp
 
@@ -21,7 +24,6 @@ def run_impact_study(
     run_dir: str,
     max_processes: int = 1,
     pointing_file: Optional[str] = None,
-    population_config: Optional[str] = None,
     orbit_id: Optional[str] = None,
     seed: Optional[int] = None,
 ) -> None:
@@ -31,7 +33,7 @@ def run_impact_study(
     impactor_orbits = ImpactorOrbits.from_parquet(orbit_file)
 
     if orbit_id:
-        orbit_ids = orbit_id.split(",")
+        orbit_ids = [orbit_id.strip() for orbit_id in orbit_id.split(",")]
         impactor_orbits = impactor_orbits.apply_mask(
             pc.is_in(impactor_orbits.object_id, pa.array(orbit_ids))
         )
@@ -71,7 +73,7 @@ def run_impact_study(
     )
 
     logger.info("Generating plots...")
-    plot_ip_over_time(impact_study_results, run_dir, impactor_orbits, survey_start)
+    plot_ip_over_time(impactor_orbits, impact_study_results, run_dir, survey_start)
     logger.info(f"Results saved to {run_dir}")
 
 
@@ -90,16 +92,20 @@ def main():
     parser.add_argument(
         "--population-config", help="Path to population configuration file"
     )
-    parser.add_argument("--orbit_id", help="Specific orbit ID to process")
+    parser.add_argument("--orbit-id", help="One or more orbit IDs to select out of input orbits, sepearated by commas")
     parser.add_argument("--debug", action="store_true", help="Enable debug logging")
     parser.add_argument("--seed", type=int, help="Seed for Sorcha", default=None)
 
     args = parser.parse_args()
 
+
     if args.debug:
+        print("Debug mode enabled")
         logging.basicConfig(level=logging.DEBUG)
+        os.environ["ADAM_LOG_LEVEL"] = "DEBUG"
     else:
         logging.basicConfig(level=logging.INFO)
+        os.environ["ADAM_LOG_LEVEL"] = "INFO"
 
     run_impact_study(
         args.orbit_file,
