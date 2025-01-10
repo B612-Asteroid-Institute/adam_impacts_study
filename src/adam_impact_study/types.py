@@ -1,5 +1,5 @@
 import quivr as qv
-from adam_core.coordinates import CartesianCoordinates, SphericalCoordinates
+from adam_core.coordinates import CartesianCoordinates, SphericalCoordinates, KeplerianCoordinates
 from adam_core.observers import Observers
 from adam_core.orbits import Orbits
 from adam_core.time import Timestamp
@@ -70,6 +70,8 @@ class ImpactStudyResults(qv.Table):
     impact_probability = qv.Float64Column(nullable=True)
     impact_time = Timestamp.as_column(nullable=True)
     error = qv.LargeStringColumn(nullable=True)
+    car_coordinates = CartesianCoordinates.as_column(nullable=True)
+    kep_coordinates = KeplerianCoordinates.as_column(nullable=True)
 
 
 class ImpactorResults(qv.Table):

@@ -361,41 +361,43 @@ def calculate_impact_probability(
             error=[error],
         )
 
-    try:
-        propagator = propagator_class()
-        orbit.to_parquet(f"{paths['propagated']}/not_propagated.parquet")
-        propagated_30_days_before_impact = propagator.propagate_orbits(
-            orbit,
-            thirty_days_before_impact,
-            covariance=True,
-            covariance_method="monte-carlo",
-            max_processes=max_processes,
-            num_samples=1000,
-            seed=seed,
-        )
-        propagated_30_days_before_impact.to_parquet(
-            f"{paths['propagated']}/orbits.parquet"
-        )
-    except Exception as e:
-        logger.error(f"Error propagating orbits: {e}")
-        return ImpactStudyResults.from_kwargs(
-            orbit_id=[orbit_id],
-            object_id=[object_id],
-            observation_start=start_date,
-            observation_end=end_date,
-            observation_count=[observations_count],
-            observation_nights=[observation_nights],
-            observations_rejected=[len(rejected_observations)],
-            error=[str(e)],
-        )
+    #try:
+    #    propagator = propagator_class()
+    #    orbit.to_parquet(f"{paths['propagated']}/not_propagated.parquet")
+    #    propagated_30_days_before_impact = propagator.propagate_orbits(
+    #        orbit,
+    #        thirty_days_before_impact,
+    #        covariance=True,
+    #        covariance_method="monte-carlo",
+    #        max_processes=max_processes,
+    #        num_samples=1000,
+    #        seed=seed,
+    #    )
+    #    propagated_30_days_before_impact.to_parquet(
+    #        f"{paths['propagated']}/orbits.parquet"
+    #    )
+    # except Exception as e:
+    #     logger.error(f"Error propagating orbits: {e}")
+    #     return ImpactStudyResults.from_kwargs(
+    #         orbit_id=[orbit_id],
+    #         object_id=[object_id],
+    #         observation_start=start_date,
+    #         observation_end=end_date,
+    #         observation_count=[observations_count],
+    #         observation_nights=[observation_nights],
+    #         observations_rejected=[len(rejected_observations)],
+    #         error=[str(e)],
+    #     )
+
+    days_until_impact = int(impactor_orbit.impact_time.mjd()[0].as_py() - orbit.coordinates.time.mjd()[0].as_py()) + 30 
 
     try:
         propagator = propagator_class()
         final_orbit_states, impacts = calculate_impacts(
-            propagated_30_days_before_impact,
-            60,
+            orbit,
+            days_until_impact,
             propagator,
-            num_samples=10000,
+            num_samples=100,
             processes=max_processes,
             seed=seed,
         )
@@ -425,8 +427,9 @@ def calculate_impact_probability(
         observation_nights=[observation_nights],
         observations_rejected=[len(rejected_observations)],
         impact_probability=ip.cumulative_probability,
+        car_coordinates=orbit.coordinates,
+        kep_coordinates=orbit.coordinates.to_keplerian(),
     )
-
 
 # Create remote version
 calculate_impact_probability_remote = ray.remote(calculate_impact_probability)

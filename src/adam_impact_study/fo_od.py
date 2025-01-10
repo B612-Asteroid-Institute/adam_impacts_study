@@ -42,6 +42,7 @@ def _populate_fo_directory(working_dir: str) -> str:
         "efindorb.txt",
         "odd_name.txt",
         "sigma.txt",
+        "mu1.txt",
     ]
 
     # Copy required files to the current directory
