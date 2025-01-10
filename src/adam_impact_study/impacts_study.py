@@ -361,7 +361,7 @@ def calculate_impact_probability(
             error=[error],
         )
 
-    #try:
+    # try:
     #    propagator = propagator_class()
     #    orbit.to_parquet(f"{paths['propagated']}/not_propagated.parquet")
     #    propagated_30_days_before_impact = propagator.propagate_orbits(
@@ -389,7 +389,13 @@ def calculate_impact_probability(
     #         error=[str(e)],
     #     )
 
-    days_until_impact = int(impactor_orbit.impact_time.mjd()[0].as_py() - orbit.coordinates.time.mjd()[0].as_py()) + 30 
+    days_until_impact = (
+        int(
+            impactor_orbit.impact_time.mjd()[0].as_py()
+            - orbit.coordinates.time.mjd()[0].as_py()
+        )
+        + 30
+    )
 
     try:
         propagator = propagator_class()
@@ -430,6 +436,7 @@ def calculate_impact_probability(
         car_coordinates=orbit.coordinates,
         kep_coordinates=orbit.coordinates.to_keplerian(),
     )
+
 
 # Create remote version
 calculate_impact_probability_remote = ray.remote(calculate_impact_probability)

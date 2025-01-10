@@ -166,7 +166,7 @@ BC405_ASTEROIDS=300
    ASTEROID_PERT_LIST=1,2,3,4,10,15,16,31,48,52,65,87,88,451,511,704
    (the order doesn't matter.)  See
    ftp://ssd.jpl.nasa.gov/pub/xfr/gm_Horizons.pck.
-ASTEROID_PERT_LIST=1,2,4,10,3,6,7,15,16,29,52,65,87,88,511,704
+ASTEROID_PERT_LIST=1,2,3,4,10,15,16,31,48,52,65,87,88,451,511,704
 
    By default,  geocentric elements are referred to the J2000 _equator_.
    Everything else (heliocentric and other non-earth-centric) is referred

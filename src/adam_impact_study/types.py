@@ -1,5 +1,9 @@
 import quivr as qv
-from adam_core.coordinates import CartesianCoordinates, SphericalCoordinates, KeplerianCoordinates
+from adam_core.coordinates import (
+    CartesianCoordinates,
+    KeplerianCoordinates,
+    SphericalCoordinates,
+)
 from adam_core.observers import Observers
 from adam_core.orbits import Orbits
 from adam_core.time import Timestamp

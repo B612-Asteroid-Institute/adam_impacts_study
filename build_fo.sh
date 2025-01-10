@@ -35,6 +35,6 @@ cd ../find_orb
 make
 make install
 cd ../.find_orb
-wget ftp://ssd.jpl.nasa.gov/pub/eph/planets/Linux/de430t/linux_p1550p2650.430t
+wget ftp://ssd.jpl.nasa.gov/pub/eph/planets/Linux/de440t/linux_p1550p2650.440t
 cd -
 cd ../..
