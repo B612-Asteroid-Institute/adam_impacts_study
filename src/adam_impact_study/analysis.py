@@ -15,7 +15,7 @@ logger = logging.getLogger(__name__)
 
 
 class WarningTimes(qv.Table):
-    object_id = qv.LargeStringColumn()
+    orbit_id = qv.LargeStringColumn()
     warning_time = qv.Float64Column(nullable=True)
 
 
@@ -48,7 +48,7 @@ def compute_warning_time(
     """
     # Sort results by object_id and observation_end
     results_sorted = results.sort_by(
-        ["object_id", "observation_end.days", "observation_end.nanos"]
+        ["orbit_id", "observation_end.days", "observation_end.nanos"]
     )
 
     # Filter results to cases where impact probability is above threshold
@@ -57,7 +57,7 @@ def compute_warning_time(
     )
 
     # Drop duplicates and keep the first instance
-    filtered_results = filtered_results.drop_duplicates(subset=["object_id"])
+    filtered_results = filtered_results.drop_duplicates(subset=["orbit_id"])
 
     # Convert last observation time to an MJD
     filtered_results = filtered_results.flattened_table().append_column(
@@ -67,9 +67,9 @@ def compute_warning_time(
     # Join with impactor orbits to get impact time
     impactors_table_time = impactor_orbits.table.append_column(
         "impact_time_mjd", impactor_orbits.impact_time.mjd()
-    ).select(["object_id", "impact_time_mjd"])
+    ).select(["orbit_id", "impact_time_mjd"])
     impactors_table_time = impactors_table_time.join(
-        filtered_results, "object_id", "object_id"
+        filtered_results, "orbit_id", "orbit_id"
     )
     impactors_table_time = impactors_table_time.append_column(
         "warning_time",
@@ -80,8 +80,77 @@ def compute_warning_time(
     )
 
     return WarningTimes.from_pyarrow(
-        impactors_table_time.select(["object_id", "warning_time"]).combine_chunks()
+        impactors_table_time.select(["orbit_id", "warning_time"]).combine_chunks()
     )
+
+
+class DiscoveryDates(qv.Table):
+    orbit_id = qv.LargeStringColumn()
+    discovery_date = Timestamp.as_column(nullable=True)
+
+
+def compute_discovery_dates(
+    impactor_orbits: ImpactorOrbits,
+    results: WindowResult,
+) -> DiscoveryDates:
+    """
+    Return when each object is considered to be discoverable.
+
+    TODO: Define what "discoverable" means in more detail.
+    """
+    # For now, we will consider an object discoverable if it has 3 unique nights of data
+    results_sorted = results.sort_by(
+        ["orbit_id", "observation_end.days", "observation_end.nanos"]
+    )
+
+
+    
+    # only consider the first 3 nights of data
+    results_sorted = results_sorted.apply_mask(
+        pc.greater_equal(results_sorted.observation_nights, 3)
+    )
+
+
+    results_sorted = results_sorted.drop_duplicates(subset=["orbit_id"], keep="first")
+
+    discovery_dates = DiscoveryDates.from_kwargs(
+        orbit_id=results_sorted.orbit_id,
+        discovery_date=results_sorted.observation_end,
+    )
+
+    # get the orbit_ids which did not have 3 unique nights of data
+    orbit_ids_without_3_nights = set(results.orbit_id.unique().to_pylist()) - set(results_sorted.orbit_id.unique().to_pylist())
+
+    non_discovery_dates = DiscoveryDates.from_kwargs(
+        orbit_id=list(orbit_ids_without_3_nights),
+        discovery_date=Timestamp.nulls(
+            len(orbit_ids_without_3_nights),
+            scale="utc",
+        )
+    )
+
+    discovery_dates = qv.concatenate([discovery_dates, non_discovery_dates])
+
+    return discovery_dates
+
+
+class RealizationTimes(qv.Table):
+    orbit_id = qv.LargeStringColumn()
+    realization_time = qv.Float64Column(nullable=True)
+
+
+def compute_realization_time(
+    impactor_orbits: ImpactorOrbits,
+    results: WindowResult,
+    discovery_dates: DiscoveryDates,
+    threshold: float = 1e-9,
+) -> RealizationTimes:
+    """
+    Compute the realization time for each object using their impact study results and their impact time.
+
+    Realization time is defined as the time between discovery and the first window where the orbit's
+    impact probability is above the threshold.
+    """
 
 
 def plot_ip_over_time(

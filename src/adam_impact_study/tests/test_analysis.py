@@ -6,7 +6,11 @@ from adam_core.coordinates import CartesianCoordinates, Origin
 from adam_core.orbits import Orbits
 from adam_core.time import Timestamp
 
-from adam_impact_study.analysis import compute_warning_time, plot_ip_over_time
+from adam_impact_study.analysis import (
+    compute_discovery_dates,
+    compute_warning_time,
+    plot_ip_over_time,
+)
 from adam_impact_study.types import ImpactorOrbits, WindowResult
 
 
@@ -80,6 +84,66 @@ def test_plot_ip_over_time(impact_study_results, impacting_orbits, tmpdir):
         assert os.path.exists(os.path.join(tmpdir_path, f"{obj_id}/IP_{obj_id}.png"))
 
     print(tmpdir_path)
+
+
+def test_compute_discovery_dates():
+    # Create test impactor orbits
+    impactor_orbits = ImpactorOrbits.from_kwargs(
+        orbit_id=["test1", "test2", "test3"],
+        object_id=["obj1", "obj2", "obj3"],
+        coordinates=CartesianCoordinates.from_kwargs(
+            x=[1, 1, 1],
+            y=[1, 1, 1], 
+            z=[1, 1, 1],
+            vx=[0, 0, 0],
+            vy=[0, 0, 0],
+            vz=[0, 0, 0],
+            time=Timestamp.from_mjd([60000, 60000, 60000]),
+        ),
+        impact_time=Timestamp.from_mjd([60100, 60200, 60300]),
+        dynamical_class=["APO", "APO", "APO"],
+        ast_class=["APO", "APO", "APO"],
+        diameter=[1.0, 1.0, 1.0],
+        albedo=[0.1, 0.1, 0.1],
+        H_r=[20.0, 20.0, 20.0],
+        u_r=[0.0, 0.0, 0.0],
+        g_r=[0.0, 0.0, 0.0],
+        i_r=[0.0, 0.0, 0.0],
+        z_r=[0.0, 0.0, 0.0],
+        y_r=[0.0, 0.0, 0.0],
+        GS=[0.15, 0.15, 0.15]
+    )
+
+    # Create test results with varying observation nights
+    results = WindowResult.from_kwargs(
+        orbit_id=["test1", "test1", "test2", "test2", "test3"],
+        object_id=["obj1", "obj1", "obj2", "obj2", "obj3"],
+        observation_start=Timestamp.from_mjd([60000, 60000, 60000, 60010, 60000], scale="utc"),
+        observation_end=Timestamp.from_mjd([60002, 60012, 60002, 60012, 60002], scale="utc"),
+        observation_count=[10, 15, 5, 8, 3],
+        observations_rejected=[0, 0, 0, 0, 0],
+        observation_nights=[2, 4, 1, 2, 1],  # obj1 has 4 nights, obj2 has 2, obj3 has 1
+        impact_probability=[0.1, 0.2, 0.1, 0.2, 0.1],
+        impact_time=Timestamp.from_mjd([60100, 60100, 60200, 60200, 60300], scale="utc"),
+        error=[None, None, None, None, None],
+        car_coordinates=None,
+        kep_coordinates=None
+    )
+
+    # Compute discovery dates
+    discovery_dates = compute_discovery_dates(impactor_orbits, results)
+
+    # Check we got results for all objects
+    assert len(discovery_dates) == 3
+
+    # Only obj1 should have a discovery date since it's the only one with >= 3 nights
+    obj1_date = discovery_dates.select("orbit_id", "test1").discovery_date[0]
+    assert obj1_date is not None
+    assert obj1_date.equals(Timestamp.from_mjd([60012], scale="utc")).to_pylist()[0]  # Should be the end time of the window with 4 nights
+
+    # obj2 and obj3 should have null discovery dates
+    assert pc.all(discovery_dates.select("orbit_id", "test2").discovery_date.null_mask())
+    assert pc.all(discovery_dates.select("orbit_id", "test3").discovery_date.null_mask())
 
 
 def test_compute_warning_time():

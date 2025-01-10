@@ -84,19 +84,33 @@ class WindowResult(qv.Table):
     kep_coordinates = KeplerianCoordinates.as_column(nullable=True)
 
 
-class ImpactorResults(qv.Table):
+class ImpactorResultSummary(qv.Table):
     orbit_id = qv.LargeStringColumn()
     object_id = qv.LargeStringColumn(nullable=True)
     impact_time = Timestamp.as_column()
+    # Number of distinct orbit fitting windows
     windows = qv.Int64Column()
+    # Number of distinct nights of observations
     nights = qv.Int64Column()
+    # Number of distinct observations recovered
     observations = qv.Int64Column()
+    # Number of singletons from observations recovered
     singletons = qv.Int64Column()
+    # Number of tracklets from observations recovered
     tracklets = qv.Int64Column()
+    # Whether the object was observed at all
     observed = qv.BooleanColumn(default=False)
+    # Whether the object was discovered during the run
     discovered = qv.BooleanColumn(default=False)
+    # Time when observations met minimum artificial discovery criteria
+    # Currently set to 3 unique nights of tracklets
     discovery_time = Timestamp.as_column(nullable=True)
+    # Duration in days since the first non-zero impact probability
+    # until true impact date
     warning_time = qv.Float64Column(nullable=True)
+    # Time between discovery and non-zero impact probability
+    # (note, this is partially a function of our monte-carlo sampling)
     realization_time = qv.Float64Column(nullable=True)
+    # How close all the windows got to discovering the definite impact nature
     maximum_impact_probability = qv.Float64Column(nullable=True)
     error = qv.LargeStringColumn(nullable=True)
