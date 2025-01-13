@@ -23,11 +23,9 @@ logger = logging.getLogger(__name__)
 def run_impact_study(
     orbit_file: str,
     run_dir: str,
-    run_config: str,
-    max_processes: int = 1,
+    run_config: RunConfiguration,
     pointing_file: Optional[str] = None,
     orbit_id: Optional[str] = None,
-    seed: Optional[int] = None,
 ) -> None:
     """Run impact study on provided orbits."""
     # Load orbits directly from parquet
@@ -61,13 +59,12 @@ def run_impact_study(
 
     logger.info(f"Processing {len(impactor_orbits)} orbits")
 
-    # Load run configuration
-    run_config = RunConfiguration.from_json(run_config)
-    logger.info(f"Run configuration: {asdict(run_config)}")
-    run_config.to_json(os.path.join(run_dir, "run_config.json"))
-
     # Create output directory
     os.makedirs(run_dir, exist_ok=True)
+
+    # Load run configuration
+    logger.info(f"Run configuration: {asdict(run_config)}")
+    run_config.to_json(os.path.join(run_dir, "run_config.json"))
 
     # Run impact study
     logger.info("Starting impact study...")
@@ -80,7 +77,7 @@ def run_impact_study(
         assist_adaptive_mode=run_config.assist_adaptive_mode,
         assist_epsilon=run_config.assist_epsilon,
         monte_carlo_samples=run_config.monte_carlo_samples,
-        max_processes=max_processes,
+        max_processes=run_config.max_processes,
         seed=run_config.seed,
     )
 
@@ -94,20 +91,26 @@ def main():
     parser = argparse.ArgumentParser(description="Run impact study")
     parser.add_argument("orbit_file", help="Path to orbit file (parquet format)")
     parser.add_argument("run_dir", help="Directory for this study run")
+    parser.add_argument("--pointing-file", help="Path to pointing database file")
+    parser.add_argument("--run-config", help="Path to run configuration file")
     parser.add_argument(
         "--max-processes",
         type=int,
-        default=1,
-        help="Maximum number of processes to use",
+        default=None,
+        help="Maximum number of processes to use (override run config)",
     )
-    parser.add_argument("--run-config", help="Path to run configuration file")
-    parser.add_argument("--pointing-file", help="Path to pointing database file")
+    parser.add_argument(
+        "--seed",
+        type=int,
+        help="Seed for pipeline (override value in run config)",
+        default=None,
+    )
+
     parser.add_argument(
         "--orbit-id",
         help="One or more orbit IDs to select out of input orbits, sepearated by commas",
     )
     parser.add_argument("--debug", action="store_true", help="Enable debug logging")
-    parser.add_argument("--seed", type=int, help="Seed for Sorcha", default=None)
 
     args = parser.parse_args()
 
@@ -118,14 +121,33 @@ def main():
         logging.basicConfig(level=logging.INFO)
         os.environ["ADAM_LOG_LEVEL"] = "INFO"
 
+    if args.run_config is None:
+        run_config = RunConfiguration(
+            monte_carlo_samples=1000,
+            assist_epsilon=1e-6,
+            assist_min_dt=1e-9,
+            assist_initial_dt=1e-6,
+            assist_adaptive_mode=1,
+            seed=612,
+            max_processes=1,
+        )
+    else:
+        run_config = RunConfiguration.from_json(args.run_config)
+
+    if args.seed is not None:
+        run_config.seed = args.seed
+        logger.info(f"Overriding run config seed {args.seed}.")
+
+    if args.max_processes is not None:
+        run_config.max_processes = args.max_processes
+        logger.info(f"Overriding run config max processes {args.max_processes}.")
+
     run_impact_study(
         args.orbit_file,
         args.run_dir,
-        run_config=args.run_config,
-        max_processes=args.max_processes,
+        run_config=run_config,
         pointing_file=args.pointing_file,
         orbit_id=args.orbit_id,
-        seed=args.seed,
     )
 
 
