@@ -8,6 +8,7 @@ import pytest
 from adam_core.coordinates import CartesianCoordinates, KeplerianCoordinates, Origin
 from adam_core.orbits import Orbits
 from adam_core.time import Timestamp
+from adam_impact_study.types import ImpactorOrbits
 
 from adam_impact_study.sorcha_utils import (
     PhotometricProperties,
@@ -19,7 +20,7 @@ from adam_impact_study.sorcha_utils import (
 
 
 def test_write_config_file_timeframe(tmpdir):
-    impact_date = 59580.0
+    impact_date = Timestamp.from_mjd([59580.0], scale="utc")
     config_file = tmpdir.join("config.txt")
     written_file = write_config_file_timeframe(impact_date, config_file)
 
@@ -32,7 +33,7 @@ def test_write_config_file_timeframe(tmpdir):
         f"SELECT observationId, observationStartMJD as observationStartMJD_TAI, visitTime, visitExposureTime, filter, "
         f"seeingFwhmGeom as seeingFwhmGeom_arcsec, seeingFwhmEff as seeingFwhmEff_arcsec, fiveSigmaDepth as fieldFiveSigmaDepth_mag , "
         f"fieldRA as fieldRA_deg, fieldDec as fieldDec_deg, rotSkyPos as fieldRotSkyPos_deg FROM observations "
-        f"WHERE observationStartMJD < {impact_date} ORDER BY observationId"
+        f"WHERE observationStartMJD < {impact_date.rescale('tai').mjd()[0].as_py()} ORDER BY observationId"
     )
     assert pointing_command in content
 
@@ -54,6 +55,28 @@ def mock_orbits():
         orbit_id=["Object1"], object_id=["Object1"], coordinates=cartesian_coords
     )
     return orbits
+
+
+@pytest.fixture
+def mock_impactor_orbits(mock_orbits):
+    impactor_orbits = ImpactorOrbits.from_kwargs(
+        orbit_id = ["ObjA", "ObjB", "ObjC"],
+        object_id = ["ObjA", "ObjB", "ObjC"],
+        coordinates = mock_orbits.coordinates.take([0, 0, 0]),
+        impact_time = Timestamp.from_mjd([60000, 60000, 60000], scale="tai"),
+        dynamical_class = ["Apollo", "Apollo", "Apollo"],
+        ast_class = ["S", "C", "S"],
+        diameter = [0.01, 0.1, 1],
+        albedo = [0.1, 0.2, 0.3],
+        H_r = [15.01, 16.012, 17.03],
+        u_r = [1.71, 1.72, 1.73],
+        g_r = [0.50, 0.51, 0.52],
+        i_r = [-0.11, -0.12, -0.13],
+        z_r = [-0.11, -0.12, -0.13],
+        y_r = [-0.11, -0.12, -0.13],
+        GS = [0.15, 0.16, 0.17],
+    )
+    return impactor_orbits
 
 
 def test_write_sorcha_orbits_file(mock_orbits, tmpdir):
@@ -95,7 +118,7 @@ def test_write_sorcha_orbits_file(mock_orbits, tmpdir):
 @pytest.fixture
 def mock_photometric_properties() -> PhotometricProperties:
     data = {
-        "ObjID": ["ObjA", "ObjB", "ObjC"],
+        "orbit_id": ["ObjA", "ObjB", "ObjC"],
         "H_mf": [15.01, 16.012, 17.03],
         "u_mf": [1.71, 1.72, 1.73],
         "g_mf": [0.50, 0.51, 0.52],
@@ -110,61 +133,56 @@ def mock_photometric_properties() -> PhotometricProperties:
 def test_write_phys_params_file(tmpdir, mock_photometric_properties):
     sorcha_physical_params_file = os.path.join(tmpdir, "physical_params.txt")
     write_phys_params_file(
-        mock_photometric_properties, sorcha_physical_params_file, main_filter="r"
+        mock_photometric_properties, sorcha_physical_params_file, filter_band="r"
     )
     assert os.path.exists(sorcha_physical_params_file)
 
     read_table = pa.csv.read_csv(
         sorcha_physical_params_file, parse_options=pa.csv.ParseOptions(delimiter=" ")
     )
-    expected_table = pa.Table.from_pandas(mock_physical_params_df)
+    expected_table = pa.table({
+        "ObjID": ["ObjA", "ObjB", "ObjC"],
+        "H_r": [15.01, 16.012, 17.03],
+        "u-r": [1.71, 1.72, 1.73],
+        "g-r": [0.50, 0.51, 0.52],
+        "i-r": [-0.11, -0.12, -0.13],
+        "z-r": [-0.11, -0.12, -0.13],
+        "y-r": [-0.11, -0.12, -0.13],
+        "GS": [0.15, 0.16, 0.17],
+    })
     assert expected_table.equals(read_table)
 
 
-@patch("subprocess.run")
-def test_run_sorcha(mock_subprocess_run, tmpdir, mock_orbits, mock_physical_params_df):
-    config_file = tmpdir.join("config_file.cfg")
-    orbits_file = tmpdir.join("orbits.csv")
-    physical_params_file = tmpdir.join("physical_params.csv")
-    pointing_file = tmpdir.join("pointing_file.txt")
-    output_dir = tmpdir.join("output_dir")
+@patch('adam_impact_study.sorcha_utils.write_sorcha_orbits_file')
+@patch('adam_impact_study.sorcha_utils.write_phys_params_file')
+@patch('adam_impact_study.sorcha_utils.write_config_file_timeframe')
+@patch('subprocess.run')
+def test_run_sorcha(mock_subprocess, mock_config, mock_params, mock_orbits_write, mock_impactor_orbits, tmpdir):
+    """Test that run_sorcha calls all the necessary functions with correct arguments"""
+    single_impactor = mock_impactor_orbits.take([0])
+    pointing_file = str(tmpdir.join("pointing.db"))
+    working_dir = str(tmpdir.mkdir("working"))
+    seed = 612
 
-    sorcha_output_dir = output_dir.join("sorcha_output")
-    os.makedirs(sorcha_output_dir, exist_ok=True)
-    sorcha_output_file = sorcha_output_dir.join("output_file.txt")
+    run_sorcha(single_impactor, pointing_file, working_dir, seed)
 
-    # Write dummy file to simulate sorcha output
-    with open(sorcha_output_file, "w") as f:
-        f.write(
-            "ObjID,fieldMJD_TAI,fieldRA_deg,fieldDec_deg,RA_deg,Dec_deg,astrometricSigma_deg,optFilter,trailedSourceMag,trailedSourceMagSigma,fiveSigmaDepth_mag,phase_deg\n"
-        )
-        f.write(
-            "Test_1001,60001.12345678912,340.1234567,-7.1234567,341.1234567,-8.1234567,1.12e-05,i,21.123,0.123,22.123,18.12345678912345\n"
-        )
-        f.write(
-            "Test_1001,60002.12345678912,341.1234567,-6.1234567,342.1234567,-7.1234567,2.12e-05,r,21.123,0.123,23.123,19.12345678912345\n"
-        )
-        f.write(
-            "Test_1001,60003.12345678912,342.1234567,-5.1234567,343.1234567,-6.1234567,3.12e-05,z,21.123,0.123,24.123,20.12345678912345\n"
-        )
-        f.write(
-            "Test_1002,60005.12345678912,344.1234567,-4.1234567,345.1234567,-5.1234567,8.12e-06,r,22.123,0.123,24.123,20.12345678912345\n"
-        )
-        f.write(
-            "Test_1002,60006.12345678912,345.1234567,-3.1234567,346.1234567,-4.1234567,9.12e-06,i,23.123,0.123,25.123,21.12345678912345\n"
-        )
-
-    run_sorcha(
-        mock_orbits,
-        config_file,
-        orbits_file,
-        physical_params_file,
-        "output_file.txt",
-        pointing_file,
-        "sorcha_output",
-        output_dir,
+    # Verify the file writing functions were called correctly
+    mock_orbits_write.assert_called_once_with(single_impactor.orbits(), f"{working_dir}/orbits.csv")
+    mock_params.assert_called_once_with(
+        single_impactor.photometric_properties(), 
+        f"{working_dir}/params.csv", 
+        filter_band="r"
+    )
+    mock_config.assert_called_once_with(
+        single_impactor.impact_time,
+        f"{working_dir}/config.ini"
     )
 
-    # Check that subprocess.run was called with the correct command
-    expected_command = f"sorcha run -c {config_file} -p {physical_params_file} -ob {orbits_file} -pd {pointing_file} -o {output_dir}/sorcha_output -t sorcha_output -f"
-    mock_subprocess_run.assert_called_once_with(expected_command, shell=True)
+    # Check the sorcha command is correct
+    expected_command = (
+        f"SORCHA_SEED={seed} "
+        f"sorcha run -c {working_dir}/config.ini -p {working_dir}/params.csv "
+        f"--orbits {working_dir}/orbits.csv --pointing-db {pointing_file} "
+        f"-o {working_dir} --stem observations -f"
+    )
+    mock_subprocess.assert_called_once_with(expected_command, shell=True)
