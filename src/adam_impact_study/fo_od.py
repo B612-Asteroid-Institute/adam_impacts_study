@@ -89,7 +89,7 @@ def _create_fo_tmp_directory() -> str:
 
 
 def _copy_files_from_tmp_to_fo_dir(fo_tmp_dir: str, fo_dir: str):
-    # Selectively copy files from fo_tmp_dir to paths["fo_dir"]
+    # Selectively copy files from fo_tmp_dir to fo_dir
     # Explicitly remove the tmp directory after copying
     files_to_copy = [
         "covar.txt",
@@ -118,7 +118,7 @@ def _de440t_exists():
 
 def run_fo_od(
     observations: Observations,
-    paths: dict,
+    fo_result_dir: str,
 ) -> Tuple[Orbits, ADESObservations, Optional[str]]:
     """Run Find_Orb orbit determination with directory-based paths
 
@@ -126,8 +126,8 @@ def run_fo_od(
     ----------
     observations : Observations
         Observations to process
-    paths : dict
-        Dictionary containing paths for input/output files, as returned by get_study_paths()
+    fo_result_dir : str
+        Directory where Find_Orb output files will be written
 
     Returns
     -------
@@ -172,7 +172,7 @@ def run_fo_od(
     )
     logger.debug(f"{result.stdout}\n{result.stderr}")
 
-    _copy_files_from_tmp_to_fo_dir(fo_tmp_dir, paths["fo_dir"])
+    _copy_files_from_tmp_to_fo_dir(fo_tmp_dir, fo_result_dir)
     # Remove the tmp directory after copying because it has
     # some large files in it that we don't need
     shutil.rmtree(fo_tmp_dir)
@@ -182,8 +182,8 @@ def run_fo_od(
         logger.warning(f"{result.stdout}\n{result.stderr}")
         return Orbits.empty(), ADESObservations.empty(), "Find_Orb failed"
 
-    if not os.path.exists(f"{paths['fo_dir']}/covar.json") or not os.path.exists(
-        f"{paths['fo_dir']}/total.json"
+    if not os.path.exists(f"{fo_result_dir}/covar.json") or not os.path.exists(
+        f"{fo_result_dir}/total.json"
     ):
         logger.warning("Find_Orb failed, covar.json or total.json file not found")
         return (
@@ -192,7 +192,7 @@ def run_fo_od(
             "Find_Orb failed, covar.json or total.json file not found",
         )
 
-    orbit = fo_to_adam_orbit_cov(paths["fo_dir"])
-    rejected = rejected_observations_from_fo(paths["fo_dir"])
+    orbit = fo_to_adam_orbit_cov(fo_result_dir)
+    rejected = rejected_observations_from_fo(fo_result_dir)
 
     return orbit, rejected, None

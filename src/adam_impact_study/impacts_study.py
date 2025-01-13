@@ -94,7 +94,7 @@ def run_impact_study_all(
         orbit_seed = seed_from_string(orbit_id.as_py(), seed)
 
         if max_processes == 1:
-            impact_result = run_impact_study_fo(
+            impact_result = run_impact_study_for_orbit(
                 impactor_orbit,
                 ImpactASSISTPropagator,
                 pointing_file,
@@ -148,7 +148,7 @@ def get_observation_windows(
         yield filtered_obs
 
 
-def run_impact_study_fo(
+def run_impact_study_for_orbit(
     impactor_orbit: ImpactorOrbits,
     propagator_class: Type[ASSISTPropagator],
     pointing_file: str,
@@ -222,7 +222,7 @@ def run_impact_study_fo(
         observations_window = observations.apply_mask(mask)
 
         if max_processes == 1:
-            result = calculate_impact_probability(
+            result = calculate_window_impact_probability(
                 observations_window,
                 impactor_orbit,
                 propagator_class,
@@ -239,7 +239,7 @@ def run_impact_study_fo(
 
         else:
             futures.append(
-                calculate_impact_probability_remote.remote(
+                calculate_window_impact_probability_remote.remote(
                     observations_window,
                     impactor_orbit,
                     propagator_class,
@@ -272,10 +272,10 @@ def run_impact_study_fo(
     return results
 
 
-run_impact_study_fo_remote = ray.remote(run_impact_study_fo)
+run_impact_study_fo_remote = ray.remote(run_impact_study_for_orbit)
 
 
-def calculate_impact_probability(
+def calculate_window_impact_probability(
     observations: Observations,
     impactor_orbit: ImpactorOrbits,
     propagator_class: Type[ASSISTPropagator],
@@ -335,7 +335,7 @@ def calculate_impact_probability(
     try:
         orbit, rejected_observations, error = run_fo_od(
             observations,
-            paths,
+            paths["fo_dir"],
         )
     except Exception as e:
         return WindowResult.from_kwargs(
@@ -409,6 +409,7 @@ def calculate_impact_probability(
         final_orbit_states.to_parquet(
             f"{paths['propagated']}/monte_carlo_variant_states.parquet"
         )
+        impacts.to_parquet(f"{paths['propagated']}/impacts.parquet")
 
         ip = calculate_impact_probabilities(final_orbit_states, impacts)
     except Exception as e:
@@ -438,4 +439,4 @@ def calculate_impact_probability(
 
 
 # Create remote version
-calculate_impact_probability_remote = ray.remote(calculate_impact_probability)
+calculate_window_impact_probability_remote = ray.remote(calculate_window_impact_probability)
