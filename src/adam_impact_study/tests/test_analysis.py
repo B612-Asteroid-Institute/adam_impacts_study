@@ -136,12 +136,17 @@ def test_compute_discovery_dates():
         observations_rejected=[0, 0, 0, 0, 0],
         observation_nights=[2, 4, 1, 2, 1],  # obj1 has 4 nights, obj2 has 2, obj3 has 1
         impact_probability=[0.1, 0.2, 0.1, 0.2, 0.1],
-        impact_time=Timestamp.from_mjd(
+        mean_impact_time=Timestamp.from_mjd(
             [60100, 60100, 60200, 60200, 60300], scale="utc"
         ),
+        minimum_impact_time=Timestamp.from_mjd(
+            [60100, 60100, 60200, 60200, 60300], scale="utc"
+        ),
+        maximum_impact_time=Timestamp.from_mjd(
+            [60100, 60100, 60200, 60200, 60300], scale="utc"
+        ),
+        stddev_impact_time=[0.0, 0.0, 0.0, 0.0, 0.0],
         error=[None, None, None, None, None],
-        car_coordinates=None,
-        kep_coordinates=None,
     )
 
     # Compute discovery dates

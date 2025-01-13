@@ -8,7 +8,6 @@ import pytest
 from adam_core.coordinates import CartesianCoordinates, KeplerianCoordinates, Origin
 from adam_core.orbits import Orbits
 from adam_core.time import Timestamp
-from adam_impact_study.types import ImpactorOrbits
 
 from adam_impact_study.sorcha_utils import (
     PhotometricProperties,
@@ -17,6 +16,7 @@ from adam_impact_study.sorcha_utils import (
     write_phys_params_file,
     write_sorcha_orbits_file,
 )
+from adam_impact_study.types import ImpactorOrbits
 
 
 def test_write_config_file_timeframe(tmpdir):
@@ -60,21 +60,21 @@ def mock_orbits():
 @pytest.fixture
 def mock_impactor_orbits(mock_orbits):
     impactor_orbits = ImpactorOrbits.from_kwargs(
-        orbit_id = ["ObjA", "ObjB", "ObjC"],
-        object_id = ["ObjA", "ObjB", "ObjC"],
-        coordinates = mock_orbits.coordinates.take([0, 0, 0]),
-        impact_time = Timestamp.from_mjd([60000, 60000, 60000], scale="tai"),
-        dynamical_class = ["Apollo", "Apollo", "Apollo"],
-        ast_class = ["S", "C", "S"],
-        diameter = [0.01, 0.1, 1],
-        albedo = [0.1, 0.2, 0.3],
-        H_r = [15.01, 16.012, 17.03],
-        u_r = [1.71, 1.72, 1.73],
-        g_r = [0.50, 0.51, 0.52],
-        i_r = [-0.11, -0.12, -0.13],
-        z_r = [-0.11, -0.12, -0.13],
-        y_r = [-0.11, -0.12, -0.13],
-        GS = [0.15, 0.16, 0.17],
+        orbit_id=["ObjA", "ObjB", "ObjC"],
+        object_id=["ObjA", "ObjB", "ObjC"],
+        coordinates=mock_orbits.coordinates.take([0, 0, 0]),
+        impact_time=Timestamp.from_mjd([60000, 60000, 60000], scale="tai"),
+        dynamical_class=["Apollo", "Apollo", "Apollo"],
+        ast_class=["S", "C", "S"],
+        diameter=[0.01, 0.1, 1],
+        albedo=[0.1, 0.2, 0.3],
+        H_r=[15.01, 16.012, 17.03],
+        u_r=[1.71, 1.72, 1.73],
+        g_r=[0.50, 0.51, 0.52],
+        i_r=[-0.11, -0.12, -0.13],
+        z_r=[-0.11, -0.12, -0.13],
+        y_r=[-0.11, -0.12, -0.13],
+        GS=[0.15, 0.16, 0.17],
     )
     return impactor_orbits
 
@@ -140,24 +140,33 @@ def test_write_phys_params_file(tmpdir, mock_photometric_properties):
     read_table = pa.csv.read_csv(
         sorcha_physical_params_file, parse_options=pa.csv.ParseOptions(delimiter=" ")
     )
-    expected_table = pa.table({
-        "ObjID": ["ObjA", "ObjB", "ObjC"],
-        "H_r": [15.01, 16.012, 17.03],
-        "u-r": [1.71, 1.72, 1.73],
-        "g-r": [0.50, 0.51, 0.52],
-        "i-r": [-0.11, -0.12, -0.13],
-        "z-r": [-0.11, -0.12, -0.13],
-        "y-r": [-0.11, -0.12, -0.13],
-        "GS": [0.15, 0.16, 0.17],
-    })
+    expected_table = pa.table(
+        {
+            "ObjID": ["ObjA", "ObjB", "ObjC"],
+            "H_r": [15.01, 16.012, 17.03],
+            "u-r": [1.71, 1.72, 1.73],
+            "g-r": [0.50, 0.51, 0.52],
+            "i-r": [-0.11, -0.12, -0.13],
+            "z-r": [-0.11, -0.12, -0.13],
+            "y-r": [-0.11, -0.12, -0.13],
+            "GS": [0.15, 0.16, 0.17],
+        }
+    )
     assert expected_table.equals(read_table)
 
 
-@patch('adam_impact_study.sorcha_utils.write_sorcha_orbits_file')
-@patch('adam_impact_study.sorcha_utils.write_phys_params_file')
-@patch('adam_impact_study.sorcha_utils.write_config_file_timeframe')
-@patch('subprocess.run')
-def test_run_sorcha(mock_subprocess, mock_config, mock_params, mock_orbits_write, mock_impactor_orbits, tmpdir):
+@patch("adam_impact_study.sorcha_utils.write_sorcha_orbits_file")
+@patch("adam_impact_study.sorcha_utils.write_phys_params_file")
+@patch("adam_impact_study.sorcha_utils.write_config_file_timeframe")
+@patch("subprocess.run")
+def test_run_sorcha(
+    mock_subprocess,
+    mock_config,
+    mock_params,
+    mock_orbits_write,
+    mock_impactor_orbits,
+    tmpdir,
+):
     """Test that run_sorcha calls all the necessary functions with correct arguments"""
     single_impactor = mock_impactor_orbits.take([0])
     pointing_file = str(tmpdir.join("pointing.db"))
@@ -167,15 +176,16 @@ def test_run_sorcha(mock_subprocess, mock_config, mock_params, mock_orbits_write
     run_sorcha(single_impactor, pointing_file, working_dir, seed)
 
     # Verify the file writing functions were called correctly
-    mock_orbits_write.assert_called_once_with(single_impactor.orbits(), f"{working_dir}/orbits.csv")
+    mock_orbits_write.assert_called_once_with(
+        single_impactor.orbits(), f"{working_dir}/orbits.csv"
+    )
     mock_params.assert_called_once_with(
-        single_impactor.photometric_properties(), 
-        f"{working_dir}/params.csv", 
-        filter_band="r"
+        single_impactor.photometric_properties(),
+        f"{working_dir}/params.csv",
+        filter_band="r",
     )
     mock_config.assert_called_once_with(
-        single_impactor.impact_time,
-        f"{working_dir}/config.ini"
+        single_impactor.impact_time, f"{working_dir}/config.ini"
     )
 
     # Check the sorcha command is correct

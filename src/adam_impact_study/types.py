@@ -148,7 +148,6 @@ class RunConfiguration:
     def from_json(cls, json_file: str) -> "RunConfiguration":
         with open(json_file, "r") as f:
             return cls(**json.load(f))
-    
 
     def to_json(self, json_file: str) -> None:
         with open(json_file, "w") as f:

@@ -27,7 +27,7 @@ from adam_impact_study.types import (
 )
 from adam_impact_study.utils import get_study_paths
 
-from .utils import seed_from_string, window_name_from_observations
+from .utils import seed_from_string
 
 logger = logging.getLogger(__name__)
 
@@ -202,6 +202,9 @@ def run_impact_study_for_orbit(
         paths["sorcha_dir"],
         seed=seed,
     )
+
+    # Serialize the observations to a file for future analysis use
+    observations.to_parquet(f"{paths['sorcha_dir']}/observations.parquet")
 
     if len(observations) == 0:
         return WindowResult.empty()
@@ -429,6 +432,7 @@ def calculate_window_impact_probability(
         impacts.to_parquet(f"{paths['propagated']}/impacts.parquet")
 
         ip = calculate_impact_probabilities(final_orbit_states, impacts)
+
     except Exception as e:
         return WindowResult.from_kwargs(
             orbit_id=[orbit_id],

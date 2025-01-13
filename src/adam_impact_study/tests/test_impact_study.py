@@ -1,11 +1,17 @@
 import logging
 from unittest.mock import patch
 
+import numpy as np
 import pandas as pd
 import pyarrow.compute as pc
 import pytest
 from adam_assist import ASSISTPropagator
-from adam_core.coordinates import CartesianCoordinates, Origin, SphericalCoordinates
+from adam_core.coordinates import (
+    CartesianCoordinates,
+    CoordinateCovariances,
+    Origin,
+    SphericalCoordinates,
+)
 from adam_core.dynamics.impacts import EarthImpacts, ImpactProbabilities
 from adam_core.observations.ades import ADESObservations
 from adam_core.observers import Observers
@@ -58,6 +64,62 @@ def impactor_orbits():
         vz=[-0.0000083965],
         time=Timestamp.from_mjd([60200.0], scale="tdb"),
         origin=Origin.from_kwargs(code=["SUN"]),
+        covariance=CoordinateCovariances.from_matrix(
+            np.array(
+                [
+                    [
+                        [
+                            4.16121327e-12,
+                            -2.09134781e-12,
+                            -2.30283659e-16,
+                            -2.71788684e-14,
+                            -1.04967287e-14,
+                            1.23426144e-18,
+                        ],
+                        [
+                            -2.09134781e-12,
+                            1.06124575e-12,
+                            3.56294828e-17,
+                            1.35942553e-14,
+                            5.18898046e-15,
+                            6.94693054e-19,
+                        ],
+                        [
+                            -2.30283659e-16,
+                            3.56294828e-17,
+                            5.18082513e-15,
+                            4.41513580e-18,
+                            -1.11430145e-18,
+                            -9.37068797e-17,
+                        ],
+                        [
+                            -2.71788684e-14,
+                            1.35942553e-14,
+                            4.41513580e-18,
+                            2.08874756e-16,
+                            3.63703260e-17,
+                            -8.68973771e-20,
+                        ],
+                        [
+                            -1.04967287e-14,
+                            5.18898046e-15,
+                            -1.11430145e-18,
+                            3.63703260e-17,
+                            6.53394971e-17,
+                            2.33681397e-20,
+                        ],
+                        [
+                            1.23426144e-18,
+                            6.94693054e-19,
+                            -9.37068797e-17,
+                            -8.68973771e-20,
+                            2.33681397e-20,
+                            2.54650689e-18,
+                        ],
+                    ]
+                ]
+            )
+        ),
         frame="ecliptic",
     )
     impactor_orbits = ImpactorOrbits.from_kwargs(
@@ -78,6 +140,7 @@ def impactor_orbits():
         GS=[0.15],
     )
     return impactor_orbits
+
 
 @pytest.fixture
 def pointing_file(tmpdir):
@@ -111,7 +174,6 @@ def sorcha_observations():
 
 
 @patch("adam_impact_study.impacts_study.calculate_impact_probabilities")
-@patch("adam_impact_study.impacts_study.calculate_impacts")
 @patch("adam_impact_study.impacts_study.ASSISTPropagator")
 @patch("adam_impact_study.impacts_study.run_fo_od")
 @patch("adam_impact_study.impacts_study.run_sorcha")
@@ -119,7 +181,6 @@ def test_run_impact_study_for_orbit(
     mock_run_sorcha,
     mock_run_fo_od,
     mock_propagator,
-    mock_calculate_impacts,
     mock_calculate_impact_probabilities,
     pointing_file,
     impactor_orbits,
@@ -143,6 +204,62 @@ def test_run_impact_study_for_orbit(
         vz=[-0.0000083965],
         time=Timestamp.from_mjd([60200.0], scale="tdb"),
         origin=Origin.from_kwargs(code=["SUN"]),
+        covariance=CoordinateCovariances.from_matrix(
+            np.array(
+                [
+                    [
+                        [
+                            4.16121327e-12,
+                            -2.09134781e-12,
+                            -2.30283659e-16,
+                            -2.71788684e-14,
+                            -1.04967287e-14,
+                            1.23426144e-18,
+                        ],
+                        [
+                            -2.09134781e-12,
+                            1.06124575e-12,
+                            3.56294828e-17,
+                            1.35942553e-14,
+                            5.18898046e-15,
+                            6.94693054e-19,
+                        ],
+                        [
+                            -2.30283659e-16,
+                            3.56294828e-17,
+                            5.18082513e-15,
+                            4.41513580e-18,
+                            -1.11430145e-18,
+                            -9.37068797e-17,
+                        ],
+                        [
+                            -2.71788684e-14,
+                            1.35942553e-14,
+                            4.41513580e-18,
+                            2.08874756e-16,
+                            3.63703260e-17,
+                            -8.68973771e-20,
+                        ],
+                        [
+                            -1.04967287e-14,
+                            5.18898046e-15,
+                            -1.11430145e-18,
+                            3.63703260e-17,
+                            6.53394971e-17,
+                            2.33681397e-20,
+                        ],
+                        [
+                            1.23426144e-18,
+                            6.94693054e-19,
+                            -9.37068797e-17,
+                            -8.68973771e-20,
+                            2.33681397e-20,
+                            2.54650689e-18,
+                        ],
+                    ]
+                ]
+            )
+        ),
         frame="ecliptic",
     )
     orbit = Orbits.from_kwargs(
@@ -152,21 +269,35 @@ def test_run_impact_study_for_orbit(
     )
     # Configure mock propagator
     mock_propagator.return_value.propagate.return_value = orbit
-    mock_run_fo_od.return_value = (impactor_orbits.orbits(), ADESObservations.empty(), None)
-
-    mock_calculate_impact_probabilities.return_value = ImpactProbabilities.from_kwargs(
-        orbit_id=["Object1"],
-        impacts=[1],
-        variants=[3],
-        cumulative_probability=[1 / 3],
+    mock_run_fo_od.return_value = (
+        impactor_orbits.orbits(),
+        ADESObservations.empty(),
+        None,
     )
-    mock_calculate_impacts.return_value = (
+
+    # mock_calculate_impacts.return_value = (
+    #     Orbits.from_kwargs(
+    #         orbit_id=["Object1"],
+    #         object_id=["Object1"],
+    #         coordinates=cartesian_coords,
+    #     ),
+    #     EarthImpacts.nulls(1),
+    # )
+
+    mock_propagator.detect_impacts.return_value = (
         Orbits.from_kwargs(
             orbit_id=["Object1"],
             object_id=["Object1"],
             coordinates=cartesian_coords,
         ),
         EarthImpacts.nulls(1),
+    )
+
+    mock_calculate_impact_probabilities.return_value = ImpactProbabilities.from_kwargs(
+        orbit_id=["Object1"],
+        impacts=[1],
+        variants=[3],
+        cumulative_probability=[1 / 3],
     )
 
     # Call the function with the mocked inputs
@@ -188,47 +319,61 @@ def test_run_impact_study_for_orbit(
 
     # Iterate through the calls to mock_run_fo_od
     expected_fo_call_list = [
-        (sorcha_observations.apply_mask(pc.less_equal(sorcha_observations.observing_night, 60002)), f"{RUN_DIR}/Object1/60000_60002/fo"),
-        (sorcha_observations.apply_mask(pc.less_equal(sorcha_observations.observing_night, 60004)), f"{RUN_DIR}/Object1/60000_60004/fo"),
-        (sorcha_observations.apply_mask(pc.less_equal(sorcha_observations.observing_night, 60005)), f"{RUN_DIR}/Object1/60000_60005/fo"),
+        (
+            sorcha_observations.apply_mask(
+                pc.less_equal(sorcha_observations.observing_night, 60002)
+            ),
+            f"{RUN_DIR}/Object1/60000_60002/fo",
+        ),
+        (
+            sorcha_observations.apply_mask(
+                pc.less_equal(sorcha_observations.observing_night, 60004)
+            ),
+            f"{RUN_DIR}/Object1/60000_60004/fo",
+        ),
+        (
+            sorcha_observations.apply_mask(
+                pc.less_equal(sorcha_observations.observing_night, 60005)
+            ),
+            f"{RUN_DIR}/Object1/60000_60005/fo",
+        ),
     ]
     for i, call in enumerate(mock_run_fo_od.call_args_list):
         # Compare the actual arguments with expected arguments
         actual_args = call.args
         expected_args = expected_fo_call_list[i]
-        assert actual_args[0] == expected_args[0], f"fo observations not what was expected"
+        assert (
+            actual_args[0] == expected_args[0]
+        ), f"fo observations not what was expected"
         assert actual_args[1] == expected_args[1], f"Call {i}: Path mismatch"
-
 
     expected_calculate_impacts_calls = [
         (impactor_orbits.orbits(), 130, ASSISTPropagator(), 100, 1, 12345),
         (impactor_orbits.orbits(), 130, ASSISTPropagator(), 100, 1, 12345),
         (impactor_orbits.orbits(), 130, ASSISTPropagator(), 100, 1, 12345),
     ]
-    for i, call in enumerate(mock_calculate_impacts.call_args_list):
+    for i, call in enumerate(mock_propagator.detect_impacts.call_args_list):
         args, kwargs = call
         assert args[0] == expected_calculate_impacts_calls[i][0]
         assert args[1] == expected_calculate_impacts_calls[i][1]
         assert isinstance(args[2], ASSISTPropagator)
-        assert kwargs['num_samples'] == expected_calculate_impacts_calls[i][3]
-        assert kwargs['processes'] == expected_calculate_impacts_calls[i][4]
-        assert kwargs['seed'] == expected_calculate_impacts_calls[i][5]
+        assert kwargs["num_samples"] == expected_calculate_impacts_calls[i][3]
+        assert kwargs["processes"] == expected_calculate_impacts_calls[i][4]
+        assert kwargs["seed"] == expected_calculate_impacts_calls[i][5]
 
     expected = WindowResult.from_kwargs(
         orbit_id=["Object1", "Object1", "Object1"],
         object_id=["Object1", "Object1", "Object1"],
+        window_name=["60000_60002", "60000_60004", "60000_60005"],
         observation_start=Timestamp.from_mjd([60001, 60001, 60001], scale="utc"),
         observation_end=Timestamp.from_mjd([60003, 60005, 60006], scale="utc"),
         observation_count=[3, 4, 5],
         observation_nights=[3, 4, 5],
         observations_rejected=[0, 0, 0],
         impact_probability=[1 / 3, 1 / 3, 1 / 3],
-        car_coordinates=cartesian_coords.take([0, 0, 0]),
-        kep_coordinates=cartesian_coords.take([0, 0, 0]).to_keplerian(),
     )
     # Convert both to pandas DataFrames for easier comparison
     results_df = results.to_dataframe()
     expected_df = expected.to_dataframe()
-    
-    pd.testing.assert_frame_equal(results_df, expected_df)
 
+    pd.testing.assert_frame_equal(results_df, expected_df)
