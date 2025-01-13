@@ -35,7 +35,8 @@ cd ../find_orb
 make
 make install
 cd ../.find_orb
-wget ftp://ssd.jpl.nasa.gov/pub/eph/planets/Linux/de440t/linux_p1550p2650.440t
-wget -O bc405.dat https://storage.googleapis.com/asteroid-institute-data/ephemeris/bc405.dat
+cd ../.find_orb
+[ ! -f linux_p1550p2650.440t ] && wget https://ssd.jpl.nasa.gov/ftp/eph/planets/Linux/de440t/linux_p1550p2650.440t
+[ ! -f bc405.dat ] && wget -O bc405.dat https://storage.googleapis.com/asteroid-institute-data/ephemeris/bc405.dat
 cd -
 cd ../..
