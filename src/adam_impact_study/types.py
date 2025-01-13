@@ -1,3 +1,7 @@
+import json
+from dataclasses import asdict, dataclass
+from typing import Optional
+
 import quivr as qv
 from adam_core.coordinates import (
     CartesianCoordinates,
@@ -5,7 +9,7 @@ from adam_core.coordinates import (
     SphericalCoordinates,
 )
 from adam_core.observers import Observers
-from adam_core.orbits import Orbits
+from adam_core.orbits import Orbits, VariantOrbits
 from adam_core.time import Timestamp
 
 
@@ -73,16 +77,18 @@ class WindowResult(qv.Table):
 
     orbit_id = qv.LargeStringColumn()
     object_id = qv.LargeStringColumn(nullable=True)
+    window_name = qv.LargeStringColumn(nullable=True)
     observation_start = Timestamp.as_column()
     observation_end = Timestamp.as_column()
     observation_count = qv.UInt64Column()
     observations_rejected = qv.UInt64Column()
     observation_nights = qv.UInt64Column()
     impact_probability = qv.Float64Column(nullable=True)
-    impact_time = Timestamp.as_column(nullable=True)
+    mean_impact_time = Timestamp.as_column(nullable=True)
+    minimum_impact_time = Timestamp.as_column(nullable=True)
+    maximum_impact_time = Timestamp.as_column(nullable=True)
+    stddev_impact_time = qv.Float64Column(nullable=True)
     error = qv.LargeStringColumn(nullable=True)
-    car_coordinates = CartesianCoordinates.as_column(nullable=True)
-    kep_coordinates = KeplerianCoordinates.as_column(nullable=True)
 
 
 class ImpactorResultSummary(qv.Table):
@@ -115,3 +121,35 @@ class ImpactorResultSummary(qv.Table):
     # How close all the windows got to discovering the definite impact nature
     maximum_impact_probability = qv.Float64Column(nullable=True)
     error = qv.LargeStringColumn(nullable=True)
+
+
+class VariantOrbitsWithWindowName(qv.Table):
+    window = qv.StringColumn()
+    variant = VariantOrbits.as_column()
+
+
+class OrbitWithWindowName(qv.Table):
+    window = qv.StringColumn()
+    orbit = Orbits.as_column()
+
+
+@dataclass
+class RunConfiguration:
+    # How many variants to create for each orbit
+    monte_carlo_samples: int
+    assist_epsilon: float
+    assist_min_dt: float
+    assist_initial_dt: float
+    assist_adaptive_mode: int
+    seed: int
+    max_processes: Optional[int] = None
+
+    @classmethod
+    def from_json(cls, json_file: str) -> "RunConfiguration":
+        with open(json_file, "r") as f:
+            return cls(**json.load(f))
+    
+
+    def to_json(self, json_file: str) -> None:
+        with open(json_file, "w") as f:
+            json.dump(asdict(self), f)

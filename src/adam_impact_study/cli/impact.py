@@ -1,4 +1,5 @@
 import os
+from dataclasses import asdict
 
 os.environ["RAY_DEDUP_LOGS"] = "0"
 import argparse
@@ -14,7 +15,7 @@ from adam_core.time import Timestamp
 
 from adam_impact_study.analysis import plot_ip_over_time
 from adam_impact_study.impacts_study import run_impact_study_all
-from adam_impact_study.types import ImpactorOrbits
+from adam_impact_study.types import ImpactorOrbits, RunConfiguration
 
 logger = logging.getLogger(__name__)
 
@@ -22,6 +23,7 @@ logger = logging.getLogger(__name__)
 def run_impact_study(
     orbit_file: str,
     run_dir: str,
+    run_config: str,
     max_processes: int = 1,
     pointing_file: Optional[str] = None,
     orbit_id: Optional[str] = None,
@@ -59,6 +61,11 @@ def run_impact_study(
 
     logger.info(f"Processing {len(impactor_orbits)} orbits")
 
+    # Load run configuration
+    run_config = RunConfiguration.from_json(run_config)
+    logger.info(f"Run configuration: {asdict(run_config)}")
+    run_config.to_json(os.path.join(run_dir, "run_config.json"))
+
     # Create output directory
     os.makedirs(run_dir, exist_ok=True)
 
@@ -68,8 +75,13 @@ def run_impact_study(
         impactor_orbits,
         pointing_file,
         run_dir,
+        assist_initial_dt=run_config.assist_initial_dt,
+        assist_min_dt=run_config.assist_min_dt,
+        assist_adaptive_mode=run_config.assist_adaptive_mode,
+        assist_epsilon=run_config.assist_epsilon,
+        monte_carlo_samples=run_config.monte_carlo_samples,
         max_processes=max_processes,
-        seed=seed,
+        seed=run_config.seed,
     )
 
     logger.info("Generating plots...")
@@ -88,10 +100,8 @@ def main():
         default=1,
         help="Maximum number of processes to use",
     )
+    parser.add_argument("--run-config", help="Path to run configuration file")
     parser.add_argument("--pointing-file", help="Path to pointing database file")
-    parser.add_argument(
-        "--population-config", help="Path to population configuration file"
-    )
     parser.add_argument(
         "--orbit-id",
         help="One or more orbit IDs to select out of input orbits, sepearated by commas",
@@ -102,7 +112,6 @@ def main():
     args = parser.parse_args()
 
     if args.debug:
-        print("Debug mode enabled")
         logging.basicConfig(level=logging.DEBUG)
         os.environ["ADAM_LOG_LEVEL"] = "DEBUG"
     else:
@@ -112,6 +121,7 @@ def main():
     run_impact_study(
         args.orbit_file,
         args.run_dir,
+        run_config=args.run_config,
         max_processes=args.max_processes,
         pointing_file=args.pointing_file,
         orbit_id=args.orbit_id,

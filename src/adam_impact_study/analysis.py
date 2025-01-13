@@ -1,3 +1,4 @@
+import glob
 import logging
 import os
 
@@ -7,7 +8,7 @@ import pyarrow.compute as pc
 import quivr as qv
 from adam_core.time import Timestamp
 
-from adam_impact_study.types import ImpactorOrbits, WindowResult
+from adam_impact_study.types import ImpactorOrbits, ImpactorResultSummary, WindowResult
 from adam_impact_study.utils import get_study_paths
 
 logging.basicConfig(level=logging.INFO)
@@ -363,3 +364,63 @@ def plot_ip_over_time(
         plt.tight_layout()
         plt.savefig(os.path.join(orbit_dir, f"IP_{orbit_id}.png"))
         plt.close()
+
+
+# def collect_impact_results(orbit_dir: str) -> WindowResult:
+#     window_directories = glob.glob(f"{orbit_dir}/windows/*")
+#     window_results = WindowResult.empty()
+#     for window_dir in window_directories:
+#         window_results = qv.concatenate([window_results, WindowResult.from_parquet(f"{window_dir}/impact_results.parquet")])
+#     return window_results
+
+
+def summarize_impact_study_object_results(
+    run_dir: str, orbit_id: str
+) -> ImpactorResultSummary:
+    """
+    Summarize the impact study results for a single object.
+    """
+    paths = get_study_paths(run_dir, orbit_id)
+    orbit_dir = paths["orbit_base_dir"]
+    impact_results = WindowResult.from_parquet(
+        f"{orbit_dir}/impact_results_{orbit_id}.parquet"
+    )
+    impactor_orbits = ImpactorOrbits.from_parquet(
+        f"{orbit_dir}/impact_orbits_{orbit_id}.parquet"
+    )
+    discovery_dates = compute_discovery_dates(impactor_orbits, impact_results)
+    warning_times = compute_warning_time(impactor_orbits, impact_results)
+    realization_times = compute_realization_time(
+        impactor_orbits, impact_results, discovery_dates
+    )
+
+    mean_impact_time = Timestamp.from_mjd(
+        [pc.mean(impact_results.impact_time.mjd())],
+        impact_results.impact_time.scale,
+    )
+
+    return ImpactorResultSummary.from_kwargs(
+        orbit_id=[orbit_id],
+        object_id=impact_results.object_id,
+        window_name=impact_results.window_name,
+        mean_impact_time=mean_impact_time,
+        windows=len(impact_results),
+        nights=impact_results.observation_nights.max(),
+        observations=impact_results.observation_count.max(),
+        discovery_dates=discovery_dates.discovery_date,
+        warning_times=warning_times.warning_time,
+        realization_times=realization_times.realization_time,
+    )
+
+
+def summarize_impact_study_results(run_dir: str) -> ImpactorResultSummary:
+    """
+    Summarize the impact study results.
+    """
+    orbit_ids = [os.path.basename(dir) for dir in glob.glob(f"{run_dir}/*")]
+    results = ImpactorResultSummary.empty()
+    for orbit_id in orbit_ids:
+        results = qv.concatenate(
+            [results, summarize_impact_study_object_results(run_dir, orbit_id)]
+        )
+    return results

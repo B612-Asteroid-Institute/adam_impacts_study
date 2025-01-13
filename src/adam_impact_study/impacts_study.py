@@ -13,16 +13,21 @@ from adam_core.dynamics.impacts import calculate_impact_probabilities, calculate
 from adam_core.observations.ades import ADESObservations
 from adam_core.observers.utils import calculate_observing_night
 from adam_core.orbit_determination import OrbitDeterminationObservations
-from adam_core.orbits import Orbits
+from adam_core.orbits import Orbits, VariantOrbits
 from adam_core.time import Timestamp
 
 from adam_impact_study.conversions import Observations
 from adam_impact_study.fo_od import run_fo_od
 from adam_impact_study.sorcha_utils import run_sorcha
-from adam_impact_study.types import ImpactorOrbits, WindowResult
+from adam_impact_study.types import (
+    ImpactorOrbits,
+    OrbitWithWindowName,
+    VariantOrbitsWithWindowName,
+    WindowResult,
+)
 from adam_impact_study.utils import get_study_paths
 
-from .utils import seed_from_string
+from .utils import seed_from_string, window_name_from_observations
 
 logger = logging.getLogger(__name__)
 
@@ -33,6 +38,11 @@ def run_impact_study_all(
     impactor_orbits: ImpactorOrbits,
     pointing_file: str,
     run_dir: str,
+    monte_carlo_samples: int,
+    assist_epsilon: float,
+    assist_min_dt: float,
+    assist_initial_dt: float,
+    assist_adaptive_mode: int,
     max_processes: Optional[int] = 1,
     overwrite: bool = True,
     seed: Optional[int] = 13612,
@@ -64,10 +74,10 @@ def run_impact_study_all(
     class ImpactASSISTPropagator(ASSISTPropagator):
         def __init__(self, *args, **kwargs):
             super().__init__(*args, **kwargs)
-            self.initial_dt = 1e-6
-            self.min_dt = 1e-9
-            self.adaptive_mode = 1
-            self.epsilon = 1e-6
+            self.initial_dt = assist_initial_dt
+            self.min_dt = assist_min_dt
+            self.adaptive_mode = assist_adaptive_mode
+            self.epsilon = assist_epsilon
 
     # If the run directory already exists, throw an exception
     # unless the user has specified the overwrite flag
@@ -179,6 +189,11 @@ def run_impact_study_for_orbit(
     orbit_id = impactor_orbit.orbit_id[0].as_py()
 
     paths = get_study_paths(run_dir, orbit_id)
+
+    # Serialize the ImpactorOrbit to a file for future analysis use
+    impactor_orbit.to_parquet(
+        f"{paths['orbit_base_dir']}/impact_orbits_{orbit_id}.parquet"
+    )
 
     # Run Sorcha to generate synthetic observations
     observations = run_sorcha(
@@ -337,10 +352,20 @@ def calculate_window_impact_probability(
             observations,
             paths["fo_dir"],
         )
+
+        # Persist the window orbit with the window name for future analysis
+        orbit_with_window_name = OrbitWithWindowName.from_kwargs(
+            window=pa.repeat(window_name, len(orbit)),
+            orbit=orbit,
+        )
+        orbit_with_window_name.to_parquet(
+            f"{paths['propagated']}/orbit_with_window_name.parquet"
+        )
     except Exception as e:
         return WindowResult.from_kwargs(
             orbit_id=[orbit_id],
             object_id=[object_id],
+            window_name=[window_name],
             observation_start=start_date,
             observation_end=end_date,
             observation_count=[observations_count],
@@ -352,6 +377,7 @@ def calculate_window_impact_probability(
         return WindowResult.from_kwargs(
             orbit_id=[orbit_id],
             object_id=[object_id],
+            window_name=[window_name],
             observation_start=start_date,
             observation_end=end_date,
             observation_count=[observations_count],
@@ -359,34 +385,6 @@ def calculate_window_impact_probability(
             observations_rejected=[len(rejected_observations)],
             error=[error],
         )
-
-    # try:
-    #    propagator = propagator_class()
-    #    orbit.to_parquet(f"{paths['propagated']}/not_propagated.parquet")
-    #    propagated_30_days_before_impact = propagator.propagate_orbits(
-    #        orbit,
-    #        thirty_days_before_impact,
-    #        covariance=True,
-    #        covariance_method="monte-carlo",
-    #        max_processes=max_processes,
-    #        num_samples=1000,
-    #        seed=seed,
-    #    )
-    #    propagated_30_days_before_impact.to_parquet(
-    #        f"{paths['propagated']}/orbits.parquet"
-    #    )
-    # except Exception as e:
-    #     logger.error(f"Error propagating orbits: {e}")
-    #     return ImpactStudyResults.from_kwargs(
-    #         orbit_id=[orbit_id],
-    #         object_id=[object_id],
-    #         observation_start=start_date,
-    #         observation_end=end_date,
-    #         observation_count=[observations_count],
-    #         observation_nights=[observation_nights],
-    #         observations_rejected=[len(rejected_observations)],
-    #         error=[str(e)],
-    #     )
 
     days_until_impact_plus_thirty = (
         int(
@@ -398,17 +396,36 @@ def calculate_window_impact_probability(
 
     try:
         propagator = propagator_class()
-        final_orbit_states, impacts = calculate_impacts(
-            orbit,
+
+        # Create initial variants
+        variants = VariantOrbits.create(
+            orbit, method="monte-carlo", num_samples=100, seed=seed
+        )
+        variants_with_window_name = VariantOrbitsWithWindowName.from_kwargs(
+            window=pa.repeat(window_name, len(variants)),
+            variant=variants,
+        )
+        # Persist the initial state of the variants with the window name
+        # for future analysis
+        variants_with_window_name.to_parquet(
+            f"{paths['propagated']}/initial_variants.parquet"
+        )
+
+        final_orbit_states, impacts = propagator.detect_impacts(
+            variants_with_window_name.variant,
             days_until_impact_plus_thirty,
-            propagator,
-            num_samples=100,
-            processes=max_processes,
-            seed=seed,
+            max_processes=max_processes,
         )
-        final_orbit_states.to_parquet(
-            f"{paths['propagated']}/monte_carlo_variant_states.parquet"
+
+        final_orbit_states_with_window_name = VariantOrbitsWithWindowName.from_kwargs(
+            window=pa.repeat(window_name, len(final_orbit_states)),
+            variant=final_orbit_states,
         )
+
+        final_orbit_states_with_window_name.to_parquet(
+            f"{paths['propagated']}/final_variants.parquet"
+        )
+
         impacts.to_parquet(f"{paths['propagated']}/impacts.parquet")
 
         ip = calculate_impact_probabilities(final_orbit_states, impacts)
@@ -416,6 +433,7 @@ def calculate_window_impact_probability(
         return WindowResult.from_kwargs(
             orbit_id=[orbit_id],
             object_id=[object_id],
+            window_name=[window_name],
             observation_start=start_date,
             observation_end=end_date,
             observation_count=[observations_count],
@@ -427,16 +445,21 @@ def calculate_window_impact_probability(
     return WindowResult.from_kwargs(
         orbit_id=[orbit_id],
         object_id=[object_id],
+        window_name=[window_name],
         observation_start=start_date,
         observation_end=end_date,
         observation_count=[observations_count],
         observation_nights=[observation_nights],
         observations_rejected=[len(rejected_observations)],
         impact_probability=ip.cumulative_probability,
-        car_coordinates=orbit.coordinates,
-        kep_coordinates=orbit.coordinates.to_keplerian(),
+        mean_impact_time=ip.mean_impact_time,
+        minimum_impact_time=ip.minimum_impact_time,
+        maximum_impact_time=ip.maximum_impact_time,
+        stddev_impact_time=ip.stddev_impact_time,
     )
 
 
 # Create remote version
-calculate_window_impact_probability_remote = ray.remote(calculate_window_impact_probability)
+calculate_window_impact_probability_remote = ray.remote(
+    calculate_window_impact_probability
+)

@@ -1,6 +1,10 @@
 import hashlib
 from typing import Optional
 
+import pyarrow.compute as pc
+
+from adam_impact_study.types import Observations
+
 
 def seed_from_string(s: str, seed: Optional[int] = None) -> int:
     """
@@ -54,7 +58,7 @@ def get_study_paths(
     }
 
     if time_range:
-        time_dir = os.path.join(obj_dir, time_range)
+        time_dir = os.path.join(obj_dir, "windows",time_range)
         paths.update(
             {
                 "time_dir": time_dir,
