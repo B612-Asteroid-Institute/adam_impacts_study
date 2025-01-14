@@ -8,7 +8,12 @@ import pyarrow.compute as pc
 import quivr as qv
 from adam_core.time import Timestamp
 
-from adam_impact_study.types import ImpactorOrbits, ImpactorResultSummary, WindowResult
+from adam_impact_study.types import (
+    ImpactorOrbits,
+    ImpactorResultSummary,
+    Observations,
+    WindowResult,
+)
 from adam_impact_study.utils import get_study_paths
 
 logging.basicConfig(level=logging.INFO)
@@ -233,6 +238,61 @@ def compute_realization_time(
     )
 
 
+class ObservationCadence(qv.Table):
+    orbit_id = qv.LargeStringColumn()
+    tracklets = qv.UInt64Column()
+    singletons = qv.UInt64Column()
+
+
+def compute_observation_cadence(
+    observations: Observations,
+) -> ObservationCadence:
+    """
+    Compute the observation cadence for each object (the number of tracklets and singletons) observed overall.
+
+    This is a placeholder function until difi is quivr-ized.
+
+    Parameters
+    ----------
+    observations: Observations
+        The observations to compute the observation cadence for.
+
+    Returns
+    -------
+    ObservationCadence
+        The observation cadence for each object.
+    """
+    observations_table = observations.flattened_table().select(
+        ["orbit_id", "observing_night"]
+    )
+    observations_grouped = observations_table.group_by(
+        ["orbit_id", "observing_night"]
+    ).aggregate([("observing_night", "count")])
+    tracklets = observations_grouped.apply_mask(
+        pc.greater_equal(observations_grouped.observing_night_count, 2)
+    )
+    singletons = observations_grouped.apply_mask(
+        pc.equal(observations_grouped.observing_night_count, 1)
+    )
+
+    tracklet_counts = (
+        tracklets.group_by("orbit_id")
+        .aggregate([("observing_night", "count")])
+        .rename_columns({"observing_night_count": "tracklets"})
+    )
+    singleton_counts = (
+        singletons.group_by("orbit_id")
+        .aggregate([("observing_night", "count")])
+        .rename_columns({"observing_night_count": "singletons"})
+    )
+
+    observation_cadence = observations_table.join(
+        tracklet_counts, "orbit_id", "orbit_id"
+    ).join(singleton_counts, "orbit_id", "orbit_id")
+
+    return ObservationCadence.from_pyarrow(observation_cadence.combine_chunks())
+
+
 def plot_ip_over_time(
     impacting_orbits: ImpactorOrbits,
     impact_study_results: WindowResult,
@@ -398,6 +458,14 @@ def summarize_impact_study_object_results(
         [pc.mean(impact_results.impact_time.mjd())],
         impact_results.impact_time.scale,
     )
+
+    # Load sorcha observations
+    observations = Observations.from_parquet(
+        f"{paths['sorcha_dir']}/observations_{orbit_id}.parquet"
+    )
+
+    # Compute the number of singletons and tracklets in each window
+    observation_cadence = calculate_observation_cadence(observations)
 
     return ImpactorResultSummary.from_kwargs(
         orbit_id=[orbit_id],
