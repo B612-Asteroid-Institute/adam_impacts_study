@@ -4,6 +4,7 @@ import os
 
 import matplotlib.pyplot as plt
 import numpy as np
+import pyarrow as pa
 import pyarrow.compute as pc
 import quivr as qv
 from adam_core.time import Timestamp
@@ -262,35 +263,58 @@ def compute_observation_cadence(
     ObservationCadence
         The observation cadence for each object.
     """
+    print(observations.orbit_id.unique().to_pylist())
+    import pdb; pdb.set_trace()
     observations_table = observations.flattened_table().select(
         ["orbit_id", "observing_night"]
     )
     observations_grouped = observations_table.group_by(
         ["orbit_id", "observing_night"]
     ).aggregate([("observing_night", "count")])
-    tracklets = observations_grouped.apply_mask(
-        pc.greater_equal(observations_grouped.observing_night_count, 2)
+
+    # Filter out tracklets and singletons
+    tracklets = observations_grouped.filter(
+        pc.greater_equal(observations_grouped.column("observing_night_count"), 2)
     )
-    singletons = observations_grouped.apply_mask(
-        pc.equal(observations_grouped.observing_night_count, 1)
+    singletons = observations_grouped.filter(
+        pc.equal(observations_grouped.column("observing_night_count"), 1)
     )
 
     tracklet_counts = (
         tracklets.group_by("orbit_id")
         .aggregate([("observing_night", "count")])
-        .rename_columns({"observing_night_count": "tracklets"})
+        .rename_columns(["orbit_id", "tracklets"])
     )
     singleton_counts = (
         singletons.group_by("orbit_id")
         .aggregate([("observing_night", "count")])
-        .rename_columns({"observing_night_count": "singletons"})
+        .rename_columns(["orbit_id", "singletons"])
     )
 
-    observation_cadence = observations_table.join(
+    # Create a table off of the unique orbit ids so we
+    # can populate empty singleton and tracklet counts
+    # with 0s
+    orbit_id_table = pa.Table.from_arrays(
+        [observations.orbit_id.unique()], ["orbit_id"]
+    )
+
+    tracklet_counts = tracklet_counts.join(
+        orbit_id_table, "orbit_id", "orbit_id"
+    )
+    singleton_counts = singleton_counts.join(
+        orbit_id_table, "orbit_id", "orbit_id"
+    )
+
+    observation_cadence = orbit_id_table.join(
         tracklet_counts, "orbit_id", "orbit_id"
     ).join(singleton_counts, "orbit_id", "orbit_id")
 
-    return ObservationCadence.from_pyarrow(observation_cadence.combine_chunks())
+
+    return ObservationCadence.from_kwargs(
+        orbit_id=observation_cadence.column("orbit_id"),
+        tracklets=observation_cadence.column("tracklets").fill_null(0),
+        singletons=observation_cadence.column("singletons").fill_null(0),
+    )
 
 
 def plot_ip_over_time(
@@ -426,14 +450,6 @@ def plot_ip_over_time(
         plt.close()
 
 
-# def collect_impact_results(orbit_dir: str) -> WindowResult:
-#     window_directories = glob.glob(f"{orbit_dir}/windows/*")
-#     window_results = WindowResult.empty()
-#     for window_dir in window_directories:
-#         window_results = qv.concatenate([window_results, WindowResult.from_parquet(f"{window_dir}/impact_results.parquet")])
-#     return window_results
-
-
 def summarize_impact_study_object_results(
     run_dir: str, orbit_id: str
 ) -> ImpactorResultSummary:
@@ -455,8 +471,8 @@ def summarize_impact_study_object_results(
     )
 
     mean_impact_time = Timestamp.from_mjd(
-        [pc.mean(impact_results.impact_time.mjd())],
-        impact_results.impact_time.scale,
+        [pc.mean(impact_results.mean_impact_time.mjd())],
+        impact_results.mean_impact_time.scale,
     )
 
     # Load sorcha observations
@@ -465,19 +481,23 @@ def summarize_impact_study_object_results(
     )
 
     # Compute the number of singletons and tracklets in each window
-    observation_cadence = calculate_observation_cadence(observations)
+    observation_cadence = compute_observation_cadence(observations)
+
 
     return ImpactorResultSummary.from_kwargs(
         orbit_id=[orbit_id],
-        object_id=impact_results.object_id,
-        window_name=impact_results.window_name,
+        object_id=impact_results[0].object_id,
         mean_impact_time=mean_impact_time,
-        windows=len(impact_results),
-        nights=impact_results.observation_nights.max(),
-        observations=impact_results.observation_count.max(),
-        discovery_dates=discovery_dates.discovery_date,
-        warning_times=warning_times.warning_time,
-        realization_times=realization_times.realization_time,
+        windows=[len(impact_results)],
+        nights=[pc.max(impact_results.observation_nights)],
+        observations=[pc.max(impact_results.observation_count)],
+        singletons=[pc.sum(observation_cadence.singletons)],
+        tracklets=[pc.sum(observation_cadence.tracklets)],
+        observed=[len(observations) > 0],
+        discovery_time=discovery_dates.discovery_date,
+        warning_time=warning_times.warning_time,
+        realization_time=realization_times.realization_time,
+        maximum_impact_probability=[pc.max(impact_results.impact_probability)],
     )
 
 

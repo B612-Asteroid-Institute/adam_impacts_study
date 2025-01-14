@@ -153,7 +153,7 @@ def pointing_file(tmpdir):
 def sorcha_observations():
     return Observations.from_kwargs(
         obs_id=["obs1", "obs2", "obs3", "obs4", "obs5"],
-        object_id=["Test_1001", "Test_1001", "Test_1001", "Test_1002", "Test_1002"],
+        orbit_id=["Test_1001", "Test_1001", "Test_1001", "Test_1002", "Test_1002"],
         coordinates=SphericalCoordinates.from_kwargs(
             lon=[180.0, 181.0, 182.0, 183.0, 184.0],
             lat=[0.0, 1.0, 2.0, 3.0, 4.0],

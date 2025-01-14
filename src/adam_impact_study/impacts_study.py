@@ -12,8 +12,7 @@ from adam_assist import ASSISTPropagator
 from adam_core.dynamics.impacts import calculate_impact_probabilities, calculate_impacts
 from adam_core.observations.ades import ADESObservations
 from adam_core.observers.utils import calculate_observing_night
-from adam_core.orbit_determination import OrbitDeterminationObservations
-from adam_core.orbits import Orbits, VariantOrbits
+from adam_core.orbits import VariantOrbits
 from adam_core.time import Timestamp
 
 from adam_impact_study.conversions import Observations
@@ -109,6 +108,7 @@ def run_impact_study_all(
                 ImpactASSISTPropagator,
                 pointing_file,
                 run_dir,
+                monte_carlo_samples,
                 max_processes=max_processes,
                 seed=orbit_seed,
             )
@@ -120,6 +120,7 @@ def run_impact_study_all(
                     ImpactASSISTPropagator,
                     pointing_file,
                     run_dir,
+                    monte_carlo_samples,
                     max_processes=max_processes,
                     seed=orbit_seed,
                 )
@@ -163,6 +164,7 @@ def run_impact_study_for_orbit(
     propagator_class: Type[ASSISTPropagator],
     pointing_file: str,
     run_dir: str,
+    monte_carlo_samples: int,
     max_processes: Optional[int] = 1,
     seed: Optional[int] = None,
 ) -> WindowResult:
@@ -204,23 +206,10 @@ def run_impact_study_for_orbit(
     )
 
     # Serialize the observations to a file for future analysis use
-    observations.to_parquet(f"{paths['sorcha_dir']}/observations.parquet")
+    observations.to_parquet(f"{paths['sorcha_dir']}/observations_{orbit_id}.parquet")
 
     if len(observations) == 0:
         return WindowResult.empty()
-
-    # Sort the observations by time and origin code
-    observations = observations.sort_by(
-        ["coordinates.time.days", "coordinates.time.nanos", "coordinates.origin.code"]
-    )
-
-    # Add the observing night column to the observations
-    observations = observations.set_column(
-        "observing_night",
-        calculate_observing_night(
-            observations.coordinates.origin.code, observations.coordinates.time
-        ),
-    )
 
     # Select the unique nights of observations and
     unique_nights = pc.unique(observations.observing_night).sort()
@@ -245,6 +234,7 @@ def run_impact_study_for_orbit(
                 impactor_orbit,
                 propagator_class,
                 run_dir,
+                monte_carlo_samples,
                 max_processes,
                 seed=seed,
             )
@@ -262,6 +252,7 @@ def run_impact_study_for_orbit(
                     impactor_orbit,
                     propagator_class,
                     run_dir,
+                    monte_carlo_samples,
                     max_processes,
                     seed=seed,
                 )
@@ -298,6 +289,7 @@ def calculate_window_impact_probability(
     impactor_orbit: ImpactorOrbits,
     propagator_class: Type[ASSISTPropagator],
     run_dir: str,
+    monte_carlo_samples: int,
     max_processes: int = 1,
     seed: Optional[int] = None,
 ) -> WindowResult:
@@ -342,11 +334,8 @@ def calculate_window_impact_probability(
     # Get the start and end date of the observations, the number of
     # observations, and the number of unique nights
     observations_count = len(observations)
-    nights = calculate_observing_night(
-        observations.coordinates.origin.code, observations.coordinates.time
-    )
-    unique_nights = pc.unique(nights).sort()
-    observation_nights = len(unique_nights)
+    unique_nights = pc.unique(observations.observing_night).sort()
+    num_observation_nights = len(unique_nights)
 
     rejected_observations = ADESObservations.empty()
 
@@ -372,7 +361,7 @@ def calculate_window_impact_probability(
             observation_start=start_date,
             observation_end=end_date,
             observation_count=[observations_count],
-            observation_nights=[observation_nights],
+            observation_nights=[num_observation_nights],
             error=[str(e)],
         )
 
@@ -384,7 +373,7 @@ def calculate_window_impact_probability(
             observation_start=start_date,
             observation_end=end_date,
             observation_count=[observations_count],
-            observation_nights=[observation_nights],
+            observation_nights=[num_observation_nights],
             observations_rejected=[len(rejected_observations)],
             error=[error],
         )
@@ -402,7 +391,7 @@ def calculate_window_impact_probability(
 
         # Create initial variants
         variants = VariantOrbits.create(
-            orbit, method="monte-carlo", num_samples=100, seed=seed
+            orbit, method="monte-carlo", num_samples=monte_carlo_samples, seed=seed
         )
         variants_with_window_name = VariantOrbitsWithWindowName.from_kwargs(
             window=pa.repeat(window_name, len(variants)),
@@ -430,7 +419,6 @@ def calculate_window_impact_probability(
         )
 
         impacts.to_parquet(f"{paths['propagated']}/impacts.parquet")
-
         ip = calculate_impact_probabilities(final_orbit_states, impacts)
 
     except Exception as e:
@@ -441,7 +429,7 @@ def calculate_window_impact_probability(
             observation_start=start_date,
             observation_end=end_date,
             observation_count=[observations_count],
-            observation_nights=[observation_nights],
+            observation_nights=[num_observation_nights],
             observations_rejected=[len(rejected_observations)],
             error=[str(e)],
         )
@@ -453,7 +441,7 @@ def calculate_window_impact_probability(
         observation_start=start_date,
         observation_end=end_date,
         observation_count=[observations_count],
-        observation_nights=[observation_nights],
+        observation_nights=[num_observation_nights],
         observations_rejected=[len(rejected_observations)],
         impact_probability=ip.cumulative_probability,
         mean_impact_time=ip.mean_impact_time,

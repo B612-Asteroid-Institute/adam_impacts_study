@@ -137,14 +137,19 @@ def run_fo_od(
         - Processed observations
         - Error message (if any)
     """
+
+    # This function is only valid for a single orbit_id
+    if len(observations.orbit_id.unique()) > 1:
+        raise ValueError("This function is only valid for a single orbit_id")
+
     _de440t_exists()
     fo_tmp_dir = _create_fo_tmp_directory()
 
     # Create input file
     input_file = os.path.join(fo_tmp_dir, "observations.csv")
-    # Truncate object_id to 8 characters
+    # Truncate object_id to 8 characters. we will re-assign it after FO runs
     observations = observations.set_column(
-        "object_id", pc.utf8_slice_codeunits(observations.object_id, 0, 8)
+        "orbit_id", pc.utf8_slice_codeunits(observations.orbit_id, 0, 8)
     )
     od_observations_to_ades_file(observations, input_file)
 
@@ -193,6 +198,11 @@ def run_fo_od(
         )
 
     orbit = fo_to_adam_orbit_cov(fo_result_dir)
+
+    # Re-assign orbit_id to the original value
+    orbit = orbit.set_column(
+        "orbit_id", observations[0].orbit_id
+    )
     rejected = rejected_observations_from_fo(fo_result_dir)
 
     return orbit, rejected, None

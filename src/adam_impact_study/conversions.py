@@ -137,7 +137,7 @@ def sorcha_output_to_od_observations(sorcha_output_file: str) -> Observations:
 
         object_observation = Observations.from_kwargs(
             obs_id=[f"{obj}_{i}" for i in range(len(object_obs))],
-            object_id=pa.repeat(obj, len(object_obs)),
+            orbit_id=pa.repeat(obj, len(object_obs)),
             coordinates=coordinates_sorted,
             observers=Observers.from_code("X05", coordinates_sorted.time),
             photometry=photometry,
@@ -168,7 +168,7 @@ def od_observations_to_ades_file(
         Path to the generated ADES file.
     """
     ades_obs = ADESObservations.from_kwargs(
-        trkSub=od_observations.object_id,
+        trkSub=od_observations.orbit_id,
         obsTime=od_observations.coordinates.time,
         ra=od_observations.coordinates.lon,
         dec=od_observations.coordinates.lat,

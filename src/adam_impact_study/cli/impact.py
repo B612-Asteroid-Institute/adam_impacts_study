@@ -121,17 +121,18 @@ def main():
         logging.basicConfig(level=logging.INFO)
         os.environ["ADAM_LOG_LEVEL"] = "INFO"
 
-    if args.run_config is None:
-        run_config = RunConfiguration(
-            monte_carlo_samples=1000,
-            assist_epsilon=1e-6,
-            assist_min_dt=1e-9,
-            assist_initial_dt=1e-6,
-            assist_adaptive_mode=1,
-            seed=612,
-            max_processes=1,
-        )
-    else:
+    # Use a default run config, unless one is specified
+    run_config = RunConfiguration(
+        monte_carlo_samples=100,
+        assist_epsilon=1e-6,
+        assist_min_dt=1e-9,
+        assist_initial_dt=1e-6,
+        assist_adaptive_mode=1,
+        seed=612,
+        max_processes=1,
+    )
+
+    if args.run_config is not None:
         run_config = RunConfiguration.from_json(args.run_config)
 
     if args.seed is not None:

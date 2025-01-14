@@ -14,6 +14,7 @@ dependencies = [
     "ray[default]==2.39.0",
     "sorcha @ git+https://github.com/B612-Asteroid-Institute/sorcha.git@cd5be9a06c6d24e1277cf2345bda9984f7097ede",
     "adam-core>=0.3.5",
+    "quivr @ git+https://github.com/B612-Asteroid-Institute/quivr@2d8ae0b40bdfb75bcceff0c73d41a52d4bffb5dc",
 ]
 requires-python = "<3.13,>=3.11"
 readme = "README.md"

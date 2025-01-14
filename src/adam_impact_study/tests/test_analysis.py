@@ -91,8 +91,6 @@ def test_plot_ip_over_time(impact_study_results, impacting_orbits, tmpdir):
     for obj_id in orbit_ids:
         assert os.path.exists(os.path.join(tmpdir_path, f"{obj_id}/IP_{obj_id}.png"))
 
-    print(tmpdir_path)
-
 
 def test_compute_discovery_dates():
     # Create test impactor orbits

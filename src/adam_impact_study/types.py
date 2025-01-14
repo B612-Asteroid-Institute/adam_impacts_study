@@ -21,7 +21,7 @@ class Photometry(qv.Table):
 
 class Observations(qv.Table):
     obs_id = qv.LargeStringColumn()
-    object_id = qv.LargeStringColumn()
+    orbit_id = qv.LargeStringColumn()
     coordinates = SphericalCoordinates.as_column()
     observers = Observers.as_column()
     photometry = Photometry.as_column(nullable=True)
@@ -94,21 +94,18 @@ class WindowResult(qv.Table):
 class ImpactorResultSummary(qv.Table):
     orbit_id = qv.LargeStringColumn()
     object_id = qv.LargeStringColumn(nullable=True)
-    impact_time = Timestamp.as_column()
+    # This is a mean of means of the impact time from each window
+    mean_impact_time = Timestamp.as_column()
     # Number of distinct orbit fitting windows
-    windows = qv.Int64Column()
+    windows = qv.UInt64Column()
     # Number of distinct nights of observations
-    nights = qv.Int64Column()
+    nights = qv.UInt64Column()
     # Number of distinct observations recovered
-    observations = qv.Int64Column()
+    observations = qv.UInt64Column()
     # Number of singletons from observations recovered
-    singletons = qv.Int64Column()
+    singletons = qv.UInt64Column()
     # Number of tracklets from observations recovered
-    tracklets = qv.Int64Column()
-    # Whether the object was observed at all
-    observed = qv.BooleanColumn(default=False)
-    # Whether the object was discovered during the run
-    discovered = qv.BooleanColumn(default=False)
+    tracklets = qv.UInt64Column()
     # Time when observations met minimum artificial discovery criteria
     # Currently set to 3 unique nights of tracklets
     discovery_time = Timestamp.as_column(nullable=True)

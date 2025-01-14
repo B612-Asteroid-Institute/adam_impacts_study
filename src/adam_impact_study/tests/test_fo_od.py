@@ -24,7 +24,7 @@ def test_run_fo_od(mock_subprocess_run, tmpdir):
     # Create mock observations
     observations = Observations.from_kwargs(
         obs_id=["obs1", "obs2", "obs3"],
-        object_id=["Test_1001", "Test_1001", "Test_1001"],
+        orbit_id=["Test_1001", "Test_1001", "Test_1001"],
         coordinates=SphericalCoordinates.from_kwargs(
             lon=[180.0, 181.0, 182.0],
             lat=[0.0, 1.0, 2.0],

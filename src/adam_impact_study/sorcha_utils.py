@@ -7,6 +7,7 @@ from typing import Optional
 import pandas as pd
 import pyarrow as pa
 import quivr as qv
+from adam_core.observers.utils import calculate_observing_night
 from adam_core.orbits import Orbits
 from adam_core.time import Timestamp
 from jpl_small_bodies_de441_n16 import de441_n16
@@ -290,5 +291,19 @@ def run_sorcha(
         observations = qv.concatenate(
             [observations, sorcha_output_to_od_observations(result_file)]
         )
+
+    # This is not strictly sorcha related, but we definitely want observing
+    # night everywhere downstream of this point, so we do it here.
+    # Also, sorting is a good idea.
+    observations = observations.sort_by(
+        ["coordinates.time.days", "coordinates.time.nanos", "coordinates.origin.code"]
+    )
+    # Add the observing night column to the observations
+    observations = observations.set_column(
+        "observing_night",
+        calculate_observing_night(
+            observations.coordinates.origin.code, observations.coordinates.time
+        ),
+    )
 
     return observations
