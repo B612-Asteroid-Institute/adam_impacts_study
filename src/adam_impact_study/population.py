@@ -1,6 +1,7 @@
 import json
 import logging
 import os
+from typing import List
 
 import numpy as np
 import pyarrow as pa
@@ -21,10 +22,7 @@ class PopulationConfig(qv.Table):
     ast_class = qv.LargeStringColumn()
     albedo_min = qv.Float64Column()
     albedo_max = qv.Float64Column()
-    albedo_distribution = qv.LargeStringColumn()
     percentage = qv.Float64Column()
-    min_diam = qv.Float64Column()
-    max_diam = qv.Float64Column()
     u_r = qv.Float64Column()
     g_r = qv.Float64Column()
     i_r = qv.Float64Column()
@@ -32,10 +30,44 @@ class PopulationConfig(qv.Table):
     y_r = qv.Float64Column()
 
     @classmethod
-    def load(cls, file_path: str) -> "PopulationConfig":
-        with open(file_path, "r") as file:
+    def from_json(cls, json_file: str) -> "PopulationConfig":
+        with open(json_file, "r") as file:
             config_data = json.load(file)
         return PopulationConfig.from_kwargs(**config_data)
+
+    def to_json(self, json_file: str) -> None:
+        with open(json_file, "w") as file:
+            json.dump(self.table.to_pydict(), file, indent=4)
+
+    @classmethod
+    def default(cls) -> "PopulationConfig":
+        C_type = PopulationConfig.from_kwargs(
+            config_id=["default"],
+            ast_class=["C"],
+            albedo_min=[0.03],
+            albedo_max=[0.09],
+            percentage=[0.5],
+            u_r=[1.786],
+            g_r=[0.474],
+            i_r=[-0.119],
+            z_r=[-0.126],
+            y_r=[-0.131],
+        )
+
+        S_type = PopulationConfig.from_kwargs(
+            config_id=["default"],
+            ast_class=["S"],
+            albedo_min=[0.10],
+            albedo_max=[0.22],
+            percentage=[0.5],
+            u_r=[2.182],
+            g_r=[0.65],
+            i_r=[-0.2],
+            z_r=[-0.146],
+            y_r=[-0.151],
+        )
+
+        return qv.concatenate([C_type, S_type])
 
 
 def select_albedo_from_range(
@@ -188,12 +220,14 @@ def generate_population(
     orbits: Orbits,
     impact_dates: Timestamp,
     population_config: PopulationConfig,
+    diameter_bins: List[float] = [0.01, 0.05, 0.1, 0.2, 0.5, 1.0],
     seed: int = 0,
     variants: int = 1,
 ) -> ImpactorOrbits:
     """
-    Generate a population of impactors from a set of orbits and impact dates. Optionally, generate multiple variants of each orbit with
-    different physical parameters.
+    Generate a population of impactors from a set of orbits and impact dates. Each orbit is duplicated once per size bin with a
+    a random diameter assigned between the size bin's minimum and maximum. Optionally, generate multiple variants of each orbit with
+    different physical parameters within the size bin.
 
     Parameters
     ----------
@@ -203,6 +237,8 @@ def generate_population(
         The impact dates to generate the population for.
     population_config : PopulationConfig
         The population configuration to use.
+    diameter_bins : List[float], optional
+        The diameter bins (in km) to use for the population generation.
     seed : int, optional
         The seed to use for the population generation.
     variants : int, optional
@@ -217,62 +253,75 @@ def generate_population(
     S_type = population_config.select("ast_class", "S")
     C_type = population_config.select("ast_class", "C")
 
+    if len(diameter_bins) < 2:
+        raise ValueError("At least two diameter bins must be provided")
+
+    if len(diameter_bins) > 999:
+        raise ValueError("Too many diameter bins requested")
+
+    if variants > 999999:
+        raise ValueError("Too many variants requested")
+
     impactor_orbits = ImpactorOrbits.empty()
     for orbit, impact_date in zip(orbits, impact_dates):
+        for i, (min_diam, max_diam) in enumerate(
+            zip(diameter_bins[:-1], diameter_bins[1:])
+        ):
+            for variant in range(variants):
+                # Create a unique identifier for the variant
+                variant_id = f"{orbit.orbit_id[0].as_py()}_b{i:03d}_v{variant:06d}"
 
-        for variant in range(variants):
-            # Create a unique identifier for the variant
-            variant_id = f"{orbit.orbit_id[0].as_py()}_v{variant:08d}"
+                # Generate a random seed based on on object id
+                variant_seed = seed_from_string(variant_id, seed)
 
-            # Generate a random seed based on on object id
-            variant_seed = seed_from_string(variant_id, seed)
+                # Determine the asteroid's taxonomic type
+                ast_class = determine_ast_class(
+                    C_type.percentage[0].as_py(),
+                    S_type.percentage[0].as_py(),
+                    variant_seed,
+                )
 
-            # Determine the asteroid's taxonomic type
-            ast_class = determine_ast_class(
-                C_type.percentage[0].as_py(), S_type.percentage[0].as_py(), variant_seed
-            )
+                if ast_class == "C":
+                    config = C_type
+                elif ast_class == "S":
+                    config = S_type
 
-            if ast_class == "C":
-                config = C_type
-            elif ast_class == "S":
-                config = S_type
+                # Randomly generate the asteroid's diameter and albedo
+                diameter = select_asteroid_size(
+                    min_diam,
+                    max_diam,
+                    variant_seed,
+                )
+                albedo = select_albedo_from_range(
+                    config.albedo_min.to_numpy()[0],
+                    config.albedo_max.to_numpy()[0],
+                    variant_seed,
+                )
 
-            # Randomly generate the asteroid's diameter and albedo
-            diameter = select_asteroid_size(
-                config.min_diam.to_numpy()[0],
-                config.max_diam.to_numpy()[0],
-                variant_seed,
-            )
-            albedo = select_albedo_from_range(
-                config.albedo_min.to_numpy()[0],
-                config.albedo_max.to_numpy()[0],
-                variant_seed,
-            )
+                # Determine the asteroid's absolute magnitude
+                H = calculate_H(diameter, albedo)
 
-            # Determine the asteroid's absolute magnitude
-            H = calculate_H(diameter, albedo)
+                # Create the impactor orbits table
+                impactor_orbit = ImpactorOrbits.from_kwargs(
+                    orbit_id=[variant_id],
+                    object_id=orbit.object_id,
+                    coordinates=orbit.coordinates,
+                    impact_time=impact_date,
+                    dynamical_class=orbit.dynamical_class().astype("object"),
+                    ast_class=[ast_class],
+                    diameter=[diameter],
+                    albedo=[albedo],
+                    H_r=[H],
+                    u_r=config.u_r,
+                    g_r=config.g_r,
+                    i_r=config.i_r,
+                    z_r=config.z_r,
+                    y_r=config.y_r,
+                    GS=[0.15],
+                )
 
-            # Create the impactor orbits table
-            impactor_orbit = ImpactorOrbits.from_kwargs(
-                orbit_id=[variant_id],
-                object_id=orbit.object_id,
-                coordinates=orbit.coordinates,
-                impact_time=impact_date,
-                dynamical_class=orbit.dynamical_class().astype("object"),
-                ast_class=[ast_class],
-                diameter=[diameter],
-                albedo=[albedo],
-                H_r=[H],
-                u_r=config.u_r,
-                g_r=config.g_r,
-                i_r=config.i_r,
-                z_r=config.z_r,
-                y_r=config.y_r,
-                GS=[0.15],
-            )
-
-            impactor_orbits = qv.concatenate([impactor_orbits, impactor_orbit])
-            if impactor_orbits.fragmented():
-                impactor_orbits = qv.defragment(impactor_orbits)
+                impactor_orbits = qv.concatenate([impactor_orbits, impactor_orbit])
+                if impactor_orbits.fragmented():
+                    impactor_orbits = qv.defragment(impactor_orbits)
 
     return impactor_orbits
