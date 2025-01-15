@@ -535,3 +535,94 @@ def summarize_impact_study_results(run_dir: str) -> ImpactorResultSummary:
         )
 
     return results
+
+
+def plot_discovery_by_h_mag(impactor_results: ImpactorResultSummary) -> None:
+    """
+    Plot the discovery time by H-mag for each object.
+    """
+
+    fig, ax = plt.subplots()
+
+    # grab max and min h_mag
+    h_mag_max = pc.max(impactor_results.orbit.H_r)
+    h_mag_min = pc.min(impactor_results.orbit.H_r)
+
+    discovered_mask = impactor_results.discovered()
+    discovered = impactor_results.apply_mask(discovered_mask)
+    not_discovered = impactor_results.apply_mask(pc.invert(discovered_mask))
+
+    ax.hist(
+        discovered.orbit.H_r,
+        bins=np.arange(pc.floor(h_mag_min).as_py(), pc.ceil(h_mag_max).as_py(), 0.5),
+        alpha=0.5,
+        label="Discovered",
+        color="blue",
+    )
+    ax.hist(
+        not_discovered.orbit.H_r,
+        bins=np.arange(pc.floor(h_mag_min).as_py(), pc.ceil(h_mag_max).as_py(), 0.5),
+        alpha=0.5,
+        label="Not Discovered",
+        color="red",
+    )
+    ax.set_xlabel("H-mag")
+    ax.set_ylabel("Number of Objects")
+    ax.legend()
+    plt.show()
+
+
+def summarize_discovery_rates_by_diameter(
+    impactor_results: ImpactorResultSummary,
+) -> pa.Table:
+    """
+    Plot the discovery time by diameter for each object.
+    """
+
+    discovered_mask = impactor_results.discovered()
+    table = impactor_results.flattened_table().append_column(
+        "discovered", discovered_mask
+    )
+    table = table.drop_columns(["orbit.coordinates.covariance.values"])
+    table_diameter_grouped = table.group_by(
+        ["orbit.diameter", "orbit.ast_class"]
+    ).aggregate([("discovered", "sum"), ("orbit.ast_class", "count")])
+    return table_diameter_grouped
+
+
+def plot_q_vs_i(impactor_results: ImpactorResultSummary) -> None:
+    """
+    Plot the discovery time by H-mag for each object.
+    """
+
+    fig, ax = plt.subplots()
+
+    discovered_mask = impactor_results.discovered()
+    discovered = impactor_results.apply_mask(discovered_mask)
+    not_discovered = impactor_results.apply_mask(pc.invert(discovered_mask))
+
+    ax.scatter(
+        discovered.orbit.coordinates.to_keplerian().q,
+        discovered.orbit.coordinates.to_keplerian().i,
+        alpha=0.2,
+        label="Discovered",
+        color="blue",
+    )
+    ax.scatter(
+        not_discovered.orbit.coordinates.to_keplerian().q,
+        not_discovered.orbit.coordinates.to_keplerian().i,
+        alpha=0.2,
+        label="Not Discovered",
+        color="red",
+    )
+    ax.set_xlabel("q")
+    ax.set_ylabel("i")
+    ax.legend()
+    plt.show()
+
+
+if __name__ == "__main__":
+    results = ImpactorResultSummary.from_parquet("demo/data/summarized_results.parquet")
+
+    table_diameter_grouped = summarize_discovery_rates_by_diameter(results)
+    print(table_diameter_grouped)

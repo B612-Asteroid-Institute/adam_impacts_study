@@ -92,28 +92,6 @@ def select_albedo_from_range(
     return rng.uniform(albedo_min, albedo_max)
 
 
-def select_asteroid_size(min_diam: float, max_diam: float, seed: int = 13612) -> float:
-    """
-    Select an asteroid size from a range.
-
-    Parameters
-    ----------
-    min_diam : float
-        Minimum asteroid diameter, in kilometers.
-    max_diam : float
-        Maximum asteroid diameter, in kilometers.
-    seed : int, optional
-        Seed for the random number generator.
-
-    Returns
-    -------
-    diam : float
-        Asteroid diameter, in kilometers.
-    """
-    rng = np.random.default_rng(seed)
-    return rng.uniform(min_diam, max_diam)
-
-
 def determine_ast_class(percent_C: float, percent_S: float, seed: int = 13612) -> str:
     """
     Determine the asteroid class based on the percentage of C and S asteroids.
@@ -218,7 +196,7 @@ def generate_population(
     orbits: Orbits,
     impact_dates: Timestamp,
     population_config: PopulationConfig,
-    diameter_bins: List[float] = [0.01, 0.05, 0.1, 0.2, 0.5, 1.0],
+    diameters: List[float] = [0.01, 0.05, 0.14, 0.25, 0.5, 1.0],
     seed: int = 0,
     variants: int = 1,
 ) -> ImpactorOrbits:
@@ -251,10 +229,10 @@ def generate_population(
     S_type = population_config.select("ast_class", "S")
     C_type = population_config.select("ast_class", "C")
 
-    if len(diameter_bins) < 2:
+    if len(diameters) < 2:
         raise ValueError("At least two diameter bins must be provided")
 
-    if len(diameter_bins) > 999:
+    if len(diameters) > 999:
         raise ValueError("Too many diameter bins requested")
 
     if variants > 999999:
@@ -262,9 +240,7 @@ def generate_population(
 
     impactor_orbits = ImpactorOrbits.empty()
     for orbit, impact_date in zip(orbits, impact_dates):
-        for i, (min_diam, max_diam) in enumerate(
-            zip(diameter_bins[:-1], diameter_bins[1:])
-        ):
+        for i, diameter in enumerate(diameters):
             for variant in range(variants):
                 # Create a unique identifier for the variant
                 variant_id = f"{orbit.orbit_id[0].as_py()}_b{i:03d}_v{variant:06d}"
@@ -284,12 +260,6 @@ def generate_population(
                 elif ast_class == "S":
                     config = S_type
 
-                # Randomly generate the asteroid's diameter and albedo
-                diameter = select_asteroid_size(
-                    min_diam,
-                    max_diam,
-                    variant_seed,
-                )
                 albedo = select_albedo_from_range(
                     config.albedo_min.to_numpy()[0],
                     config.albedo_max.to_numpy()[0],

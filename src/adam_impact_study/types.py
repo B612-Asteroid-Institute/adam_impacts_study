@@ -2,6 +2,8 @@ import json
 from dataclasses import asdict, dataclass
 from typing import Optional
 
+import pyarrow as pa
+import pyarrow.compute as pc
 import quivr as qv
 from adam_core.coordinates import CartesianCoordinates, SphericalCoordinates
 from adam_core.observers import Observers
@@ -122,6 +124,9 @@ class ImpactorResultSummary(qv.Table):
     # How close all the windows got to discovering the definite impact nature
     maximum_impact_probability = qv.Float64Column(nullable=True)
     error = qv.LargeStringColumn(nullable=True)
+
+    def discovered(self) -> pa.BooleanArray:
+        return pc.invert(pc.is_null(self.discovery_time.days))
 
 
 class VariantOrbitsWithWindowName(qv.Table):
