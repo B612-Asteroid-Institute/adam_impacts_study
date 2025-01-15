@@ -64,7 +64,9 @@ def compute_warning_time(
     )
 
     # Drop duplicates and keep the first instance
-    filtered_results = filtered_results.drop_duplicates(subset=["orbit_id"], keep="first")
+    filtered_results = filtered_results.drop_duplicates(
+        subset=["orbit_id"], keep="first"
+    )
 
     # import pdb; pdsb.set_trace()
     # Convert last observation time to an MJD
@@ -444,12 +446,12 @@ def plot_ip_over_time(
         plt.close()
 
 
-def collect_orbit_window_results(
-    run_dir: str, orbit_id: str
-) -> WindowResult:
+def collect_orbit_window_results(run_dir: str, orbit_id: str) -> WindowResult:
     paths = get_study_paths(run_dir, orbit_id)
     orbit_dir = paths["orbit_base_dir"]
-    window_result_files = glob.glob(f"{orbit_dir}/windows/*/impact_results_{orbit_id}.parquet")
+    window_result_files = sorted(
+        glob.glob(f"{orbit_dir}/windows/*/window_result.parquet")
+    )
     window_results = WindowResult.empty()
     for f in window_result_files:
         window_results = qv.concatenate([window_results, WindowResult.from_parquet(f)])
@@ -474,7 +476,6 @@ def summarize_impact_study_object_results(
         impactor_orbits, impact_results, discovery_dates
     )
 
-    import pdb; pdb.set_trace()
     mean_impact_time = Timestamp.from_mjd(
         [pc.mean(impact_results.mean_impact_time.mjd())],
         impact_results.mean_impact_time.scale,
@@ -489,15 +490,13 @@ def summarize_impact_study_object_results(
     observation_cadence = compute_observation_cadence(observations)
 
     return ImpactorResultSummary.from_kwargs(
-        orbit_id=[orbit_id],
-        object_id=impact_results[0].object_id,
+        orbit=impactor_orbits,
         mean_impact_time=mean_impact_time,
         windows=[len(impact_results)],
         nights=[pc.max(impact_results.observation_nights)],
         observations=[pc.max(impact_results.observation_count)],
         singletons=[pc.sum(observation_cadence.singletons)],
         tracklets=[pc.sum(observation_cadence.tracklets)],
-        observed=[len(observations) > 0],
         discovery_time=discovery_dates.discovery_date,
         warning_time=warning_times.warning_time,
         realization_time=realization_times.realization_time,

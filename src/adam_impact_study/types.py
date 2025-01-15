@@ -97,8 +97,7 @@ class WindowResult(qv.Table):
 
 
 class ImpactorResultSummary(qv.Table):
-    orbit_id = qv.LargeStringColumn()
-    object_id = qv.LargeStringColumn(nullable=True)
+    orbit = ImpactorOrbits.as_column()
     # This is a mean of means of the impact time from each window
     mean_impact_time = Timestamp.as_column()
     # Number of distinct orbit fitting windows
