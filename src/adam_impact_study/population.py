@@ -4,8 +4,6 @@ import os
 from typing import List
 
 import numpy as np
-import pyarrow as pa
-import pyarrow.compute as pc
 import quivr as qv
 from adam_core.orbits import Orbits
 from adam_core.time import Timestamp

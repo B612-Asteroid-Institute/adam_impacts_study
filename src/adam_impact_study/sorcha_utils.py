@@ -14,21 +14,10 @@ from jpl_small_bodies_de441_n16 import de441_n16
 from naif_de440 import de440
 
 from adam_impact_study.conversions import sorcha_output_to_od_observations
-from adam_impact_study.types import ImpactorOrbits, Observations
+from adam_impact_study.types import ImpactorOrbits, Observations, PhotometricProperties
 
 logger = logging.getLogger(__name__)
 logger.setLevel(os.environ.get("ADAM_LOG_LEVEL", "INFO"))
-
-
-class PhotometricProperties(qv.Table):
-    orbit_id = qv.LargeStringColumn()
-    H_mf = qv.Float64Column()
-    u_mf = qv.Float64Column()
-    g_mf = qv.Float64Column()
-    i_mf = qv.Float64Column()
-    z_mf = qv.Float64Column()
-    y_mf = qv.Float64Column()
-    GS = qv.Float64Column()
 
 
 def remove_quotes(file_path: str) -> None:

@@ -1,10 +1,6 @@
 import hashlib
 from typing import Optional
 
-import pyarrow.compute as pc
-
-from adam_impact_study.types import Observations
-
 
 def seed_from_string(s: str, seed: Optional[int] = None) -> int:
     """

@@ -1,14 +1,10 @@
-import json
 from unittest.mock import patch
-
-import pytest
 
 from adam_impact_study.population import (
     determine_ast_class,
     select_albedo_from_range,
     select_asteroid_size,
 )
-from adam_impact_study.sorcha_utils import PhotometricProperties
 
 
 def test_select_albedo_from_range():

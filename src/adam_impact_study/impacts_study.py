@@ -3,13 +3,12 @@ import os
 import shutil
 from typing import Iterator, Optional, Type
 
-import numpy as np
 import pyarrow as pa
 import pyarrow.compute as pc
 import quivr as qv
 import ray
 from adam_assist import ASSISTPropagator
-from adam_core.dynamics.impacts import calculate_impact_probabilities, calculate_impacts
+from adam_core.dynamics.impacts import calculate_impact_probabilities
 from adam_core.observations.ades import ADESObservations
 from adam_core.observers.utils import calculate_observing_night
 from adam_core.orbits import VariantOrbits

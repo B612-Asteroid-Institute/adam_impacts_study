@@ -1,15 +1,17 @@
+import logging
 import os
 
 import pyarrow as pa
 import pyarrow.compute as pc
 import quivr as qv
+from adam_assist import ASSISTPropagator
 from adam_core.orbits import Orbits
-from adam_core.propagator.adam_assist import (  # download_jpl_ephemeris_files,
-    ASSISTPropagator,
-)
 from adam_core.time import Timestamp
 
 from adam_impact_study.conversions import impactor_file_to_adam_orbit
+
+logger = logging.getLogger(__name__)
+logger.setLevel(os.environ.get("ADAM_LOG_LEVEL", "INFO"))
 
 inputdir = "./results_raw/"
 outputdir = "./processed_results/"

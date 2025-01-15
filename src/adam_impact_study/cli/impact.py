@@ -9,8 +9,6 @@ from typing import Optional
 
 import pyarrow as pa
 import pyarrow.compute as pc
-import ray
-from adam_core.orbits import Orbits
 from adam_core.time import Timestamp
 
 from adam_impact_study.analysis import plot_ip_over_time
@@ -50,7 +48,7 @@ def run_impact_study(
     conn = sqlite3.connect(pointing_file)
     cursor = conn.cursor()
     cursor.execute(
-        f"SELECT observationStartMJD as observationStartMJD_TAI FROM observations ORDER BY observationStartMJD_TAI LIMIT 1"
+        "SELECT observationStartMJD as observationStartMJD_TAI FROM observations ORDER BY observationStartMJD_TAI LIMIT 1"
     )
     survey_start = cursor.fetchone()[0]
     survey_start = Timestamp.from_mjd([survey_start], scale="tai")

@@ -18,20 +18,12 @@ from adam_core.observers import Observers
 from adam_core.orbits import Orbits
 from adam_core.time import Timestamp
 
+from adam_impact_study.conversions import Observations, Photometry
+from adam_impact_study.impacts_study import run_impact_study_for_orbit
 from adam_impact_study.types import ImpactorOrbits, WindowResult
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
-
-from adam_impact_study.conversions import (
-    Observations,
-    Photometry,
-    impactor_file_to_adam_orbit,
-)
-from adam_impact_study.impacts_study import (
-    run_impact_study_all,
-    run_impact_study_for_orbit,
-)
 
 
 @pytest.fixture
@@ -345,7 +337,7 @@ def test_run_impact_study_for_orbit(
         expected_args = expected_fo_call_list[i]
         assert (
             actual_args[0] == expected_args[0]
-        ), f"fo observations not what was expected"
+        ), "fo observations not what was expected"
         assert actual_args[1] == expected_args[1], f"Call {i}: Path mismatch"
 
     expected_calculate_impacts_calls = [

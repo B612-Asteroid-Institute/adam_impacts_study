@@ -263,8 +263,6 @@ def compute_observation_cadence(
     ObservationCadence
         The observation cadence for each object.
     """
-    print(observations.orbit_id.unique().to_pylist())
-    import pdb; pdb.set_trace()
     observations_table = observations.flattened_table().select(
         ["orbit_id", "observing_night"]
     )
@@ -298,17 +296,12 @@ def compute_observation_cadence(
         [observations.orbit_id.unique()], ["orbit_id"]
     )
 
-    tracklet_counts = tracklet_counts.join(
-        orbit_id_table, "orbit_id", "orbit_id"
-    )
-    singleton_counts = singleton_counts.join(
-        orbit_id_table, "orbit_id", "orbit_id"
-    )
+    tracklet_counts = tracklet_counts.join(orbit_id_table, "orbit_id", "orbit_id")
+    singleton_counts = singleton_counts.join(orbit_id_table, "orbit_id", "orbit_id")
 
     observation_cadence = orbit_id_table.join(
         tracklet_counts, "orbit_id", "orbit_id"
     ).join(singleton_counts, "orbit_id", "orbit_id")
-
 
     return ObservationCadence.from_kwargs(
         orbit_id=observation_cadence.column("orbit_id"),
@@ -482,7 +475,6 @@ def summarize_impact_study_object_results(
 
     # Compute the number of singletons and tracklets in each window
     observation_cadence = compute_observation_cadence(observations)
-
 
     return ImpactorResultSummary.from_kwargs(
         orbit_id=[orbit_id],

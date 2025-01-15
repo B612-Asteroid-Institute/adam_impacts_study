@@ -2,7 +2,6 @@ import glob
 import os
 
 import pyarrow as pa
-import pyarrow.compute as pc
 import quivr as qv
 from adam_core.orbits import Orbits
 

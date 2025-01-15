@@ -3,11 +3,7 @@ from dataclasses import asdict, dataclass
 from typing import Optional
 
 import quivr as qv
-from adam_core.coordinates import (
-    CartesianCoordinates,
-    KeplerianCoordinates,
-    SphericalCoordinates,
-)
+from adam_core.coordinates import CartesianCoordinates, SphericalCoordinates
 from adam_core.observers import Observers
 from adam_core.orbits import Orbits, VariantOrbits
 from adam_core.time import Timestamp
@@ -26,6 +22,17 @@ class Observations(qv.Table):
     observers = Observers.as_column()
     photometry = Photometry.as_column(nullable=True)
     observing_night = qv.Int64Column(nullable=True)
+
+
+class PhotometricProperties(qv.Table):
+    orbit_id = qv.LargeStringColumn()
+    H_mf = qv.Float64Column()
+    u_mf = qv.Float64Column()
+    g_mf = qv.Float64Column()
+    i_mf = qv.Float64Column()
+    z_mf = qv.Float64Column()
+    y_mf = qv.Float64Column()
+    GS = qv.Float64Column()
 
 
 class ImpactorOrbits(qv.Table):
@@ -52,9 +59,7 @@ class ImpactorOrbits(qv.Table):
             coordinates=self.coordinates,
         )
 
-    def photometric_properties(self) -> "PhotometricProperties":
-        from .sorcha_utils import PhotometricProperties
-
+    def photometric_properties(self) -> PhotometricProperties:
         return PhotometricProperties.from_kwargs(
             orbit_id=self.orbit_id,
             H_mf=self.H_r,

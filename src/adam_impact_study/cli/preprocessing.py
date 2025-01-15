@@ -1,7 +1,6 @@
 import argparse
 import logging
 import os
-from typing import Optional
 
 from adam_impact_study.conversions import impactor_file_to_adam_orbit
 

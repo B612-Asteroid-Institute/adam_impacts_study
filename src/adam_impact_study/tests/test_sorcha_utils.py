@@ -2,7 +2,6 @@ import os
 from unittest.mock import patch
 
 import numpy as np
-import pandas as pd
 import pyarrow as pa
 import pytest
 from adam_core.coordinates import CartesianCoordinates, KeplerianCoordinates, Origin

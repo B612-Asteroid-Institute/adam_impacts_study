@@ -1,6 +1,6 @@
 import json
 import logging
-from typing import Dict, Optional, Tuple
+from typing import Dict, Tuple
 
 import numpy as np
 import pyarrow as pa
