@@ -86,7 +86,7 @@ class WindowResult(qv.Table):
     observation_start = Timestamp.as_column()
     observation_end = Timestamp.as_column()
     observation_count = qv.UInt64Column()
-    observations_rejected = qv.UInt64Column()
+    observations_rejected = qv.UInt64Column(nullable=True)
     observation_nights = qv.UInt64Column()
     impact_probability = qv.Float64Column(nullable=True)
     mean_impact_time = Timestamp.as_column(nullable=True)

@@ -1,4 +1,5 @@
 import hashlib
+import os
 from typing import Optional
 
 
@@ -44,7 +45,7 @@ def get_study_paths(
     dict
         Dictionary containing all relevant paths
     """
-    import os
+
 
     obj_dir = os.path.join(run_dir, orbit_id)
 
@@ -54,7 +55,7 @@ def get_study_paths(
     }
 
     if time_range:
-        time_dir = os.path.join(obj_dir, time_range)
+        time_dir = os.path.join(obj_dir, "windows",time_range)
         paths.update(
             {
                 "time_dir": time_dir,

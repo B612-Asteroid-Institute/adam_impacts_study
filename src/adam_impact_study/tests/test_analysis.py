@@ -67,8 +67,7 @@ def impacting_orbits():
 
 
 def test_plot_ip_over_time(impact_study_results, impacting_orbits, tmpdir):
-    # tmpdir_path = tmpdir.mkdir("plots")
-    tmpdir_path = os.path.join(os.getcwd(), "test_plots")
+    tmpdir_path = tmpdir.mkdir("plots")
     os.makedirs(tmpdir_path, exist_ok=True)
 
     # Test without survey_start
@@ -232,6 +231,15 @@ def test_compute_warning_time():
     assert warning_time_obj3.warning_time[0].as_py() == 50.0  # 60300 - 60250
 
 
+    # Make sure warning time still works if inputs are not sorted
+    scrambled_results = results.take([1, 0, 2, 3])
+    scrambled_impactor_orbits = impactor_orbits.take([1, 0, 2])
+    warning_times = compute_warning_time(scrambled_impactor_orbits, scrambled_results, threshold=0.25)
+    assert len(warning_times) == 3
+    assert warning_times.orbit_id.to_pylist() == ["test1", "test2", "test3"]
+    assert warning_times.warning_time.to_pylist() == [40.0, None, 50.0]
+
+
 def test_compute_warning_time_edge_cases():
     # Test empty impact study results
     impactor_orbits = ImpactorOrbits.from_kwargs(
@@ -375,3 +383,11 @@ def test_compute_realization_time():
     assert len(realization_times) == 3
     assert realization_times.orbit_id.to_pylist() == ["test1", "test2", "test3"]
     assert realization_times.realization_time.to_pylist() == [None, None, 0.0]
+
+    # Now test with scrambled inputs
+    scrambled_results = results.take([1, 0, 2, 3])
+    scrambled_impactor_orbits = impactor_orbits.take([1, 0, 2])
+    realization_times = compute_realization_time(scrambled_impactor_orbits, scrambled_results, discovery_dates, threshold=1e-9)
+    assert len(realization_times) == 3
+    assert realization_times.orbit_id.to_pylist() == ["test1", "test2", "test3"]
+    assert realization_times.realization_time.to_pylist() == [25.0, None, 0.0]

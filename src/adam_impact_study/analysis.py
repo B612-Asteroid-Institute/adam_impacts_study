@@ -60,12 +60,13 @@ def compute_warning_time(
 
     # Filter results to cases where impact probability is above threshold
     filtered_results = results_sorted.apply_mask(
-        pc.greater_equal(pc.fill_null(results.impact_probability, 0), threshold)
+        pc.greater_equal(pc.fill_null(results_sorted.impact_probability, 0), threshold)
     )
 
     # Drop duplicates and keep the first instance
-    filtered_results = filtered_results.drop_duplicates(subset=["orbit_id"])
+    filtered_results = filtered_results.drop_duplicates(subset=["orbit_id"], keep="first")
 
+    # import pdb; pdsb.set_trace()
     # Convert last observation time to an MJD
     filtered_results = (
         filtered_results.flattened_table()
@@ -92,7 +93,7 @@ def compute_warning_time(
 
     return WarningTimes.from_pyarrow(
         impactors_table_time.select(["orbit_id", "warning_time"]).combine_chunks()
-    )
+    ).sort_by([("orbit_id", "ascending")])
 
 
 class DiscoveryDates(qv.Table):
@@ -197,7 +198,7 @@ def compute_realization_time(
 
     # Filter results to cases where impact probability is above threshold
     filtered_results = results_sorted.apply_mask(
-        pc.greater_equal(pc.fill_null(results.impact_probability, 0), threshold)
+        pc.greater_equal(pc.fill_null(results_sorted.impact_probability, 0), threshold)
     )
 
     # Drop duplicates and keep the first instance
@@ -236,7 +237,7 @@ def compute_realization_time(
 
     return RealizationTimes.from_pyarrow(
         realization_table.select(["orbit_id", "realization_time"]).combine_chunks()
-    )
+    ).sort_by([("orbit_id", "ascending")])
 
 
 class ObservationCadence(qv.Table):
@@ -443,6 +444,18 @@ def plot_ip_over_time(
         plt.close()
 
 
+def collect_orbit_window_results(
+    run_dir: str, orbit_id: str
+) -> WindowResult:
+    paths = get_study_paths(run_dir, orbit_id)
+    orbit_dir = paths["orbit_base_dir"]
+    window_result_files = glob.glob(f"{orbit_dir}/windows/*/impact_results_{orbit_id}.parquet")
+    window_results = WindowResult.empty()
+    for f in window_result_files:
+        window_results = qv.concatenate([window_results, WindowResult.from_parquet(f)])
+    return window_results
+
+
 def summarize_impact_study_object_results(
     run_dir: str, orbit_id: str
 ) -> ImpactorResultSummary:
@@ -451,9 +464,7 @@ def summarize_impact_study_object_results(
     """
     paths = get_study_paths(run_dir, orbit_id)
     orbit_dir = paths["orbit_base_dir"]
-    impact_results = WindowResult.from_parquet(
-        f"{orbit_dir}/impact_results_{orbit_id}.parquet"
-    )
+    impact_results = collect_orbit_window_results(run_dir, orbit_id)
     impactor_orbits = ImpactorOrbits.from_parquet(
         f"{orbit_dir}/impact_orbits_{orbit_id}.parquet"
     )
@@ -463,6 +474,7 @@ def summarize_impact_study_object_results(
         impactor_orbits, impact_results, discovery_dates
     )
 
+    import pdb; pdb.set_trace()
     mean_impact_time = Timestamp.from_mjd(
         [pc.mean(impact_results.mean_impact_time.mjd())],
         impact_results.mean_impact_time.scale,

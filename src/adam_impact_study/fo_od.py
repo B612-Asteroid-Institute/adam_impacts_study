@@ -200,7 +200,7 @@ def run_fo_od(
     orbit = fo_to_adam_orbit_cov(fo_result_dir)
 
     # Re-assign orbit_id to the original value
-    orbit = orbit.set_column("orbit_id", orbit_id[:1])
+    orbit = orbit.set_column("orbit_id", observations[0].orbit_id)
     rejected = rejected_observations_from_fo(fo_result_dir)
 
     return orbit, rejected, None
