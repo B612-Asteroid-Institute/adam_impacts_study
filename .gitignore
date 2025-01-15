@@ -1,2 +1,6 @@
 .pdm-python
-find_orb/*
+find_orb/
+.DS_Store
+debug.txt
+results*
+*__pycache__*

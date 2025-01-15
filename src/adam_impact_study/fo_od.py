@@ -1,63 +1,206 @@
+import logging
 import os
+import pathlib
 import shutil
 import subprocess
+import tempfile
+from typing import Optional, Tuple
 
+import pyarrow.compute as pc
+from adam_core.observations.ades import ADESObservations
 from adam_core.orbits import Orbits
 
-from adam_impact_study.conversions import fo_to_adam_orbit_cov
+from adam_impact_study.conversions import (
+    fo_to_adam_orbit_cov,
+    od_observations_to_ades_file,
+    rejected_observations_from_fo,
+)
+
+from .types import Observations
+
+logger = logging.getLogger(__name__)
+logger.setLevel(os.environ.get("ADAM_LOG_LEVEL", "INFO"))
+
+
+FO_BINARY_DIR = pathlib.Path(__file__).parent.parent.parent / "find_orb/find_orb"
+LINUX_JPL_PATH = (
+    pathlib.Path(__file__).parent.parent.parent
+    / "find_orb/.find_orb/linux_p1550p2650.440t"
+)
+
+BC405_FILENAME = (
+    pathlib.Path(__file__).parent.parent.parent / "find_orb/.find_orb/bc405.dat"
+)
+
+
+def _populate_fo_directory(working_dir: str) -> str:
+    os.makedirs(working_dir, exist_ok=True)
+    # List of required files to copy from FO_DIR to current directory
+    required_files = [
+        "ObsCodes.htm",
+        "jpl_eph.txt",
+        "orbitdef.sof",
+        "rovers.txt",
+        "xdesig.txt",
+        "cospar.txt",
+        "efindorb.txt",
+        "odd_name.txt",
+        "sigma.txt",
+        "mu1.txt",
+    ]
+
+    # Copy required files to the current directory
+    for file in required_files:
+        src = os.path.join(FO_BINARY_DIR, file)
+        dst = os.path.join(working_dir, file)
+        shutil.copy2(src, dst)  # Copy to current directory
+
+    # Copy bc405.dat to the current directory
+    shutil.copy2(BC405_FILENAME, os.path.join(working_dir, "bc405.dat"))
+
+    # Template in the JPL path to environ.dat
+    environ_dat_template = pathlib.Path(__file__).parent / "environ.dat.tpl"
+    with open(environ_dat_template, "r") as file:
+        environ_dat_content = file.read()
+    environ_dat_content = environ_dat_content.format(
+        LINUX_JPL_FILENAME=LINUX_JPL_PATH.absolute(),
+    )
+    with open(os.path.join(working_dir, "environ.dat"), "w") as file:
+        file.write(environ_dat_content)
+
+    return working_dir
+
+
+def _create_fo_tmp_directory() -> str:
+    """
+    Creates a temporary directory that avoids /tmp to handle fo locking and directory length limits.
+    Uses ~/.cache/adam_impact_study/ftmp to avoid Find_Orb's special handling of paths containing /tmp/.
+
+    Returns:
+        str: The absolute path to the temporary directory populated with necessary FO files
+    """
+    base_tmp_dir = os.path.expanduser("~/.cache/adam_impact_study/ftmp")
+    os.makedirs(base_tmp_dir, mode=0o770, exist_ok=True)
+    tmp_dir = tempfile.mkdtemp(dir=base_tmp_dir)
+    os.chmod(tmp_dir, 0o770)
+    tmp_dir = _populate_fo_directory(tmp_dir)
+    return tmp_dir
+
+
+def _copy_files_from_tmp_to_fo_dir(fo_tmp_dir: str, fo_dir: str):
+    # Selectively copy files from fo_tmp_dir to fo_dir
+    # Explicitly remove the tmp directory after copying
+    files_to_copy = [
+        "covar.txt",
+        "cospar.txt",
+        "elem_short.json",
+        "gauss.out",
+        "covar.json",
+        "total.json",
+        "elements.txt",
+        "debug.txt",
+        "bc405pre.dat",
+        "environ.dat",
+    ]
+
+    for file in files_to_copy:
+        if os.path.exists(os.path.join(fo_tmp_dir, file)):
+            shutil.copy2(os.path.join(fo_tmp_dir, file), os.path.join(fo_dir, file))
+
+
+def _de440t_exists():
+    if not os.path.exists(LINUX_JPL_PATH):
+        raise Exception(
+            f"DE440t file not found at {LINUX_JPL_PATH}, find_orb will not work correctly"
+        )
 
 
 def run_fo_od(
-    fo_input_file: str,
-    fo_output_folder: str,
-    FO_DIR: str,
-    RUN_DIR: str,
-    RESULT_DIR: str,
-) -> Orbits:
-    """
-    Run the find_orb orbit determination process for each object
+    observations: Observations,
+    fo_result_dir: str,
+) -> Tuple[Orbits, ADESObservations, Optional[str]]:
+    """Run Find_Orb orbit determination with directory-based paths
 
     Parameters
     ----------
-    fo_input_file : str
-        Name of the find_orb input file.
-    fo_output_folder : str
-        Name of the find_orb output folder.
-    FO_DIR : str
-        Directory path where the find_orb executable is located.
-    RUN_DIR : str
-        Directory path where the script is being run.
-    RESULT_DIR : str
-        Directory path where the results will be stored.
+    observations : Observations
+        Observations to process
+    fo_result_dir : str
+        Directory where Find_Orb output files will be written
 
     Returns
     -------
-    orbit : `~adam_core.orbits.orbits.Orbits`
-        Orbit object containing the orbital elements and covariance matrix.
+    Tuple[Orbits, ADESObservations, Optional[str]]
+        Tuple containing:
+        - Determined orbit
+        - Processed observations
+        - Error message (if any)
     """
 
-    # Generate the find_orb commands
+    # This function is only valid for a single orbit_id
+    if len(observations.orbit_id.unique()) > 1:
+        raise ValueError("This function is only valid for a single orbit_id")
+
+    _de440t_exists()
+    fo_tmp_dir = _create_fo_tmp_directory()
+
+    # Create input file
+    input_file = os.path.join(fo_tmp_dir, "observations.csv")
+    # Truncate object_id to 8 characters. we will re-assign it after FO runs
+    orbit_id = observations.orbit_id
+    observations = observations.set_column(
+        "orbit_id", pc.utf8_slice_codeunits(orbit_id, 0, 8)
+    )
+    od_observations_to_ades_file(observations, input_file)
+
+    debug_level = os.environ.get("ADAM_LOG_LEVEL", "INFO")
+    fo_debug_level = {
+        "DEBUG": 10,
+        "INFO": 2,
+    }.get(debug_level, 0)
+    # Run Find_Orb
     fo_command = (
-        f"cd {FO_DIR}; ./fo {fo_input_file} "
-        f"-O {fo_output_folder}; cp -r {fo_output_folder} "
-        f"{RUN_DIR}/{RESULT_DIR}/; cd {RUN_DIR}"
-    )
-    print(f"Find Orb command: {fo_command}")
-
-    # Ensure the output directory exists and copy the input file
-    os.makedirs(f"{FO_DIR}/{fo_output_folder}", exist_ok=True)
-    shutil.copyfile(
-        f"{RESULT_DIR}/{fo_input_file}",
-        f"{FO_DIR}/{fo_input_file}",
+        f"{FO_BINARY_DIR}/fo {input_file} -c "
+        f"-d {fo_debug_level} "
+        f"-D {fo_tmp_dir}/environ.dat "
+        f"-O {fo_tmp_dir}"
     )
 
-    # Run find_orb and check for output
-    subprocess.run(fo_command, shell=True)
-    if not os.path.exists(f"{FO_DIR}/{fo_output_folder}/covar.json"):
-        print("No find_orb output for: ", fo_output_folder)
-        return None
-    else:
-        # Convert to ADAM Orbit objects
-        orbit = fo_to_adam_orbit_cov(f"{RESULT_DIR}/{fo_output_folder}")
+    logger.info(f"fo command: {fo_command}")
 
-        return orbit
+    result = subprocess.run(
+        fo_command,
+        shell=True,
+        cwd=fo_tmp_dir,
+        text=True,
+        capture_output=True,
+    )
+    logger.debug(f"{result.stdout}\n{result.stderr}")
+
+    _copy_files_from_tmp_to_fo_dir(fo_tmp_dir, fo_result_dir)
+    # Remove the tmp directory after copying because it has
+    # some large files in it that we don't need
+    shutil.rmtree(fo_tmp_dir)
+
+    if result.returncode != 0:
+        logger.warning(f"Find_Orb failed with return code {result.returncode}")
+        logger.warning(f"{result.stdout}\n{result.stderr}")
+        return Orbits.empty(), ADESObservations.empty(), "Find_Orb failed"
+
+    if not os.path.exists(f"{fo_result_dir}/covar.json") or not os.path.exists(
+        f"{fo_result_dir}/total.json"
+    ):
+        logger.warning("Find_Orb failed, covar.json or total.json file not found")
+        return (
+            Orbits.empty(),
+            ADESObservations.empty(),
+            "Find_Orb failed, covar.json or total.json file not found",
+        )
+
+    orbit = fo_to_adam_orbit_cov(fo_result_dir)
+
+    # Re-assign orbit_id to the original value
+    orbit = orbit.set_column("orbit_id", orbit_id[:1])
+    rejected = rejected_observations_from_fo(fo_result_dir)
+
+    return orbit, rejected, None

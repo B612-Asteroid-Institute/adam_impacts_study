@@ -8,14 +8,13 @@ from adam_core.orbits import Orbits
 from adam_core.time import Timestamp
 
 from adam_impact_study.conversions import (
-    Observations,
-    Photometry,
     fo_to_adam_orbit_cov,
     impactor_file_to_adam_orbit,
     od_observations_to_ades_file,
     read_fo_output,
     sorcha_output_to_od_observations,
 )
+from adam_impact_study.types import Observations, Photometry
 
 
 @pytest.fixture
@@ -73,7 +72,7 @@ def test_sorcha_output_to_od_observations(mock_sorcha_output_file):
     observations = sorcha_output_to_od_observations(mock_sorcha_output_file)
     assert observations is not None
     assert len(observations) == 5
-    assert observations.object_id.to_pylist() == [
+    assert observations.orbit_id.to_pylist() == [
         "Test_1001",
         "Test_1001",
         "Test_1001",
@@ -110,7 +109,7 @@ def test_sorcha_output_to_od_observations(mock_sorcha_output_file):
 def mock_observations():
     return Observations.from_kwargs(
         obs_id=["obs1", "obs2", "obs3", "obs4", "obs5"],
-        object_id=["Test_1001", "Test_1001", "Test_1001", "Test_1002", "Test_1002"],
+        orbit_id=["Test_1001", "Test_1001", "Test_1001", "Test_1002", "Test_1002"],
         coordinates=SphericalCoordinates.from_kwargs(
             lon=[180.0, 181.0, 182.0, 183.0, 184.0],
             lat=[0.0, 1.0, 2.0, 3.0, 4.0],

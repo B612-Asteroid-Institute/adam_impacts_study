@@ -1,5 +1,6 @@
 import json
-from typing import Dict, Optional, Tuple
+import logging
+from typing import Dict, Tuple
 
 import numpy as np
 import pyarrow as pa
@@ -24,19 +25,10 @@ from adam_core.observers import Observers
 from adam_core.orbits import Orbits
 from adam_core.time import Timestamp
 
+from adam_impact_study.types import Observations, Photometry
 
-class Photometry(qv.Table):
-    mag = qv.Float64Column()
-    mag_sigma = qv.Float64Column(nullable=True)
-    filter = qv.LargeStringColumn()
-
-
-class Observations(qv.Table):
-    obs_id = qv.LargeStringColumn()
-    object_id = qv.LargeStringColumn()
-    coordinates = SphericalCoordinates.as_column()
-    observers = Observers.as_column()
-    photometry = Photometry.as_column(nullable=True)
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
 
 
 def impactor_file_to_adam_orbit(impactor_file: str) -> Orbits:
@@ -79,7 +71,7 @@ def impactor_file_to_adam_orbit(impactor_file: str) -> Orbits:
     return orbit
 
 
-def sorcha_output_to_od_observations(sorcha_output_file: str) -> Optional[Observations]:
+def sorcha_output_to_od_observations(sorcha_output_file: str) -> Observations:
     """
     Convert Sorcha observations output files to Observations type.
 
@@ -94,14 +86,14 @@ def sorcha_output_to_od_observations(sorcha_output_file: str) -> Optional[Observ
         Observations object continaining the Sorcha observations.
         Returns None if the input file is empty.
     """
-
+    logger.info(f"Reading Sorcha output file: {sorcha_output_file}")
     sorcha_observations_table = pa.csv.read_csv(sorcha_output_file)
     sort_indices = pc.sort_indices(
         sorcha_observations_table,
         sort_keys=[("ObjID", "ascending"), ("fieldMJD_TAI", "ascending")],
     )
     sorcha_observations_table = sorcha_observations_table.take(sort_indices)
-    od_observations = None
+    observations = Observations.empty()
 
     object_ids = pc.unique(sorcha_observations_table["ObjID"]).to_numpy(
         zero_copy_only=False
@@ -143,20 +135,17 @@ def sorcha_output_to_od_observations(sorcha_output_file: str) -> Optional[Observ
             ]
         )
 
-        od_observation = Observations.from_kwargs(
+        object_observation = Observations.from_kwargs(
             obs_id=[f"{obj}_{i}" for i in range(len(object_obs))],
-            object_id=pa.repeat(obj, len(object_obs)),
+            orbit_id=pa.repeat(obj, len(object_obs)),
             coordinates=coordinates_sorted,
             observers=Observers.from_code("X05", coordinates_sorted.time),
             photometry=photometry,
         )
 
-        if od_observations is None:
-            od_observations = od_observation
-        else:
-            od_observations = qv.concatenate([od_observations, od_observation])
+        observations = qv.concatenate([observations, object_observation])
 
-    return od_observations
+    return observations
 
 
 def od_observations_to_ades_file(
@@ -179,7 +168,7 @@ def od_observations_to_ades_file(
         Path to the generated ADES file.
     """
     ades_obs = ADESObservations.from_kwargs(
-        trkSub=od_observations.object_id,
+        trkSub=od_observations.orbit_id,
         obsTime=od_observations.coordinates.time,
         ra=od_observations.coordinates.lon,
         dec=od_observations.coordinates.lat,
@@ -276,6 +265,7 @@ def read_fo_output(fo_output_dir: str) -> Tuple[Dict[str, dict], Dict[str, dict]
     """
     covar_dict = read_fo_covariance(f"{fo_output_dir}/covar.json")
     elements_dict = read_fo_orbits(f"{fo_output_dir}/total.json")
+    # TODO: Read in the observations used and unused and return them
     return elements_dict, covar_dict
 
 
@@ -381,14 +371,18 @@ def fo_to_adam_orbit_cov(fo_output_folder: str) -> Orbits:
 
     elements_dict, covar_dict = read_fo_output(fo_output_folder)
 
-    orbits = None
+    orbits = Orbits.empty()
     for object_id, elements in elements_dict.items():
-
         covar_matrix = np.array([covar_dict["covar"]])
         covar_state_vector = [covar_dict["state_vect"]]
 
         covariances_cartesian = CoordinateCovariances.from_matrix(covar_matrix)
-        times = Timestamp.from_jd([covar_dict["epoch"]], scale="tdb")
+        # After a lot of searching, we mostly believe that the epoch
+        # is defined in TT (TD in find_orb). During reading of the
+        # ADES files, find_orb converts the jd times in its struct to
+        # TD and does not appear to rescale it again before writing
+        # out the total.json and covar.json files.
+        times = Timestamp.from_jd([covar_dict["epoch"]], scale="tt")
 
         cartesian_coordinates = CartesianCoordinates.from_kwargs(
             x=[covar_state_vector[0][0]],
@@ -407,9 +401,58 @@ def fo_to_adam_orbit_cov(fo_output_folder: str) -> Orbits:
             object_id=[object_id],
             coordinates=cartesian_coordinates,
         )
-        if orbits is None:
-            orbits = orbit
-        else:
-            orbits = qv.concatenate([orbits, orbit])
+        orbits = qv.concatenate([orbits, orbit])
+        if orbits.fragmented():
+            orbits = qv.defragment(orbits)
 
     return orbits
+
+
+def rejected_observations_from_fo(fo_output_folder: str) -> ADESObservations:
+    with open(f"{fo_output_folder}/total.json", "r") as f:
+        total_json = json.load(f)
+    objects = total_json.get("objects", {})
+    json_observations = []
+    for object_id, object_data in objects.items():
+        object_observations = object_data.get("observations", {}).get("residuals", [])
+        for observation in object_observations:
+            observation.update({"object_id": object_id})
+        json_observations.extend(object_observations)
+
+    rejected_observations = []
+    for observation in json_observations:
+        if observation.get("incl") == 0:
+            rejected_observations.append(observation)
+
+    if len(rejected_observations) == 0:
+        return ADESObservations.empty()
+
+    ades_rejected_observations = ADESObservations.from_kwargs(
+        trkSub=pa.array(
+            [observation.get("object_id") for observation in rejected_observations]
+        ),
+        obsTime=Timestamp.from_jd(
+            [observation.get("JD") for observation in rejected_observations],
+            scale="utc",
+        ),
+        ra=pa.array([observation.get("RA") for observation in rejected_observations]),
+        dec=pa.array([observation.get("Dec") for observation in rejected_observations]),
+        mag=pa.array(
+            [observation.get("MagObs") for observation in rejected_observations]
+        ),
+        rmsRA=pa.array(
+            [observation.get("sigma_1") for observation in rejected_observations]
+        ),
+        rmsDec=pa.array(
+            [observation.get("sigma_2") for observation in rejected_observations]
+        ),
+        band=pa.array(
+            [observation.get("MagBand") for observation in rejected_observations]
+        ),
+        stn=pa.array(
+            [observation.get("obscode") for observation in rejected_observations]
+        ),
+        mode=pa.repeat("NA", len(rejected_observations)),
+        astCat=pa.repeat("NA", len(rejected_observations)),
+    )
+    return ades_rejected_observations
