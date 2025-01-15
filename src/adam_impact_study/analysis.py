@@ -470,16 +470,34 @@ def summarize_impact_study_object_results(
     impactor_orbits = ImpactorOrbits.from_parquet(
         f"{orbit_dir}/impact_orbits_{orbit_id}.parquet"
     )
+
+    if len(impact_results) == 0:
+        return ImpactorResultSummary.from_kwargs(
+            orbit=impactor_orbits,
+            mean_impact_time=Timestamp.nulls(1, scale="tdb"),
+            windows=[0],
+            nights=[0],
+            observations=[0],
+            singletons=[0],
+            tracklets=[0],
+            discovery_time=Timestamp.nulls(1, scale="utc"),
+            maximum_impact_probability=[0],
+        )
+
     discovery_dates = compute_discovery_dates(impactor_orbits, impact_results)
     warning_times = compute_warning_time(impactor_orbits, impact_results)
     realization_times = compute_realization_time(
         impactor_orbits, impact_results, discovery_dates
     )
 
-    mean_impact_time = Timestamp.from_mjd(
-        [pc.mean(impact_results.mean_impact_time.mjd())],
-        impact_results.mean_impact_time.scale,
-    )
+    mean_impact_mjd = pc.mean(impact_results.mean_impact_time.mjd()).as_py()
+    if mean_impact_mjd is None:
+        mean_impact_time = Timestamp.nulls(1, scale="tdb")
+    else:
+        mean_impact_time = Timestamp.from_mjd(
+            [mean_impact_mjd],
+            impact_results.mean_impact_time.scale,
+        )
 
     # Load sorcha observations
     observations = Observations.from_parquet(
@@ -511,7 +529,9 @@ def summarize_impact_study_results(run_dir: str) -> ImpactorResultSummary:
     orbit_ids = [os.path.basename(dir) for dir in glob.glob(f"{run_dir}/*")]
     results = ImpactorResultSummary.empty()
     for orbit_id in orbit_ids:
+
         results = qv.concatenate(
             [results, summarize_impact_study_object_results(run_dir, orbit_id)]
         )
+
     return results
