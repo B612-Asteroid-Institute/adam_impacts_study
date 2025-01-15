@@ -25,19 +25,26 @@ def run_impact_study(
     run_dir: str,
     run_config: RunConfiguration,
     pointing_file: Optional[str] = None,
-    orbit_id: Optional[str] = None,
+    orbit_id_filter: Optional[str] = None,
 ) -> None:
     """Run impact study on provided orbits."""
     # Load orbits directly from parquet
     logger.info(f"Loading orbits from {orbit_file}")
     impactor_orbits = ImpactorOrbits.from_parquet(orbit_file)
 
-    if orbit_id:
-        orbit_ids = [orbit_id.strip() for orbit_id in orbit_id.split(",")]
-        impactor_orbits = impactor_orbits.apply_mask(
-            pc.is_in(impactor_orbits.object_id, pa.array(orbit_ids))
-        )
-        logger.info(f"Filtered to orbit IDs: {orbit_ids}")
+    # User passed a comma-delimited list of substrings to filter orbit id
+    # by. We need to filter by the parent object id instead.
+    filtered_orbits = impactor_orbits
+    if orbit_id_filter:
+        orbit_id_filter = [
+            orbit_id_filter.strip() for orbit_id_filter in orbit_id_filter.split(",")
+        ]
+        mask = pa.array([False] * len(impactor_orbits))
+        for f in orbit_id_filter:
+            mask = pc.or_(mask, pc.match_substring(impactor_orbits.orbit_id, f))
+
+        filtered_orbits = impactor_orbits.apply_mask(mask)
+        logger.info(f"Selected {len(filtered_orbits)}/{len(impactor_orbits)} orbits")
 
     # Extract the date of the first pointing from the pointing file
     conn = sqlite3.connect(pointing_file)
@@ -51,13 +58,13 @@ def run_impact_study(
 
     # Note, we want to remove this hard-coded value and replace with a superclass that includes impact date
     # If any orbits impact date is before the survey start, throw a ValueError
-    impact_date = impactor_orbits.impact_time
+    impact_date = filtered_orbits.impact_time
     if impact_date.min().mjd()[0].as_py() < survey_start.mjd()[0].as_py():
         raise ValueError(
             f"Orbit impact date is before survey start: {impact_date.min().mjd()[0].as_py()} < {survey_start.mjd()[0].as_py()}"
         )
 
-    logger.info(f"Processing {len(impactor_orbits)} orbits")
+    logger.info(f"Processing {len(filtered_orbits)} orbits")
 
     # Create output directory
     os.makedirs(run_dir, exist_ok=True)
@@ -69,7 +76,7 @@ def run_impact_study(
     # Run impact study
     logger.info("Starting impact study...")
     impact_study_results = run_impact_study_all(
-        impactor_orbits,
+        filtered_orbits,
         pointing_file,
         run_dir,
         assist_initial_dt=run_config.assist_initial_dt,
@@ -82,7 +89,7 @@ def run_impact_study(
     )
 
     logger.info("Generating plots...")
-    plot_ip_over_time(impactor_orbits, impact_study_results, run_dir, survey_start)
+    plot_ip_over_time(filtered_orbits, impact_study_results, run_dir, survey_start)
     logger.info(f"Results saved to {run_dir}")
 
 
@@ -107,8 +114,8 @@ def main():
     )
 
     parser.add_argument(
-        "--orbit-id",
-        help="One or more orbit IDs to select out of input orbits, sepearated by commas",
+        "--orbit-id-filter",
+        help="Comma-delimited list of substrings to filter orbit id by",
     )
     parser.add_argument("--debug", action="store_true", help="Enable debug logging")
 
@@ -148,7 +155,7 @@ def main():
         args.run_dir,
         run_config=run_config,
         pointing_file=args.pointing_file,
-        orbit_id=args.orbit_id,
+        orbit_id_filter=args.orbit_id_filter,
     )
 
 
