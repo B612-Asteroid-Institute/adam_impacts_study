@@ -92,7 +92,6 @@ def run_impact_study_all(
 
     logger.info(f"Impactor Orbits: {impactor_orbits}")
     orbit_ids = impactor_orbits.orbit_id.unique()
-    logger.info(f"Object IDs: {orbit_ids.to_pylist()}")
 
     impact_results = WindowResult.empty()
 
@@ -169,6 +168,10 @@ def run_impact_study_for_orbit(
     seed: Optional[int] = None,
 ) -> WindowResult:
     """Run an impact study for a single impactor.
+
+    Individual window results are accumulated but saved to their corresponding
+    time window directory.
+
     Parameters
     ----------
     impactor_orbit : ImpactorOrbits
@@ -276,8 +279,6 @@ def run_impact_study_for_orbit(
     # Sort the results by observation_end for consistency.
     results = results.sort_by("observation_end")
 
-    results.to_parquet(f"{paths['orbit_base_dir']}/impact_results_{orbit_id}.parquet")
-
     return results
 
 
@@ -328,8 +329,8 @@ def calculate_window_impact_probability(
     end_night = pc.max(observations.observing_night)
     start_date = observations.coordinates.time.min()
     end_date = observations.coordinates.time.max()
-    window_name = f"{start_night.as_py()}_{end_night.as_py()}"
-    paths = get_study_paths(run_dir, orbit_id, window_name)
+    window = f"{start_night.as_py()}_{end_night.as_py()}"
+    paths = get_study_paths(run_dir, orbit_id, window)
 
     # Get the start and end date of the observations, the number of
     # observations, and the number of unique nights
@@ -346,18 +347,16 @@ def calculate_window_impact_probability(
         )
 
         # Persist the window orbit with the window name for future analysis
-        orbit_with_window_name = OrbitWithWindowName.from_kwargs(
-            window=pa.repeat(window_name, len(orbit)),
+        orbit_with_window = OrbitWithWindowName.from_kwargs(
+            window=pa.repeat(window, len(orbit)),
             orbit=orbit,
         )
-        orbit_with_window_name.to_parquet(
-            f"{paths['propagated']}/orbit_with_window_name.parquet"
-        )
+        orbit_with_window.to_parquet(f"{paths['time_dir']}/orbit_with_window.parquet")
     except Exception as e:
         return WindowResult.from_kwargs(
             orbit_id=[orbit_id],
             object_id=[object_id],
-            window_name=[window_name],
+            window=[window],
             observation_start=start_date,
             observation_end=end_date,
             observation_count=[observations_count],
@@ -369,7 +368,7 @@ def calculate_window_impact_probability(
         return WindowResult.from_kwargs(
             orbit_id=[orbit_id],
             object_id=[object_id],
-            window_name=[window_name],
+            window=[window],
             observation_start=start_date,
             observation_end=end_date,
             observation_count=[observations_count],
@@ -393,39 +392,37 @@ def calculate_window_impact_probability(
         variants = VariantOrbits.create(
             orbit, method="monte-carlo", num_samples=monte_carlo_samples, seed=seed
         )
-        variants_with_window_name = VariantOrbitsWithWindowName.from_kwargs(
-            window=pa.repeat(window_name, len(variants)),
+        variants_with_window = VariantOrbitsWithWindowName.from_kwargs(
+            window=pa.repeat(window, len(variants)),
             variant=variants,
         )
         # Persist the initial state of the variants with the window name
         # for future analysis
-        variants_with_window_name.to_parquet(
-            f"{paths['propagated']}/initial_variants.parquet"
-        )
+        variants_with_window.to_parquet(f"{paths['time_dir']}/initial_variants.parquet")
 
         final_orbit_states, impacts = propagator.detect_impacts(
-            variants_with_window_name.variant,
+            variants_with_window.variant,
             days_until_impact_plus_thirty,
             max_processes=max_processes,
         )
 
-        final_orbit_states_with_window_name = VariantOrbitsWithWindowName.from_kwargs(
-            window=pa.repeat(window_name, len(final_orbit_states)),
+        final_orbit_states_with_window = VariantOrbitsWithWindowName.from_kwargs(
+            window=pa.repeat(window, len(final_orbit_states)),
             variant=final_orbit_states,
         )
 
-        final_orbit_states_with_window_name.to_parquet(
-            f"{paths['propagated']}/final_variants.parquet"
+        final_orbit_states_with_window.to_parquet(
+            f"{paths['time_dir']}/final_variants.parquet"
         )
 
-        impacts.to_parquet(f"{paths['propagated']}/impacts.parquet")
+        impacts.to_parquet(f"{paths['time_dir']}/impacts.parquet")
         ip = calculate_impact_probabilities(final_orbit_states, impacts)
 
     except Exception as e:
         return WindowResult.from_kwargs(
             orbit_id=[orbit_id],
             object_id=[object_id],
-            window_name=[window_name],
+            window=[window],
             observation_start=start_date,
             observation_end=end_date,
             observation_count=[observations_count],
@@ -434,10 +431,10 @@ def calculate_window_impact_probability(
             error=[str(e)],
         )
 
-    return WindowResult.from_kwargs(
+    window_result = WindowResult.from_kwargs(
         orbit_id=[orbit_id],
         object_id=[object_id],
-        window_name=[window_name],
+        window=[window],
         observation_start=start_date,
         observation_end=end_date,
         observation_count=[observations_count],
@@ -449,6 +446,9 @@ def calculate_window_impact_probability(
         maximum_impact_time=ip.maximum_impact_time,
         stddev_impact_time=ip.stddev_impact_time,
     )
+    window_result.to_parquet(f"{paths['time_dir']}/window_result.parquet")
+
+    return window_result
 
 
 # Create remote version

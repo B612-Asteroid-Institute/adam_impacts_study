@@ -72,7 +72,7 @@ def test_sorcha_output_to_od_observations(mock_sorcha_output_file):
     observations = sorcha_output_to_od_observations(mock_sorcha_output_file)
     assert observations is not None
     assert len(observations) == 5
-    assert observations.object_id.to_pylist() == [
+    assert observations.orbit_id.to_pylist() == [
         "Test_1001",
         "Test_1001",
         "Test_1001",

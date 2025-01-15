@@ -63,7 +63,6 @@ def get_study_paths(
             {
                 "time_dir": time_dir,
                 "fo_dir": os.path.join(time_dir, "fo"),
-                "propagated": os.path.join(time_dir, "propagated"),
             }
         )
 

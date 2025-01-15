@@ -306,6 +306,7 @@ def test_run_impact_study_for_orbit(
         ASSISTPropagator,
         pointing_file,
         str(RUN_DIR),
+        monte_carlo_samples=100,
         max_processes=1,
         seed=12345,
     )
@@ -364,7 +365,7 @@ def test_run_impact_study_for_orbit(
     expected = WindowResult.from_kwargs(
         orbit_id=["Object1", "Object1", "Object1"],
         object_id=["Object1", "Object1", "Object1"],
-        window_name=["60000_60002", "60000_60004", "60000_60005"],
+        window=["60000_60002", "60000_60004", "60000_60005"],
         observation_start=Timestamp.from_mjd([60001, 60001, 60001], scale="utc"),
         observation_end=Timestamp.from_mjd([60003, 60005, 60006], scale="utc"),
         observation_count=[3, 4, 5],

@@ -4,7 +4,6 @@ import pathlib
 import shutil
 import subprocess
 import tempfile
-import uuid
 from typing import Optional, Tuple
 
 import pyarrow.compute as pc
@@ -148,8 +147,9 @@ def run_fo_od(
     # Create input file
     input_file = os.path.join(fo_tmp_dir, "observations.csv")
     # Truncate object_id to 8 characters. we will re-assign it after FO runs
+    orbit_id = observations.orbit_id
     observations = observations.set_column(
-        "orbit_id", pc.utf8_slice_codeunits(observations.orbit_id, 0, 8)
+        "orbit_id", pc.utf8_slice_codeunits(orbit_id, 0, 8)
     )
     od_observations_to_ades_file(observations, input_file)
 
@@ -200,9 +200,7 @@ def run_fo_od(
     orbit = fo_to_adam_orbit_cov(fo_result_dir)
 
     # Re-assign orbit_id to the original value
-    orbit = orbit.set_column(
-        "orbit_id", observations[0].orbit_id
-    )
+    orbit = orbit.set_column("orbit_id", orbit_id[:1])
     rejected = rejected_observations_from_fo(fo_result_dir)
 
     return orbit, rejected, None

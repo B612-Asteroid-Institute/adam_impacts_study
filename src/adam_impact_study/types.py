@@ -77,7 +77,7 @@ class WindowResult(qv.Table):
 
     orbit_id = qv.LargeStringColumn()
     object_id = qv.LargeStringColumn(nullable=True)
-    window_name = qv.LargeStringColumn(nullable=True)
+    window = qv.LargeStringColumn(nullable=True)
     observation_start = Timestamp.as_column()
     observation_end = Timestamp.as_column()
     observation_count = qv.UInt64Column()
