@@ -244,8 +244,6 @@ def run_impact_study_for_orbit(
             if pc.any(pc.invert(pc.is_null(result.error))).as_py():
                 logger.warning(f"Error: {result.error}")
             results = qv.concatenate([results, result])
-            if results.fragmented():
-                results = qv.defragment(results)
 
         else:
             futures.append(
@@ -360,6 +358,9 @@ def calculate_window_impact_probability(
             observation_end=end_date,
             observation_count=[observations_count],
             observation_nights=[num_observation_nights],
+            mean_impact_time=Timestamp.nulls(1, scale="tdb"),
+            minimum_impact_time=Timestamp.nulls(1, scale="tdb"),
+            maximum_impact_time=Timestamp.nulls(1, scale="tdb"),
             error=[str(e)],
         )
 
@@ -373,6 +374,9 @@ def calculate_window_impact_probability(
             observation_count=[observations_count],
             observation_nights=[num_observation_nights],
             observations_rejected=[len(rejected_observations)],
+            mean_impact_time=Timestamp.nulls(1, scale="tdb"),
+            minimum_impact_time=Timestamp.nulls(1, scale="tdb"),
+            maximum_impact_time=Timestamp.nulls(1, scale="tdb"),
             error=[error],
         )
 
@@ -427,6 +431,9 @@ def calculate_window_impact_probability(
             observation_count=[observations_count],
             observation_nights=[num_observation_nights],
             observations_rejected=[len(rejected_observations)],
+            mean_impact_time=Timestamp.nulls(1, scale="tdb"),
+            minimum_impact_time=Timestamp.nulls(1, scale="tdb"),
+            maximum_impact_time=Timestamp.nulls(1, scale="tdb"),
             error=[str(e)],
         )
 
