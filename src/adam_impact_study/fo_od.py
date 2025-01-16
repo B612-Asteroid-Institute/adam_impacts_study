@@ -168,7 +168,8 @@ def run_fo_od(
         f"-O {fo_tmp_dir}"
     )
 
-    logger.info(f"fo command: {fo_command}")
+    logger.info(f"Running od for {orbit_id[0].as_py()}")
+    logger.debug(f"fo command: {fo_command}")
 
     result = subprocess.run(
         fo_command,

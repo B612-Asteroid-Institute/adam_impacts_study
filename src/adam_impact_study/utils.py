@@ -46,7 +46,6 @@ def get_study_paths(
         Dictionary containing all relevant paths
     """
 
-
     obj_dir = os.path.join(run_dir, orbit_id)
 
     paths = {
@@ -55,7 +54,7 @@ def get_study_paths(
     }
 
     if time_range:
-        time_dir = os.path.join(obj_dir, "windows",time_range)
+        time_dir = os.path.join(obj_dir, "windows", time_range)
         paths.update(
             {
                 "time_dir": time_dir,

@@ -230,11 +230,12 @@ def test_compute_warning_time():
     warning_time_obj3 = warning_times.select("orbit_id", "test3")
     assert warning_time_obj3.warning_time[0].as_py() == 50.0  # 60300 - 60250
 
-
     # Make sure warning time still works if inputs are not sorted
     scrambled_results = results.take([1, 0, 2, 3])
     scrambled_impactor_orbits = impactor_orbits.take([1, 0, 2])
-    warning_times = compute_warning_time(scrambled_impactor_orbits, scrambled_results, threshold=0.25)
+    warning_times = compute_warning_time(
+        scrambled_impactor_orbits, scrambled_results, threshold=0.25
+    )
     assert len(warning_times) == 3
     assert warning_times.orbit_id.to_pylist() == ["test1", "test2", "test3"]
     assert warning_times.warning_time.to_pylist() == [40.0, None, 50.0]
@@ -387,7 +388,9 @@ def test_compute_realization_time():
     # Now test with scrambled inputs
     scrambled_results = results.take([1, 0, 2, 3])
     scrambled_impactor_orbits = impactor_orbits.take([1, 0, 2])
-    realization_times = compute_realization_time(scrambled_impactor_orbits, scrambled_results, discovery_dates, threshold=1e-9)
+    realization_times = compute_realization_time(
+        scrambled_impactor_orbits, scrambled_results, discovery_dates, threshold=1e-9
+    )
     assert len(realization_times) == 3
     assert realization_times.orbit_id.to_pylist() == ["test1", "test2", "test3"]
     assert realization_times.realization_time.to_pylist() == [25.0, None, 0.0]

@@ -270,7 +270,8 @@ def run_sorcha(
         f"-o {working_dir} --stem {output_stem} -f"
     )
 
-    logger.info(f"Running sorcha command: {sorcha_command}")
+    logger.info(f"Running sorcha for {impactor_orbit.orbit_id[0].as_py()}")
+    logger.debug(f"Running sorcha command: {sorcha_command}")
 
     subprocess.run(sorcha_command, shell=True)
 

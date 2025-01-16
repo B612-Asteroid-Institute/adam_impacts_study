@@ -111,11 +111,15 @@ def run_impact_study_all(
                 pointing_file,
                 run_dir,
                 monte_carlo_samples,
-                max_processes=max_processes,
+                max_processes=1,
                 seed=orbit_seed,
             )
             impact_results = qv.concatenate([impact_results, impact_result])
         else:
+
+            # run_impact_study_for_orbit has the ability to call other
+            # remote functions so when already running in a ray cluster, we
+            # want to explicity set max_processes to 1
             futures.append(
                 run_impact_study_for_orbit_remote.remote(
                     impactor_orbit,
@@ -123,7 +127,7 @@ def run_impact_study_all(
                     pointing_file,
                     run_dir,
                     monte_carlo_samples,
-                    max_processes=max_processes,
+                    max_processes=1,
                     seed=orbit_seed,
                 )
             )
