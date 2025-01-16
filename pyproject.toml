@@ -9,7 +9,7 @@ authors = [
     {name = "Joachim Moeyens", email = "moeyensj@uw.edu"},
 ]
 dependencies = [
-    "matplotlib",
+    "matplotlib>=3.10.0",
     "adam_assist>=0.2.0",
     "ray[default]==2.39.0",
     "sorcha @ git+https://github.com/B612-Asteroid-Institute/sorcha.git@cd5be9a06c6d24e1277cf2345bda9984f7097ede",

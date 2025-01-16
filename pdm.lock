@@ -5,7 +5,7 @@
 groups = ["default", "dev"]
 strategy = ["inherit_metadata"]
 lock_version = "4.5.0"
-content_hash = "sha256:e32bc71c63904261315e1cfe8414f5958e140f8496f0604f45cd6b8d2019e052"
+content_hash = "sha256:65d11af716f54b9037cfdcc76bf8521d1c0facc51e383b889157a40397cdce04"
 
 [[metadata.targets]]
 requires_python = ">=3.11,<3.13"
@@ -1572,7 +1572,7 @@ name = "mmh3"
 version = "5.0.1"
 requires_python = ">=3.8"
 summary = "Python extension for MurmurHash (MurmurHash3), a set of fast and robust hash functions."
-groups = ["default"]
+groups = ["default", "dev"]
 files = [
     {file = "mmh3-5.0.1-cp311-cp311-macosx_10_9_universal2.whl", hash = "sha256:9a6d5a9b1b923f1643559ba1fc0bf7a5076c90cbb558878d3bf3641ce458f25d"},
     {file = "mmh3-5.0.1-cp311-cp311-macosx_10_9_x86_64.whl", hash = "sha256:3349b968be555f7334bbcce839da98f50e1e80b1c615d8e2aa847ea4a964a012"},
@@ -2652,7 +2652,7 @@ git = "https://github.com/B612-Asteroid-Institute/quivr"
 ref = "2d8ae0b40bdfb75bcceff0c73d41a52d4bffb5dc"
 revision = "2d8ae0b40bdfb75bcceff0c73d41a52d4bffb5dc"
 summary = "Container library for working with tabular Arrow data"
-groups = ["default"]
+groups = ["default", "dev"]
 dependencies = [
     "mmh3",
     "numpy",

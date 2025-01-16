@@ -9,6 +9,7 @@ import pyarrow.compute as pc
 import quivr as qv
 from adam_core.time import Timestamp
 
+from adam_impact_study.analysis.plots import make_analysis_plots
 from adam_impact_study.types import (
     ImpactorOrbits,
     ImpactorResultSummary,
@@ -104,7 +105,6 @@ class DiscoveryDates(qv.Table):
 
 
 def compute_discovery_dates(
-    impactor_orbits: ImpactorOrbits,
     results: WindowResult,
 ) -> DiscoveryDates:
     """
@@ -484,7 +484,7 @@ def summarize_impact_study_object_results(
             maximum_impact_probability=[0],
         )
 
-    discovery_dates = compute_discovery_dates(impactor_orbits, impact_results)
+    discovery_dates = compute_discovery_dates(impact_results)
     warning_times = compute_warning_time(impactor_orbits, impact_results)
     realization_times = compute_realization_time(
         impactor_orbits, impact_results, discovery_dates
@@ -522,7 +522,9 @@ def summarize_impact_study_object_results(
     )
 
 
-def summarize_impact_study_results(run_dir: str) -> ImpactorResultSummary:
+def summarize_impact_study_results(
+    run_dir: str, plot: bool = True
+) -> ImpactorResultSummary:
     """
     Summarize the impact study results.
     """
@@ -534,95 +536,10 @@ def summarize_impact_study_results(run_dir: str) -> ImpactorResultSummary:
             [results, summarize_impact_study_object_results(run_dir, orbit_id)]
         )
 
-    return results
+    analysis_dir = os.path.join(run_dir, "analysis")
+    os.makedirs(analysis_dir, exist_ok=True)
+    results.to_parquet(os.path.join(analysis_dir, "impact_study_results.parquet"))
+    logger.info(f"Saved impact study results to {analysis_dir}")
 
-
-def plot_discovery_by_h_mag(impactor_results: ImpactorResultSummary) -> None:
-    """
-    Plot the discovery time by H-mag for each object.
-    """
-
-    fig, ax = plt.subplots()
-
-    # grab max and min h_mag
-    h_mag_max = pc.max(impactor_results.orbit.H_r)
-    h_mag_min = pc.min(impactor_results.orbit.H_r)
-
-    discovered_mask = impactor_results.discovered()
-    discovered = impactor_results.apply_mask(discovered_mask)
-    not_discovered = impactor_results.apply_mask(pc.invert(discovered_mask))
-
-    ax.hist(
-        discovered.orbit.H_r,
-        bins=np.arange(pc.floor(h_mag_min).as_py(), pc.ceil(h_mag_max).as_py(), 0.5),
-        alpha=0.5,
-        label="Discovered",
-        color="blue",
-    )
-    ax.hist(
-        not_discovered.orbit.H_r,
-        bins=np.arange(pc.floor(h_mag_min).as_py(), pc.ceil(h_mag_max).as_py(), 0.5),
-        alpha=0.5,
-        label="Not Discovered",
-        color="red",
-    )
-    ax.set_xlabel("H-mag")
-    ax.set_ylabel("Number of Objects")
-    ax.legend()
-    plt.show()
-
-
-def summarize_discovery_rates_by_diameter(
-    impactor_results: ImpactorResultSummary,
-) -> pa.Table:
-    """
-    Plot the discovery time by diameter for each object.
-    """
-
-    discovered_mask = impactor_results.discovered()
-    table = impactor_results.flattened_table().append_column(
-        "discovered", discovered_mask
-    )
-    table = table.drop_columns(["orbit.coordinates.covariance.values"])
-    table_diameter_grouped = table.group_by(
-        ["orbit.diameter", "orbit.ast_class"]
-    ).aggregate([("discovered", "sum"), ("orbit.ast_class", "count")])
-    return table_diameter_grouped
-
-
-def plot_q_vs_i(impactor_results: ImpactorResultSummary) -> None:
-    """
-    Plot the discovery time by H-mag for each object.
-    """
-
-    fig, ax = plt.subplots()
-
-    discovered_mask = impactor_results.discovered()
-    discovered = impactor_results.apply_mask(discovered_mask)
-    not_discovered = impactor_results.apply_mask(pc.invert(discovered_mask))
-
-    ax.scatter(
-        discovered.orbit.coordinates.to_keplerian().q,
-        discovered.orbit.coordinates.to_keplerian().i,
-        alpha=0.2,
-        label="Discovered",
-        color="blue",
-    )
-    ax.scatter(
-        not_discovered.orbit.coordinates.to_keplerian().q,
-        not_discovered.orbit.coordinates.to_keplerian().i,
-        alpha=0.2,
-        label="Not Discovered",
-        color="red",
-    )
-    ax.set_xlabel("q")
-    ax.set_ylabel("i")
-    ax.legend()
-    plt.show()
-
-
-if __name__ == "__main__":
-    results = ImpactorResultSummary.from_parquet("demo/data/summarized_results.parquet")
-
-    table_diameter_grouped = summarize_discovery_rates_by_diameter(results)
-    print(table_diameter_grouped)
+    if plot:
+        make_analysis_plots(results, analysis_dir)
