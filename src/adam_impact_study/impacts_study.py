@@ -224,6 +224,9 @@ def run_impact_study_for_orbit(
         # TODO: We might consider returning something else here.
         return WindowResult.empty()
 
+    # Initialize ray cluster
+    use_ray = initialize_use_ray(num_cpus=max_processes)
+
     # Process each time window
     # We iterate through unique nights and filter observations based on
     # to everything below or equal to the current night number
@@ -234,14 +237,14 @@ def run_impact_study_for_orbit(
         mask = pc.less_equal(observations.observing_night, night)
         observations_window = observations.apply_mask(mask)
 
-        if max_processes == 1:
+        if not use_ray:
             result = calculate_window_impact_probability(
                 observations_window,
                 impactor_orbit,
                 propagator_class,
                 run_dir,
                 monte_carlo_samples,
-                max_processes,
+                max_processes=max_processes,
                 seed=seed,
             )
             # Log if any error is present
@@ -257,7 +260,7 @@ def run_impact_study_for_orbit(
                     propagator_class,
                     run_dir,
                     monte_carlo_samples,
-                    max_processes,
+                    max_processes=max_processes,
                     seed=seed,
                 )
             )
