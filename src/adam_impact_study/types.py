@@ -96,6 +96,9 @@ class WindowResult(qv.Table):
     maximum_impact_time = Timestamp.as_column(nullable=True)
     stddev_impact_time = qv.Float64Column(nullable=True)
     error = qv.LargeStringColumn(nullable=True)
+    od_runtime = qv.Float64Column(nullable=True)
+    ip_runtime = qv.Float64Column(nullable=True)
+    window_runtime = qv.Float64Column(nullable=True)
 
 
 class ImpactorResultSummary(qv.Table):
@@ -127,6 +130,18 @@ class ImpactorResultSummary(qv.Table):
 
     def discovered(self) -> pa.BooleanArray:
         return pc.invert(pc.is_null(self.discovery_time.days))
+
+
+class ResultsTiming(qv.Table):
+    orbit_id = qv.LargeStringColumn()
+    sorcha_runtime = qv.Float64Column(nullable=True)
+    mean_od_runtime = qv.Float64Column(nullable=True)
+    total_od_runtime = qv.Float64Column(nullable=True)
+    mean_ip_runtime = qv.Float64Column(nullable=True)
+    total_ip_runtime = qv.Float64Column(nullable=True)
+    mean_window_runtime = qv.Float64Column(nullable=True)
+    total_window_runtime = qv.Float64Column(nullable=True)
+    total_runtime = qv.Float64Column(nullable=True)
 
 
 class VariantOrbitsWithWindowName(qv.Table):
