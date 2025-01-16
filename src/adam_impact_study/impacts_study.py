@@ -2,7 +2,7 @@ import logging
 import os
 import shutil
 import time
-from typing import Iterator, Optional, Type, Tuple
+from typing import Iterator, Optional, Tuple, Type
 
 import pyarrow as pa
 import pyarrow.compute as pc
@@ -22,9 +22,9 @@ from adam_impact_study.sorcha_utils import run_sorcha
 from adam_impact_study.types import (
     ImpactorOrbits,
     OrbitWithWindowName,
+    ResultsTiming,
     VariantOrbitsWithWindowName,
     WindowResult,
-    ResultsTiming,
 )
 from adam_impact_study.utils import get_study_paths
 
@@ -142,7 +142,7 @@ def run_impact_study_all(
                 results_timings = qv.concatenate([results_timings, timing])
     while len(futures) > 0:
         finished, futures = ray.wait(futures, num_returns=1)
-        #import pdb; pdb.set_trace()
+        # import pdb; pdb.set_trace()
         result, timing = ray.get(finished[0])
         impact_results = qv.concatenate([impact_results, result])
         results_timings = qv.concatenate([results_timings, timing])
