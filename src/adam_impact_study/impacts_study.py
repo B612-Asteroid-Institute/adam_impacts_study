@@ -12,6 +12,7 @@ from adam_core.dynamics.impacts import calculate_impact_probabilities
 from adam_core.observations.ades import ADESObservations
 from adam_core.observers.utils import calculate_observing_night
 from adam_core.orbits import VariantOrbits
+from adam_core.ray_cluster import initialize_use_ray
 from adam_core.time import Timestamp
 
 from adam_impact_study.conversions import Observations
@@ -89,6 +90,9 @@ def run_impact_study_all(
 
     os.makedirs(f"{run_dir}", exist_ok=True)
 
+    # Initialize ray cluster
+    use_ray = initialize_use_ray(num_cpus=max_processes)
+
     logger.info(f"Impactor Orbits: {impactor_orbits}")
     orbit_ids = impactor_orbits.orbit_id.unique()
 
@@ -100,7 +104,7 @@ def run_impact_study_all(
 
         orbit_seed = seed_from_string(orbit_id.as_py(), seed)
 
-        if max_processes == 1:
+        if not use_ray:
             impact_result = run_impact_study_for_orbit(
                 impactor_orbit,
                 ImpactASSISTPropagator,
@@ -113,7 +117,7 @@ def run_impact_study_all(
             impact_results = qv.concatenate([impact_results, impact_result])
         else:
             futures.append(
-                run_impact_study_fo_remote.remote(
+                run_impact_study_for_orbit_remote.remote(
                     impactor_orbit,
                     ImpactASSISTPropagator,
                     pointing_file,
@@ -279,7 +283,7 @@ def run_impact_study_for_orbit(
     return results
 
 
-run_impact_study_fo_remote = ray.remote(run_impact_study_for_orbit)
+run_impact_study_for_orbit_remote = ray.remote(run_impact_study_for_orbit)
 
 
 def calculate_window_impact_probability(
