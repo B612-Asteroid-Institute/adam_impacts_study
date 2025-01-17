@@ -73,7 +73,7 @@ def run_impact_study(
 
     # Run impact study
     logger.info("Starting impact study...")
-    impact_study_results = run_impact_study_all(
+    impact_study_results, results_timings = run_impact_study_all(
         filtered_orbits,
         pointing_file,
         run_dir,

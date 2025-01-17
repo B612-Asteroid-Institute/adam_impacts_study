@@ -101,6 +101,8 @@ def _copy_files_from_tmp_to_fo_dir(fo_tmp_dir: str, fo_dir: str):
         "debug.txt",
         "bc405pre.dat",
         "environ.dat",
+        # Copy observations for fo debugging purposes
+        "observations.ades",
     ]
 
     for file in files_to_copy:
@@ -145,7 +147,7 @@ def run_fo_od(
     fo_tmp_dir = _create_fo_tmp_directory()
 
     # Create input file
-    input_file = os.path.join(fo_tmp_dir, "observations.csv")
+    input_file = os.path.join(fo_tmp_dir, "observations.ades")
     # Truncate object_id to 8 characters. we will re-assign it after FO runs
     orbit_id = observations.orbit_id
     observations = observations.set_column(
@@ -166,7 +168,8 @@ def run_fo_od(
         f"-O {fo_tmp_dir}"
     )
 
-    logger.info(f"fo command: {fo_command}")
+    logger.info(f"Running od for {orbit_id[0].as_py()}")
+    logger.debug(f"fo command: {fo_command}")
 
     result = subprocess.run(
         fo_command,

@@ -1,7 +1,8 @@
 import logging
 import os
 import shutil
-from typing import Iterator, Optional, Type
+import time
+from typing import Iterator, Optional, Tuple, Type
 
 import pyarrow as pa
 import pyarrow.compute as pc
@@ -12,6 +13,7 @@ from adam_core.dynamics.impacts import calculate_impact_probabilities
 from adam_core.observations.ades import ADESObservations
 from adam_core.observers.utils import calculate_observing_night
 from adam_core.orbits import VariantOrbits
+from adam_core.ray_cluster import initialize_use_ray
 from adam_core.time import Timestamp
 
 from adam_impact_study.conversions import Observations
@@ -20,6 +22,7 @@ from adam_impact_study.sorcha_utils import run_sorcha
 from adam_impact_study.types import (
     ImpactorOrbits,
     OrbitWithWindowName,
+    ResultsTiming,
     VariantOrbitsWithWindowName,
     WindowResult,
 )
@@ -44,7 +47,7 @@ def run_impact_study_all(
     max_processes: Optional[int] = 1,
     overwrite: bool = True,
     seed: Optional[int] = 13612,
-) -> Optional[WindowResult]:
+) -> Tuple[WindowResult, ResultsTiming]:
     """
     Run an impact study for all impactors in the input file.
 
@@ -89,52 +92,62 @@ def run_impact_study_all(
 
     os.makedirs(f"{run_dir}", exist_ok=True)
 
+    # Initialize ray cluster
+    use_ray = initialize_use_ray(num_cpus=max_processes)
+
     logger.info(f"Impactor Orbits: {impactor_orbits}")
     orbit_ids = impactor_orbits.orbit_id.unique()
 
     impact_results = WindowResult.empty()
-
+    results_timings = ResultsTiming.empty()
     futures = []
     for orbit_id in orbit_ids:
         impactor_orbit = impactor_orbits.select("orbit_id", orbit_id)
 
         orbit_seed = seed_from_string(orbit_id.as_py(), seed)
 
-        if max_processes == 1:
-            impact_result = run_impact_study_for_orbit(
+        if not use_ray:
+            impact_result, results_timing = run_impact_study_for_orbit(
                 impactor_orbit,
                 ImpactASSISTPropagator,
                 pointing_file,
                 run_dir,
                 monte_carlo_samples,
-                max_processes=max_processes,
+                max_processes=1,
                 seed=orbit_seed,
             )
             impact_results = qv.concatenate([impact_results, impact_result])
+            results_timings = qv.concatenate([results_timings, results_timing])
         else:
+
+            # run_impact_study_for_orbit has the ability to call other
+            # remote functions so when already running in a ray cluster, we
+            # want to explicity set max_processes to 1
             futures.append(
-                run_impact_study_fo_remote.remote(
+                run_impact_study_for_orbit_remote.remote(
                     impactor_orbit,
                     ImpactASSISTPropagator,
                     pointing_file,
                     run_dir,
                     monte_carlo_samples,
-                    max_processes=max_processes,
+                    max_processes=1,
                     seed=orbit_seed,
                 )
             )
 
             if len(futures) > max_processes * 1.5:
                 finished, futures = ray.wait(futures, num_returns=1)
-                result = ray.get(finished[0])
+                result, timing = ray.get(finished[0])
                 impact_results = qv.concatenate([impact_results, result])
-
+                results_timings = qv.concatenate([results_timings, timing])
     while len(futures) > 0:
         finished, futures = ray.wait(futures, num_returns=1)
-        result = ray.get(finished[0])
+        # import pdb; pdb.set_trace()
+        result, timing = ray.get(finished[0])
         impact_results = qv.concatenate([impact_results, result])
+        results_timings = qv.concatenate([results_timings, timing])
 
-    return impact_results
+    return impact_results, results_timings
 
 
 def get_observation_windows(
@@ -165,7 +178,7 @@ def run_impact_study_for_orbit(
     monte_carlo_samples: int,
     max_processes: Optional[int] = 1,
     seed: Optional[int] = None,
-) -> WindowResult:
+) -> Tuple[WindowResult, ResultsTiming]:
     """Run an impact study for a single impactor.
 
     Individual window results are accumulated but saved to their corresponding
@@ -189,6 +202,7 @@ def run_impact_study_for_orbit(
     ImpactStudyResults
         Table containing the results of the impact study
     """
+    orbit_start_time = time.perf_counter()
     assert len(impactor_orbit) == 1, "Only one object supported at a time"
     orbit_id = impactor_orbit.orbit_id[0].as_py()
 
@@ -200,25 +214,29 @@ def run_impact_study_for_orbit(
     )
 
     # Run Sorcha to generate synthetic observations
+    sorcha_start_time = time.perf_counter()
     observations = run_sorcha(
         impactor_orbit,
         pointing_file,
         paths["sorcha_dir"],
         seed=seed,
     )
-
+    sorcha_runtime = time.perf_counter() - sorcha_start_time
     # Serialize the observations to a file for future analysis use
     observations.to_parquet(f"{paths['sorcha_dir']}/observations_{orbit_id}.parquet")
 
     if len(observations) == 0:
-        return WindowResult.empty()
+        return WindowResult.empty(), ResultsTiming.empty()
 
     # Select the unique nights of observations and
     unique_nights = pc.unique(observations.observing_night).sort()
 
     if len(unique_nights) < 3:
         # TODO: We might consider returning something else here.
-        return WindowResult.empty()
+        return WindowResult.empty(), ResultsTiming.empty()
+
+    # Initialize ray cluster
+    use_ray = initialize_use_ray(num_cpus=max_processes)
 
     # Process each time window
     # We iterate through unique nights and filter observations based on
@@ -230,14 +248,14 @@ def run_impact_study_for_orbit(
         mask = pc.less_equal(observations.observing_night, night)
         observations_window = observations.apply_mask(mask)
 
-        if max_processes == 1:
+        if not use_ray:
             result = calculate_window_impact_probability(
                 observations_window,
                 impactor_orbit,
                 propagator_class,
                 run_dir,
                 monte_carlo_samples,
-                max_processes,
+                max_processes=max_processes,
                 seed=seed,
             )
             # Log if any error is present
@@ -253,7 +271,7 @@ def run_impact_study_for_orbit(
                     propagator_class,
                     run_dir,
                     monte_carlo_samples,
-                    max_processes,
+                    max_processes=max_processes,
                     seed=seed,
                 )
             )
@@ -276,10 +294,24 @@ def run_impact_study_for_orbit(
     # Sort the results by observation_end for consistency.
     results = results.sort_by("observation_end")
 
-    return results
+    orbit_end_time = time.perf_counter()
+    timings = ResultsTiming.from_kwargs(
+        orbit_id=[orbit_id],
+        total_runtime=[orbit_end_time - orbit_start_time],
+        sorcha_runtime=[sorcha_runtime],
+        mean_od_runtime=[pc.mean(results.od_runtime)],
+        total_od_runtime=[pc.sum(results.od_runtime)],
+        mean_ip_runtime=[pc.mean(results.ip_runtime)],
+        total_ip_runtime=[pc.sum(results.ip_runtime)],
+        mean_window_runtime=[pc.mean(results.window_runtime)],
+        total_window_runtime=[pc.sum(results.window_runtime)],
+    )
+    timings.to_parquet(f"{paths['orbit_base_dir']}/timings.parquet")
+
+    return results, timings
 
 
-run_impact_study_fo_remote = ray.remote(run_impact_study_for_orbit)
+run_impact_study_for_orbit_remote = ray.remote(run_impact_study_for_orbit)
 
 
 def calculate_window_impact_probability(
@@ -311,6 +343,7 @@ def calculate_window_impact_probability(
     ImpactStudyResults
         Impact probability results for this day if successful
     """
+    window_start_time = time.perf_counter()
     # if observing_night is null, we need to add it
     if pc.any(pc.is_null(observations.observing_night)).as_py():
         observations = observations.set_column(
@@ -338,11 +371,12 @@ def calculate_window_impact_probability(
     rejected_observations = ADESObservations.empty()
 
     try:
+        od_start_time = time.perf_counter()
         orbit, rejected_observations, error = run_fo_od(
             observations,
             paths["fo_dir"],
         )
-
+        od_runtime = time.perf_counter() - od_start_time
         # Persist the window orbit with the window name for future analysis
         orbit_with_window = OrbitWithWindowName.from_kwargs(
             window=pa.repeat(window, len(orbit)),
@@ -362,6 +396,7 @@ def calculate_window_impact_probability(
             minimum_impact_time=Timestamp.nulls(1, scale="tdb"),
             maximum_impact_time=Timestamp.nulls(1, scale="tdb"),
             error=[str(e)],
+            od_runtime=[od_runtime],
         )
 
     if error is not None:
@@ -378,6 +413,7 @@ def calculate_window_impact_probability(
             minimum_impact_time=Timestamp.nulls(1, scale="tdb"),
             maximum_impact_time=Timestamp.nulls(1, scale="tdb"),
             error=[error],
+            od_runtime=[od_runtime],
         )
 
     days_until_impact_plus_thirty = (
@@ -389,6 +425,7 @@ def calculate_window_impact_probability(
     )
 
     try:
+        ip_start_time = time.perf_counter()
         propagator = propagator_class()
 
         # Create initial variants
@@ -420,6 +457,7 @@ def calculate_window_impact_probability(
 
         impacts.to_parquet(f"{paths['time_dir']}/impacts.parquet")
         ip = calculate_impact_probabilities(final_orbit_states, impacts)
+        ip_runtime = time.perf_counter() - ip_start_time
 
     except Exception as e:
         return WindowResult.from_kwargs(
@@ -435,7 +473,11 @@ def calculate_window_impact_probability(
             minimum_impact_time=Timestamp.nulls(1, scale="tdb"),
             maximum_impact_time=Timestamp.nulls(1, scale="tdb"),
             error=[str(e)],
+            od_runtime=[od_runtime],
+            ip_runtime=[ip_runtime],
         )
+
+    window_end_time = time.perf_counter()
 
     window_result = WindowResult.from_kwargs(
         orbit_id=[orbit_id],
@@ -451,6 +493,9 @@ def calculate_window_impact_probability(
         minimum_impact_time=ip.minimum_impact_time,
         maximum_impact_time=ip.maximum_impact_time,
         stddev_impact_time=ip.stddev_impact_time,
+        window_runtime=[window_end_time - window_start_time],
+        od_runtime=[od_runtime],
+        ip_runtime=[ip_runtime],
     )
     window_result.to_parquet(f"{paths['time_dir']}/window_result.parquet")
 

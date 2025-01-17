@@ -256,7 +256,11 @@ def run_sorcha(
     write_phys_params_file(
         impactor_orbit.photometric_properties(), params_file, filter_band="r"
     )
-    write_config_file_timeframe(impact_date, config_file)
+
+    # TODO: Investigate if we can avoid limiting the observation time span
+    # to 1 day prior to impact to avoid edge cases where the propagation
+    # in sorcha approaches singularity-like behavior
+    write_config_file_timeframe(impact_date.add_days(-1), config_file)
 
     # Run Sorcha to generate observational data
     sorcha_command = (
@@ -266,7 +270,8 @@ def run_sorcha(
         f"-o {working_dir} --stem {output_stem} -f"
     )
 
-    logger.info(f"Running sorcha command: {sorcha_command}")
+    logger.info(f"Running sorcha for {impactor_orbit.orbit_id[0].as_py()}")
+    logger.debug(f"Running sorcha command: {sorcha_command}")
 
     subprocess.run(sorcha_command, shell=True)
 

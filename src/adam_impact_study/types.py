@@ -96,6 +96,9 @@ class WindowResult(qv.Table):
     maximum_impact_time = Timestamp.as_column(nullable=True)
     stddev_impact_time = qv.Float64Column(nullable=True)
     error = qv.LargeStringColumn(nullable=True)
+    od_runtime = qv.Float64Column(nullable=True)
+    ip_runtime = qv.Float64Column(nullable=True)
+    window_runtime = qv.Float64Column(nullable=True)
 
 
 class ImpactorResultSummary(qv.Table):
@@ -127,6 +130,54 @@ class ImpactorResultSummary(qv.Table):
 
     def discovered(self) -> pa.BooleanArray:
         return pc.invert(pc.is_null(self.discovery_time.days))
+
+    def summarize_discoveries(self) -> "DiscoverySummary":
+        summary_table = self.flattened_table().append_column(
+            "discovered", self.discovered()
+        )
+        discoveries_by_diameter_class = summary_table.group_by(
+            ["orbit.diameter", "orbit.ast_class"]
+        ).aggregate([("discovered", "sum"), ("discovered", "count")])
+        discoveries_by_diameter_class = discoveries_by_diameter_class.append_column(
+            "percent_discovered",
+            pc.multiply(
+                pc.divide(
+                    pc.cast(
+                        discoveries_by_diameter_class["discovered_sum"], pa.float64()
+                    ),
+                    pc.cast(
+                        discoveries_by_diameter_class["discovered_count"], pa.float64()
+                    ),
+                ),
+                100,
+            ),
+        ).sort_by([("orbit.diameter", "ascending")])
+
+        return DiscoverySummary.from_kwargs(
+            diameter=discoveries_by_diameter_class["orbit.diameter"],
+            ast_class=discoveries_by_diameter_class["orbit.ast_class"],
+            discovered=discoveries_by_diameter_class["discovered_sum"],
+            total=discoveries_by_diameter_class["discovered_count"],
+        )
+
+
+class DiscoverySummary(qv.Table):
+    diameter = qv.Float64Column()
+    ast_class = qv.StringColumn()
+    discovered = qv.Int64Column()
+    total = qv.Int64Column()
+
+
+class ResultsTiming(qv.Table):
+    orbit_id = qv.LargeStringColumn()
+    sorcha_runtime = qv.Float64Column(nullable=True)
+    mean_od_runtime = qv.Float64Column(nullable=True)
+    total_od_runtime = qv.Float64Column(nullable=True)
+    mean_ip_runtime = qv.Float64Column(nullable=True)
+    total_ip_runtime = qv.Float64Column(nullable=True)
+    mean_window_runtime = qv.Float64Column(nullable=True)
+    total_window_runtime = qv.Float64Column(nullable=True)
+    total_runtime = qv.Float64Column(nullable=True)
 
 
 class VariantOrbitsWithWindowName(qv.Table):
