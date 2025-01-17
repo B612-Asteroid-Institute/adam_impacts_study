@@ -114,6 +114,10 @@ def run_impact_study_all(
                 pointing_file,
                 run_dir,
                 monte_carlo_samples,
+                assist_epsilon,
+                assist_min_dt,
+                assist_initial_dt,
+                assist_adaptive_mode,
                 max_processes=1,
                 seed=orbit_seed,
             )
@@ -131,6 +135,10 @@ def run_impact_study_all(
                     pointing_file,
                     run_dir,
                     monte_carlo_samples,
+                    assist_epsilon,
+                    assist_min_dt,
+                    assist_initial_dt,
+                    assist_adaptive_mode,
                     max_processes=1,
                     seed=orbit_seed,
                 )
