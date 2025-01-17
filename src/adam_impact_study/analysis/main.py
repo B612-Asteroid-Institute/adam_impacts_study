@@ -523,11 +523,13 @@ def summarize_impact_study_object_results(
 
 
 def summarize_impact_study_results(
-    run_dir: str, plot: bool = True
+    run_dir: str, out_dir: str, plot: bool = True
 ) -> ImpactorResultSummary:
     """
     Summarize the impact study results.
     """
+    assert run_dir != out_dir, "run_dir and out_dir must be different"
+
     orbit_ids = [os.path.basename(dir) for dir in glob.glob(f"{run_dir}/*")]
     results = ImpactorResultSummary.empty()
     for orbit_id in orbit_ids:
@@ -536,10 +538,9 @@ def summarize_impact_study_results(
             [results, summarize_impact_study_object_results(run_dir, orbit_id)]
         )
 
-    analysis_dir = os.path.join(run_dir, "analysis")
-    os.makedirs(analysis_dir, exist_ok=True)
-    results.to_parquet(os.path.join(analysis_dir, "impact_study_results.parquet"))
-    logger.info(f"Saved impact study results to {analysis_dir}")
+    os.makedirs(out_dir)
+    results.to_parquet(os.path.join(out_dir, "impactor_results_summary.parquet"))
+    logger.info(f"Saved impact study results to {out_dir}")
 
     if plot:
-        make_analysis_plots(results, analysis_dir)
+        make_analysis_plots(results, out_dir)

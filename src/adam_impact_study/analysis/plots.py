@@ -47,6 +47,55 @@ def plot_warning_time_histogram(
     return fig, ax
 
 
+def plot_realization_time_histogram(
+    summary: ImpactorResultSummary,
+) -> Tuple[plt.Figure, plt.Axes]:
+
+    fig, ax = plt.subplots(1, 1, dpi=200)
+
+    realization_time_max = pc.ceil(pc.max(summary.realization_time)).as_py()
+    if realization_time_max > 100:
+        realization_time_max = 100
+    bins = np.linspace(0, realization_time_max, 100)
+
+    unique_diameters = summary.orbit.diameter.unique().sort().to_pylist()
+    colors = plt.cm.coolwarm(np.linspace(0, 1, len(unique_diameters)))
+    for diameter, color in zip(unique_diameters, colors):
+
+        orbits_at_diameter = summary.select("orbit.diameter", diameter)
+
+        realization_time = orbits_at_diameter.realization_time.to_numpy(
+            zero_copy_only=False
+        )
+
+        ax.hist(
+            realization_time[~np.isnan(realization_time)],
+            histtype="step",
+            label=f"{diameter:.3f} km",
+            color=color,
+            bins=bins,
+            density=True,
+        )
+
+    # Identify number of objects beyond 100 days
+    realization_time = summary.realization_time.to_numpy(zero_copy_only=False)
+    n_objects_beyond_100_days = np.sum(realization_time > 100)
+
+    ax.text(
+        99,
+        0.01,
+        rf"$N_{{objects}}$(>100 d)={n_objects_beyond_100_days}",
+        ha="right",
+        rotation=90,
+    )
+
+    ax.set_xlim(0, realization_time_max)
+    ax.set_xlabel("Realization Time for Discoveries [days]")
+    ax.set_ylabel("PDF")
+    ax.legend(frameon=False, bbox_to_anchor=(1.01, 0.75))
+    return fig, ax
+
+
 def plot_discoveries_by_diameter(
     summary: ImpactorResultSummary,
 ) -> Tuple[plt.Figure, plt.Axes]:
@@ -102,6 +151,15 @@ def make_analysis_plots(
         dpi=200,
     )
     logger.info("Generated warning time histogram")
+    plt.close(fig)
+
+    fig, ax = plot_realization_time_histogram(summary)
+    fig.savefig(
+        os.path.join(out_dir, "realization_time_histogram.jpg"),
+        bbox_inches="tight",
+        dpi=200,
+    )
+    logger.info("Generated realization time histogram")
     plt.close(fig)
 
     fig, ax = plot_discoveries_by_diameter(summary)
