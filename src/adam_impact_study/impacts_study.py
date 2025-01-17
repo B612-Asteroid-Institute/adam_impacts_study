@@ -177,6 +177,10 @@ def run_impact_study_for_orbit(
     pointing_file: str,
     run_dir: str,
     monte_carlo_samples: int,
+    assist_epsilon: float,
+    assist_min_dt: float,
+    assist_initial_dt: float,
+    assist_adaptive_mode: int,
     max_processes: Optional[int] = 1,
     seed: Optional[int] = None,
 ) -> Tuple[WindowResult, ResultsTiming]:
@@ -195,6 +199,16 @@ def run_impact_study_for_orbit(
         Path to the file containing pointing data for Sorcha
     run_dir : str
         Directory for this study run
+    monte_carlo_samples : int
+        Number of monte carlo samples to use for impact calculation
+    assist_epsilon : float
+        Epsilon value for ASSIST
+    assist_min_dt : float
+        Minimum time step for ASSIST
+    assist_initial_dt : float
+        Initial time step for ASSIST
+    assist_adaptive_mode : int
+        Adaptive mode for ASSIST
     max_processes : Optional[int]
         Maximum number of processes to use for impact calculation
 
@@ -244,6 +258,10 @@ def run_impact_study_for_orbit(
             impactor_orbit,
             pointing_file,
             paths["sorcha_dir"],
+            assist_epsilon=assist_epsilon,
+            assist_min_dt=assist_min_dt,
+            assist_initial_dt=assist_initial_dt,
+            assist_adaptive_mode=assist_adaptive_mode,
             seed=seed,
         )
         sorcha_runtime = time.perf_counter() - sorcha_start_time

@@ -40,16 +40,31 @@ def remove_quotes(file_path: str) -> None:
     os.replace(temp_file_path, file_path)
 
 
-def write_config_file_timeframe(impact_date: Timestamp, config_file: str) -> str:
+def write_config_file_timeframe(
+    config_file: str,
+    impact_date: Timestamp,
+    assist_epsilon: float,
+    assist_min_dt: float,
+    assist_initial_dt: float,
+    assist_adaptive_mode: int,
+) -> str:
     """
     Write a Sorcha configuration file for a given impact date.
 
     Parameters
     ----------
-    impact_date : float
-        Impact date in MJD.
     config_file : str
         Path to the file where the Sorcha configuration data will be saved.
+    impact_date : float
+        Impact date in MJD.
+    assist_epsilon : float
+        Epsilon value for ASSIST
+    assist_min_dt : float
+        Minimum time step for ASSIST
+    assist_initial_dt : float
+        Initial time step for ASSIST
+    assist_adaptive_mode : int
+        Adaptive mode for ASSIST
 
     Returns
     -------
@@ -129,6 +144,10 @@ jpl_small_bodies = {assist_small_bodies}
 
 [EXPERT]
 ar_use_integrate = True
+ar_initial_dt = {assist_initial_dt}
+ar_min_dt = {assist_min_dt}
+ar_adaptive_mode = {assist_adaptive_mode}
+ar_epsilon = {assist_epsilon}
 """
     with open(config_file, "w") as f:
         f.write(config_text)
@@ -244,6 +263,10 @@ def run_sorcha(
     impactor_orbit: ImpactorOrbits,
     pointing_file: str,
     working_dir: str,
+    assist_epsilon: float,
+    assist_min_dt: float,
+    assist_initial_dt: float,
+    assist_adaptive_mode: int,
     seed: Optional[int] = None,
 ) -> Observations:
     """Run Sorcha with directory-based paths"""
@@ -263,7 +286,14 @@ def run_sorcha(
     # TODO: Investigate if we can avoid limiting the observation time span
     # to 1 day prior to impact to avoid edge cases where the propagation
     # in sorcha approaches singularity-like behavior
-    write_config_file_timeframe(impact_date.add_days(-1), config_file)
+    write_config_file_timeframe(
+        config_file,
+        impact_date.add_days(-1),
+        assist_epsilon,
+        assist_min_dt,
+        assist_initial_dt,
+        assist_adaptive_mode,
+    )
 
     # Run Sorcha to generate observational data
     sorcha_command = (
