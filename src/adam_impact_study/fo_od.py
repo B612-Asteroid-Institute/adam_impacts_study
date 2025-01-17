@@ -79,9 +79,9 @@ def _create_fo_tmp_directory() -> str:
     Returns:
         str: The absolute path to the temporary directory populated with necessary FO files
     """
-    base_tmp_dir = os.path.expanduser("~/.cache/adam_impact_study/ftmp")
+    base_tmp_dir = os.path.expanduser("~/.cache/adam_impact_study/")
     os.makedirs(base_tmp_dir, mode=0o770, exist_ok=True)
-    tmp_dir = tempfile.mkdtemp(dir=base_tmp_dir)
+    tmp_dir = tempfile.mkdtemp(dir=base_tmp_dir, prefix="fo_")
     os.chmod(tmp_dir, 0o770)
     tmp_dir = _populate_fo_directory(tmp_dir)
     return tmp_dir
@@ -186,7 +186,9 @@ def run_fo_od(
     shutil.rmtree(fo_tmp_dir)
 
     if result.returncode != 0:
-        logger.warning(f"Find_Orb failed with return code {result.returncode}")
+        logger.warning(
+            f"Find_Orb failed with return code {result.returncode} for {len(observations)} observations in {fo_result_dir}"
+        )
         logger.warning(f"{result.stdout}\n{result.stderr}")
         return Orbits.empty(), ADESObservations.empty(), "Find_Orb failed"
 

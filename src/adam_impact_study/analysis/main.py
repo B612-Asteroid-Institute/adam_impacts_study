@@ -544,3 +544,5 @@ def summarize_impact_study_results(
 
     if plot:
         make_analysis_plots(results, out_dir)
+
+    return results

@@ -45,7 +45,7 @@ def run_impact_study_all(
     assist_initial_dt: float,
     assist_adaptive_mode: int,
     max_processes: Optional[int] = 1,
-    overwrite: bool = True,
+    overwrite: bool = False,
     seed: Optional[int] = 13612,
 ) -> Tuple[WindowResult, ResultsTiming]:
     """
@@ -82,13 +82,14 @@ def run_impact_study_all(
 
     # If the run directory already exists, throw an exception
     # unless the user has specified the overwrite flag
-    if os.path.exists(f"{run_dir}"):
-        if not overwrite:
-            raise ValueError(
-                f"Run directory {run_dir} already exists. Set overwrite=True to overwrite."
+    if os.path.exists(run_dir):
+        if overwrite:
+            logger.warning(f"Overwriting run directory {run_dir}")
+            shutil.rmtree(f"{run_dir}")
+        else:
+            logger.warning(
+                f"Run directory {run_dir} already exists, attempting to continue previous run..."
             )
-        logger.warning(f"Overwriting run directory {run_dir}")
-        shutil.rmtree(f"{run_dir}")
 
     os.makedirs(f"{run_dir}", exist_ok=True)
 
@@ -140,9 +141,9 @@ def run_impact_study_all(
                 result, timing = ray.get(finished[0])
                 impact_results = qv.concatenate([impact_results, result])
                 results_timings = qv.concatenate([results_timings, timing])
+
     while len(futures) > 0:
         finished, futures = ray.wait(futures, num_returns=1)
-        # import pdb; pdb.set_trace()
         result, timing = ray.get(finished[0])
         impact_results = qv.concatenate([impact_results, result])
         results_timings = qv.concatenate([results_timings, timing])
@@ -209,21 +210,54 @@ def run_impact_study_for_orbit(
     paths = get_study_paths(run_dir, orbit_id)
 
     # Serialize the ImpactorOrbit to a file for future analysis use
-    impactor_orbit.to_parquet(
-        f"{paths['orbit_base_dir']}/impact_orbits_{orbit_id}.parquet"
-    )
+    impactor_orbit_file = f"{paths['orbit_base_dir']}/impactor_orbit.parquet"
+    if not os.path.exists(impactor_orbit_file):
+        impactor_orbit.to_parquet(impactor_orbit_file)
+    else:
+        impactor_orbit_saved = ImpactorOrbits.from_parquet(impactor_orbit_file)
+        impactor_orbit_table = impactor_orbit.flattened_table().drop_columns(
+            ["coordinates.covariance.values"]
+        )
+        impactor_orbit_saved_table = (
+            impactor_orbit_saved.flattened_table().drop_columns(
+                ["coordinates.covariance.values"]
+            )
+        )
+        assert impactor_orbit_table.equals(
+            impactor_orbit_saved_table
+        ), "ImpactorOrbit does not match saved version"
 
-    # Run Sorcha to generate synthetic observations
-    sorcha_start_time = time.perf_counter()
-    observations = run_sorcha(
-        impactor_orbit,
-        pointing_file,
-        paths["sorcha_dir"],
-        seed=seed,
-    )
-    sorcha_runtime = time.perf_counter() - sorcha_start_time
-    # Serialize the observations to a file for future analysis use
-    observations.to_parquet(f"{paths['sorcha_dir']}/observations_{orbit_id}.parquet")
+    timing_file = f"{paths['orbit_base_dir']}/timings.parquet"
+    if os.path.exists(timing_file):
+        timings = ResultsTiming.from_parquet(timing_file)
+    else:
+        timings = ResultsTiming.from_kwargs(
+            orbit_id=[orbit_id],
+        )
+
+    observations_file = f"{paths['sorcha_dir']}/observations_{orbit_id}.parquet"
+    sorcha_runtime = None
+    if not os.path.exists(observations_file):
+        # Run Sorcha to generate synthetic observations
+        sorcha_start_time = time.perf_counter()
+        observations = run_sorcha(
+            impactor_orbit,
+            pointing_file,
+            paths["sorcha_dir"],
+            seed=seed,
+        )
+        sorcha_runtime = time.perf_counter() - sorcha_start_time
+        # Serialize the observations to a file for future analysis use
+        observations.to_parquet(
+            f"{paths['sorcha_dir']}/observations_{orbit_id}.parquet"
+        )
+
+        # Update timings
+        timings = timings.set_column("sorcha_runtime", pa.array([sorcha_runtime]))
+        timings.to_parquet(timing_file)
+    else:
+        observations = Observations.from_parquet(observations_file)
+        logger.info(f"Loaded observations from {observations_file}")
 
     if len(observations) == 0:
         return WindowResult.empty(), ResultsTiming.empty()
@@ -294,11 +328,13 @@ def run_impact_study_for_orbit(
     # Sort the results by observation_end for consistency.
     results = results.sort_by("observation_end")
 
+    # Update timings
     orbit_end_time = time.perf_counter()
+    total_runtime = orbit_end_time - orbit_start_time
     timings = ResultsTiming.from_kwargs(
-        orbit_id=[orbit_id],
-        total_runtime=[orbit_end_time - orbit_start_time],
-        sorcha_runtime=[sorcha_runtime],
+        orbit_id=timings.orbit_id,
+        total_runtime=[total_runtime],
+        sorcha_runtime=timings.sorcha_runtime,
         mean_od_runtime=[pc.mean(results.od_runtime)],
         total_od_runtime=[pc.sum(results.od_runtime)],
         mean_ip_runtime=[pc.mean(results.ip_runtime)],
@@ -306,7 +342,7 @@ def run_impact_study_for_orbit(
         mean_window_runtime=[pc.mean(results.window_runtime)],
         total_window_runtime=[pc.sum(results.window_runtime)],
     )
-    timings.to_parquet(f"{paths['orbit_base_dir']}/timings.parquet")
+    timings.to_parquet(timing_file)
 
     return results, timings
 
@@ -362,6 +398,10 @@ def calculate_window_impact_probability(
     window = f"{start_night.as_py()}_{end_night.as_py()}"
     paths = get_study_paths(run_dir, orbit_id, window)
 
+    window_out_file = f"{paths['time_dir']}/window_result.parquet"
+    if os.path.exists(window_out_file):
+        return WindowResult.from_parquet(window_out_file)
+
     # Get the start and end date of the observations, the number of
     # observations, and the number of unique nights
     observations_count = len(observations)
@@ -370,6 +410,7 @@ def calculate_window_impact_probability(
 
     rejected_observations = ADESObservations.empty()
 
+    od_runtime = None
     try:
         od_start_time = time.perf_counter()
         orbit, rejected_observations, error = run_fo_od(
@@ -384,7 +425,7 @@ def calculate_window_impact_probability(
         )
         orbit_with_window.to_parquet(f"{paths['time_dir']}/orbit_with_window.parquet")
     except Exception as e:
-        return WindowResult.from_kwargs(
+        window_result = WindowResult.from_kwargs(
             orbit_id=[orbit_id],
             object_id=[object_id],
             window=[window],
@@ -398,9 +439,11 @@ def calculate_window_impact_probability(
             error=[str(e)],
             od_runtime=[od_runtime],
         )
+        window_result.to_parquet(window_out_file)
+        return window_result
 
     if error is not None:
-        return WindowResult.from_kwargs(
+        window_result = WindowResult.from_kwargs(
             orbit_id=[orbit_id],
             object_id=[object_id],
             window=[window],
@@ -415,6 +458,8 @@ def calculate_window_impact_probability(
             error=[error],
             od_runtime=[od_runtime],
         )
+        window_result.to_parquet(window_out_file)
+        return window_result
 
     days_until_impact_plus_thirty = (
         int(
@@ -424,6 +469,7 @@ def calculate_window_impact_probability(
         + 30
     )
 
+    ip_runtime = None
     try:
         ip_start_time = time.perf_counter()
         propagator = propagator_class()
@@ -460,7 +506,7 @@ def calculate_window_impact_probability(
         ip_runtime = time.perf_counter() - ip_start_time
 
     except Exception as e:
-        return WindowResult.from_kwargs(
+        window_result = WindowResult.from_kwargs(
             orbit_id=[orbit_id],
             object_id=[object_id],
             window=[window],
@@ -476,6 +522,8 @@ def calculate_window_impact_probability(
             od_runtime=[od_runtime],
             ip_runtime=[ip_runtime],
         )
+        window_result.to_parquet(window_out_file)
+        return window_result
 
     window_end_time = time.perf_counter()
 

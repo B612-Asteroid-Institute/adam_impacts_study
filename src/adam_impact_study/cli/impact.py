@@ -11,7 +11,7 @@ import pyarrow as pa
 import pyarrow.compute as pc
 from adam_core.time import Timestamp
 
-from adam_impact_study.analysis import plot_ip_over_time
+from adam_impact_study.analysis.main import plot_ip_over_time
 from adam_impact_study.impacts_study import run_impact_study_all
 from adam_impact_study.types import ImpactorOrbits, RunConfiguration
 
@@ -24,6 +24,7 @@ def run_impact_study(
     run_config: RunConfiguration,
     pointing_file: Optional[str] = None,
     orbit_id_filter: Optional[str] = None,
+    overwrite: bool = False,
 ) -> None:
     """Run impact study on provided orbits."""
     # Load orbits directly from parquet
@@ -84,6 +85,7 @@ def run_impact_study(
         monte_carlo_samples=run_config.monte_carlo_samples,
         max_processes=run_config.max_processes,
         seed=run_config.seed,
+        overwrite=overwrite,
     )
 
     logger.info("Generating plots...")
@@ -114,6 +116,12 @@ def main():
     parser.add_argument(
         "--orbit-id-filter",
         help="Comma-delimited list of substrings to filter orbit id by",
+    )
+    parser.add_argument(
+        "--overwrite",
+        action="store_true",
+        help="Overwrite existing results in run directory",
+        default=False,
     )
     parser.add_argument("--debug", action="store_true", help="Enable debug logging")
 
@@ -154,6 +162,7 @@ def main():
         run_config=run_config,
         pointing_file=args.pointing_file,
         orbit_id_filter=args.orbit_id_filter,
+        overwrite=args.overwrite,
     )
 
 
