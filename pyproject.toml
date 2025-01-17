@@ -12,7 +12,7 @@ dependencies = [
     "matplotlib>=3.10.0",
     "adam_assist>=0.2.0",
     "ray[default]==2.39.0",
-    "sorcha @ git+https://github.com/B612-Asteroid-Institute/sorcha@5c7fe1ff712d67b5cc9f04e3175afb4794f281f9",
+    "sorcha @ git+https://github.com/B612-Asteroid-Institute/sorcha@23a3392f0145f7dbbdbb7b17687b69902716bde8",
     "adam-core>=0.3.5",
     "quivr @ git+https://github.com/B612-Asteroid-Institute/quivr@2d8ae0b40bdfb75bcceff0c73d41a52d4bffb5dc",
     "ipdb>=0.13.13",

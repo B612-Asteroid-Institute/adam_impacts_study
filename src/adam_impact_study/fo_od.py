@@ -168,7 +168,11 @@ def run_fo_od(
         f"-O {fo_tmp_dir}"
     )
 
-    logger.info(f"Running od for {orbit_id[0].as_py()}")
+    min_mjd = observations.coordinates.time.min().mjd()[0].as_py()
+    max_mjd = observations.coordinates.time.max().mjd()[0].as_py()
+    logger.info(
+        f"Running fo for {orbit_id[0].as_py()} from {min_mjd} to {max_mjd}"
+    )
     logger.debug(f"fo command: {fo_command}")
 
     result = subprocess.run(

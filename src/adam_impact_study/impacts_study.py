@@ -102,6 +102,13 @@ def run_impact_study_all(
     impact_results = WindowResult.empty()
     results_timings = ResultsTiming.empty()
     futures = []
+    # If we are only running a single orbit on this machine,
+    # we can run the sub-remotes using max_processes
+    # Otherwise, each orbit gets a single CPU to run.
+    sub_remote_max_processes = 1
+    if len(orbit_ids) == 1:
+        sub_remote_max_processes = max_processes
+
     for orbit_id in orbit_ids:
         impactor_orbit = impactor_orbits.select("orbit_id", orbit_id)
 
@@ -139,7 +146,7 @@ def run_impact_study_all(
                     assist_min_dt,
                     assist_initial_dt,
                     assist_adaptive_mode,
-                    max_processes=1,
+                    max_processes=sub_remote_max_processes,
                     seed=orbit_seed,
                 )
             )
