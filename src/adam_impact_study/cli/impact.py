@@ -22,7 +22,6 @@ def run_impact_study(
     orbit_file: str,
     run_dir: str,
     run_config: RunConfiguration,
-    pointing_file: Optional[str] = None,
     orbit_id_filter: Optional[str] = None,
     overwrite: bool = False,
 ) -> None:
@@ -46,7 +45,7 @@ def run_impact_study(
         logger.info(f"Selected {len(filtered_orbits)}/{len(impactor_orbits)} orbits")
 
     # Extract the date of the first pointing from the pointing file
-    conn = sqlite3.connect(pointing_file)
+    conn = sqlite3.connect(run_config.pointing_database_file)
     cursor = conn.cursor()
     cursor.execute(
         "SELECT observationStartMJD as observationStartMJD_TAI FROM observations ORDER BY observationStartMJD_TAI LIMIT 1"
@@ -76,7 +75,7 @@ def run_impact_study(
     logger.info("Starting impact study...")
     impact_study_results, results_timings = run_impact_study_all(
         filtered_orbits,
-        pointing_file,
+        run_config.pointing_database_file,
         run_dir,
         assist_initial_dt=run_config.assist_initial_dt,
         assist_min_dt=run_config.assist_min_dt,
@@ -143,6 +142,7 @@ def main():
         assist_adaptive_mode=1,
         seed=612,
         max_processes=1,
+        pointing_database_file=args.pointing_file,
     )
 
     if args.run_config is not None:
@@ -160,7 +160,6 @@ def main():
         args.orbit_file,
         args.run_dir,
         run_config=run_config,
-        pointing_file=args.pointing_file,
         orbit_id_filter=args.orbit_id_filter,
         overwrite=args.overwrite,
     )

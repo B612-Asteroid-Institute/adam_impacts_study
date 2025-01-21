@@ -199,6 +199,7 @@ class RunConfiguration:
     assist_initial_dt: float
     assist_adaptive_mode: int
     seed: int
+    pointing_database_file: str
     max_processes: Optional[int] = None
 
     @classmethod
