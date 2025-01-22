@@ -24,6 +24,7 @@ license = {text = "MIT"}
 [build-system]
 requires = ["pdm-backend"]
 build-backend = "pdm.backend"
+build-script = "build_fo.sh"
 
 [project.optional-dependencies]
 dev = [
@@ -80,3 +81,6 @@ adam-impact = "adam_impact_study.cli.impact:main"
 adam-impact-convert = "adam_impact_study.cli.preprocessing:main"
 adam-impact-sort = "adam_impact_study.cli.sort:main"
 adam-impact-refine = "adam_impact_study.cli.refine:main"
+
+[project.entry-points."pdm.post_install"]
+build-fo = "adam_impact_study.install:build_fo"

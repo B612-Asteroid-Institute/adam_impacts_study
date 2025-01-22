@@ -93,3 +93,16 @@ plot_ip_over_time(impact_study_results)
 ```
 
 This code and the input files needed to run it can be found in the 'demo' section.
+
+## Installation as a Dependency
+
+When installing this package as a dependency in another project, ensure you include it with the post-install hook:
+```
+toml
+[project.dependencies]
+adam-impact-study = {git = "https://github.com/your-repo/adam-impact-study.git"}
+[tool.pdm.scripts]
+post-install = "python -c 'from adam_impact_study.install import build_fo; build_fo()'"
+```
+
+This will ensure that Find Orb is built and installed when the package is installed.
