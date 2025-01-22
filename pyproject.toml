@@ -15,7 +15,7 @@ dependencies = [
     "sorcha @ git+https://github.com/B612-Asteroid-Institute/sorcha@23a3392f0145f7dbbdbb7b17687b69902716bde8",
     "adam-core @ git+https://github.com/B612-Asteroid-Institute/adam_core@ee57577ff786c573c856d591b1e993d1649576f3",
     "quivr @ git+https://github.com/B612-Asteroid-Institute/quivr@2d8ae0b40bdfb75bcceff0c73d41a52d4bffb5dc",
-    "adam-fo @ git+https://github.com/B612-Asteroid-Institute/adam_fo@552488e07a3fd1bef1b95a41f3591a157e87e2ee",
+    "adam-fo @ git+https://github.com/B612-Asteroid-Institute/adam_fo@1a900ad69577c9cf4ce2190156280e80d70f9ca1",
     "ipdb>=0.13.13",
 ]
 requires-python = "<3.13,>=3.11"

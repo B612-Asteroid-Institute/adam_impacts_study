@@ -105,6 +105,7 @@ def run_fo_od(
     orbit, rejected, error = fo(
         ades_string,
         clean_up=True,
+        out_dir=fo_result_dir,
     )
 
     # Re-assign orbit_id to the original value if we found an orbit
