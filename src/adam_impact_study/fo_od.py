@@ -33,7 +33,7 @@ BC405_FILENAME = (
 )
 
 
-def _populate_fo_directory(working_dir: str) -> str:
+def _populate_fo_directory(working_dir: str, fo_binary_dir: str = FO_BINARY_DIR, bc405_filename: str = BC405_FILENAME, linus_jpl_path: str = LINUX_JPL_PATH) -> str:
     os.makedirs(working_dir, exist_ok=True)
     # List of required files to copy from FO_DIR to current directory
     required_files = [
@@ -51,19 +51,19 @@ def _populate_fo_directory(working_dir: str) -> str:
 
     # Copy required files to the current directory
     for file in required_files:
-        src = os.path.join(FO_BINARY_DIR, file)
+        src = os.path.join(fo_binary_dir, file)
         dst = os.path.join(working_dir, file)
         shutil.copy2(src, dst)  # Copy to current directory
 
     # Copy bc405.dat to the current directory
-    shutil.copy2(BC405_FILENAME, os.path.join(working_dir, "bc405.dat"))
+    shutil.copy2(bc405_filename, os.path.join(working_dir, "bc405.dat"))
 
     # Template in the JPL path to environ.dat
     environ_dat_template = pathlib.Path(__file__).parent / "environ.dat.tpl"
     with open(environ_dat_template, "r") as file:
         environ_dat_content = file.read()
     environ_dat_content = environ_dat_content.format(
-        LINUX_JPL_FILENAME=LINUX_JPL_PATH.absolute(),
+        LINUX_JPL_FILENAME=linus_jpl_path.absolute(),
     )
     with open(os.path.join(working_dir, "environ.dat"), "w") as file:
         file.write(environ_dat_content)
@@ -71,7 +71,7 @@ def _populate_fo_directory(working_dir: str) -> str:
     return working_dir
 
 
-def _create_fo_tmp_directory() -> str:
+def _create_fo_tmp_directory(fo_binary_dir: str = FO_BINARY_DIR, bc405_filename: str = BC405_FILENAME, linus_jpl_path: str = LINUX_JPL_PATH) -> str:
     """
     Creates a temporary directory that avoids /tmp to handle fo locking and directory length limits.
     Uses ~/.cache/adam_impact_study/ftmp to avoid Find_Orb's special handling of paths containing /tmp/.
@@ -83,7 +83,7 @@ def _create_fo_tmp_directory() -> str:
     os.makedirs(base_tmp_dir, mode=0o770, exist_ok=True)
     tmp_dir = tempfile.mkdtemp(dir=base_tmp_dir, prefix="fo_")
     os.chmod(tmp_dir, 0o770)
-    tmp_dir = _populate_fo_directory(tmp_dir)
+    tmp_dir = _populate_fo_directory(tmp_dir, fo_binary_dir, bc405_filename, linus_jpl_path)
     return tmp_dir
 
 
