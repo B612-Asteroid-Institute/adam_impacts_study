@@ -1,120 +1,25 @@
 import logging
 import os
-import pathlib
-import shutil
-import subprocess
-import tempfile
 from typing import Optional, Tuple
 
+import numpy as np
+import pyarrow as pa
 import pyarrow.compute as pc
-from adam_core.observations.ades import ADESObservations
-from adam_core.orbits import Orbits
-
-from adam_impact_study.conversions import (
-    fo_to_adam_orbit_cov,
-    od_observations_to_ades_file,
-    rejected_observations_from_fo,
+from adam_core.observations.ades import (
+    ADES_to_string,
+    ADESObservations,
+    ObsContext,
+    ObservatoryObsContext,
+    SubmitterObsContext,
+    TelescopeObsContext,
 )
+from adam_core.orbits import Orbits
+from adam_fo import fo
 
 from .types import Observations
 
 logger = logging.getLogger(__name__)
 logger.setLevel(os.environ.get("ADAM_LOG_LEVEL", "INFO"))
-
-
-FO_BINARY_DIR = pathlib.Path(__file__).parent.parent.parent / "find_orb/find_orb"
-LINUX_JPL_PATH = (
-    pathlib.Path(__file__).parent.parent.parent
-    / "find_orb/.find_orb/linux_p1550p2650.440t"
-)
-
-BC405_FILENAME = (
-    pathlib.Path(__file__).parent.parent.parent / "find_orb/.find_orb/bc405.dat"
-)
-
-
-def _populate_fo_directory(working_dir: str) -> str:
-    os.makedirs(working_dir, exist_ok=True)
-    # List of required files to copy from FO_DIR to current directory
-    required_files = [
-        "ObsCodes.htm",
-        "jpl_eph.txt",
-        "orbitdef.sof",
-        "rovers.txt",
-        "xdesig.txt",
-        "cospar.txt",
-        "efindorb.txt",
-        "odd_name.txt",
-        "sigma.txt",
-        "mu1.txt",
-    ]
-
-    # Copy required files to the current directory
-    for file in required_files:
-        src = os.path.join(FO_BINARY_DIR, file)
-        dst = os.path.join(working_dir, file)
-        shutil.copy2(src, dst)  # Copy to current directory
-
-    # Copy bc405.dat to the current directory
-    shutil.copy2(BC405_FILENAME, os.path.join(working_dir, "bc405.dat"))
-
-    # Template in the JPL path to environ.dat
-    environ_dat_template = pathlib.Path(__file__).parent / "environ.dat.tpl"
-    with open(environ_dat_template, "r") as file:
-        environ_dat_content = file.read()
-    environ_dat_content = environ_dat_content.format(
-        LINUX_JPL_FILENAME=LINUX_JPL_PATH.absolute(),
-    )
-    with open(os.path.join(working_dir, "environ.dat"), "w") as file:
-        file.write(environ_dat_content)
-
-    return working_dir
-
-
-def _create_fo_tmp_directory() -> str:
-    """
-    Creates a temporary directory that avoids /tmp to handle fo locking and directory length limits.
-    Uses ~/.cache/adam_impact_study/ftmp to avoid Find_Orb's special handling of paths containing /tmp/.
-
-    Returns:
-        str: The absolute path to the temporary directory populated with necessary FO files
-    """
-    base_tmp_dir = os.path.expanduser("~/.cache/adam_impact_study/")
-    os.makedirs(base_tmp_dir, mode=0o770, exist_ok=True)
-    tmp_dir = tempfile.mkdtemp(dir=base_tmp_dir, prefix="fo_")
-    os.chmod(tmp_dir, 0o770)
-    tmp_dir = _populate_fo_directory(tmp_dir)
-    return tmp_dir
-
-
-def _copy_files_from_tmp_to_fo_dir(fo_tmp_dir: str, fo_dir: str):
-    # Selectively copy files from fo_tmp_dir to fo_dir
-    # Explicitly remove the tmp directory after copying
-    files_to_copy = [
-        "covar.txt",
-        "cospar.txt",
-        "elem_short.json",
-        "gauss.out",
-        "covar.json",
-        "total.json",
-        "elements.txt",
-        "debug.txt",
-        "bc405pre.dat",
-        "environ.dat",
-        # Copy observations for fo debugging purposes
-        "observations.ades",
-    ]
-
-    for file in files_to_copy:
-        if os.path.exists(os.path.join(fo_tmp_dir, file)):
-            shutil.copy2(os.path.join(fo_tmp_dir, file), os.path.join(fo_dir, file))
-
-
-def _de440t_exists():
-    if not os.path.exists(LINUX_JPL_PATH):
-        raise Exception(
-            f"DE440t file not found at {LINUX_JPL_PATH}, find_orb will not work correctly"
-        )
 
 
 def run_fo_od(
@@ -138,78 +43,72 @@ def run_fo_od(
         - Processed observations
         - Error message (if any)
     """
-
     # This function is only valid for a single orbit_id
     if len(observations.orbit_id.unique()) > 1:
         raise ValueError("This function is only valid for a single orbit_id")
 
-    _de440t_exists()
-    fo_tmp_dir = _create_fo_tmp_directory()
+    # Extract the original orbit_id since trkSub has an 8-character limit
+    orbit_ids = observations.orbit_id
 
-    # Create input file
-    input_file = os.path.join(fo_tmp_dir, "observations.ades")
-    # Truncate object_id to 8 characters. we will re-assign it after FO runs
-    orbit_id = observations.orbit_id
-    observations = observations.set_column(
-        "orbit_id", pc.utf8_slice_codeunits(orbit_id, 0, 8)
+    # Convert uncertainties in RA and Dec to arcseconds
+    # and adjust the RA uncertainty to account for the cosine of the declination
+    sigma_ra_cos_dec = (
+        np.cos(np.radians(observations.coordinates.lat.to_numpy(zero_copy_only=False)))
+        * observations.coordinates.covariance.sigmas[:, 1]
     )
-    od_observations_to_ades_file(observations, input_file)
+    sigma_ra_cos_dec_arcseconds = sigma_ra_cos_dec * 3600
+    sigma_dec_arcseconds = observations.coordinates.covariance.sigmas[:, 2] * 3600
 
-    debug_level = os.environ.get("ADAM_LOG_LEVEL", "INFO")
-    fo_debug_level = {
-        "DEBUG": 10,
-        "INFO": 2,
-    }.get(debug_level, 0)
-    # Run Find_Orb
-    fo_command = (
-        f"{FO_BINARY_DIR}/fo {input_file} -c "
-        f"-d {fo_debug_level} "
-        f"-D {fo_tmp_dir}/environ.dat "
-        f"-O {fo_tmp_dir}"
+    # Serialize observations to an ADES table
+    ades_observations = ADESObservations.from_kwargs(
+        trkSub=pc.utf8_slice_codeunits(orbit_ids, 0, 8),
+        obsTime=observations.coordinates.time,
+        ra=observations.coordinates.lon,
+        dec=observations.coordinates.lat,
+        rmsRACosDec=sigma_ra_cos_dec_arcseconds,
+        rmsDec=sigma_dec_arcseconds,
+        mag=observations.photometry.mag,
+        rmsMag=observations.photometry.mag_sigma,
+        band=observations.photometry.filter,
+        stn=pa.repeat("X05", len(observations)),
+        mode=pa.repeat("NA", len(observations)),
+        astCat=pa.repeat("NA", len(observations)),
     )
+
+    # Minimal obscontext representing our simulated X05 survey
+    obs_contexts = {
+        "X05": ObsContext(
+            observatory=ObservatoryObsContext(
+                mpcCode="X05", name="Vera C. Rubin Observatory - LSST"
+            ),
+            submitter=SubmitterObsContext(
+                name="K. Kiker",
+                institution="B612 Asteroid Institute",
+            ),
+            observers=["J. Doe"],
+            measurers=["J. Doe"],
+            telescope=TelescopeObsContext(
+                name="Simonyi Survey Telescope",
+                design="Reflector",
+            ),
+        ),
+    }
+
+    ades_string = ADES_to_string(ades_observations, obs_contexts)
 
     min_mjd = observations.coordinates.time.min().mjd()[0].as_py()
     max_mjd = observations.coordinates.time.max().mjd()[0].as_py()
-    logger.info(
-        f"Running fo for {orbit_id[0].as_py()} from {min_mjd} to {max_mjd}"
+    logger.info(f"Running fo for {orbit_ids[0].as_py()} from {min_mjd} to {max_mjd}")
+
+    # TODO: We need to a way to pass an output directory to this function so we can store
+    # all the files find_orb likes to create for debugging purposes.
+    orbit, rejected, error = fo(
+        ades_string,
+        clean_up=True,
     )
-    logger.debug(f"fo command: {fo_command}")
 
-    result = subprocess.run(
-        fo_command,
-        shell=True,
-        cwd=fo_tmp_dir,
-        text=True,
-        capture_output=True,
-    )
-    logger.debug(f"{result.stdout}\n{result.stderr}")
+    # Re-assign orbit_id to the original value if we found an orbit
+    if len(orbit) > 0:
+        orbit = orbit.set_column("orbit_id", orbit_ids[:1])
 
-    _copy_files_from_tmp_to_fo_dir(fo_tmp_dir, fo_result_dir)
-    # Remove the tmp directory after copying because it has
-    # some large files in it that we don't need
-    shutil.rmtree(fo_tmp_dir)
-
-    if result.returncode != 0:
-        logger.warning(
-            f"Find_Orb failed with return code {result.returncode} for {len(observations)} observations in {fo_result_dir}"
-        )
-        logger.warning(f"{result.stdout}\n{result.stderr}")
-        return Orbits.empty(), ADESObservations.empty(), "Find_Orb failed"
-
-    if not os.path.exists(f"{fo_result_dir}/covar.json") or not os.path.exists(
-        f"{fo_result_dir}/total.json"
-    ):
-        logger.warning("Find_Orb failed, covar.json or total.json file not found")
-        return (
-            Orbits.empty(),
-            ADESObservations.empty(),
-            "Find_Orb failed, covar.json or total.json file not found",
-        )
-
-    orbit = fo_to_adam_orbit_cov(fo_result_dir)
-
-    # Re-assign orbit_id to the original value
-    orbit = orbit.set_column("orbit_id", observations[0].orbit_id)
-    rejected = rejected_observations_from_fo(fo_result_dir)
-
-    return orbit, rejected, None
+    return orbit, rejected, error
