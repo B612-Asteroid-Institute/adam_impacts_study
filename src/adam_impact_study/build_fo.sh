@@ -1,6 +1,6 @@
 #build and install find orb
-mkdir -p find_orb
-cd find_orb
+mkdir -p ../../find_orb
+cd ../../find_orb
 git clone https://github.com/Bill-Gray/lunar.git
 cd lunar
 git checkout 005ccaa469b32abc0df84b512d52e8b1c80efbda

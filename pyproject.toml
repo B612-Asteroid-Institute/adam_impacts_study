@@ -24,7 +24,6 @@ license = {text = "MIT"}
 [build-system]
 requires = ["pdm-backend"]
 build-backend = "pdm.backend"
-build-script = "build_fo.sh"
 
 [project.optional-dependencies]
 dev = [
@@ -63,6 +62,9 @@ coverage = "pytest --cov=adam_impact_study --cov-report=xml"
 distribution = true
 # We use our fork but sorcha wants to install vanilla assist
 resolution.excludes = ["assist"]
+
+[tool.pdm.build]
+includes = ["build_fo.sh"]
 
 [tool.black]
 line-length = 88
