@@ -64,7 +64,7 @@ distribution = true
 resolution.excludes = ["assist"]
 
 [tool.pdm.build]
-includes = ["build_fo.sh"]
+includes = ["src/adam_impact_study/build_fo.sh", "src/adam_impact_study/"]
 
 [tool.black]
 line-length = 88
