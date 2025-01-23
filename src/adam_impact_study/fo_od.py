@@ -22,31 +22,22 @@ logger = logging.getLogger(__name__)
 logger.setLevel(os.environ.get("ADAM_LOG_LEVEL", "INFO"))
 
 
-def run_fo_od(
-    observations: Observations,
-    fo_result_dir: str,
-) -> Tuple[Orbits, ADESObservations, Optional[str]]:
-    """Run Find_Orb orbit determination with directory-based paths
+def observations_to_ades(observations: Observations) -> Tuple[str, ADESObservations]:
+    """
+    Convert Observations to ADES format string.
 
     Parameters
     ----------
     observations : Observations
-        Observations to process
-    fo_result_dir : str
-        Directory where Find_Orb output files will be written
+        Observations to convert
 
     Returns
     -------
-    Tuple[Orbits, ADESObservations, Optional[str]]
+    Tuple[str, ADESObservations]
         Tuple containing:
-        - Determined orbit
-        - Processed observations
-        - Error message (if any)
+        - ADES format string
+        - ADESObservations object
     """
-    # This function is only valid for a single orbit_id
-    if len(observations.orbit_id.unique()) > 1:
-        raise ValueError("This function is only valid for a single orbit_id")
-
     # Extract the original orbit_id since trkSub has an 8-character limit
     orbit_ids = observations.orbit_id
 
@@ -56,8 +47,18 @@ def run_fo_od(
         np.cos(np.radians(observations.coordinates.lat.to_numpy(zero_copy_only=False)))
         * observations.coordinates.covariance.sigmas[:, 1]
     )
-    sigma_ra_cos_dec_arcseconds = sigma_ra_cos_dec * 3600
-    sigma_dec_arcseconds = observations.coordinates.covariance.sigmas[:, 2] * 3600
+    sigma_ra_cos_dec_arcseconds = pa.array(sigma_ra_cos_dec * 3600, type=pa.float64())
+    sigma_dec_arcseconds = pa.array(
+        observations.coordinates.covariance.sigmas[:, 2] * 3600, type=pa.float64()
+    )
+
+    # Replace nans with nulls using pyarrow
+    sigma_ra_cos_dec_arcseconds = pc.if_else(
+        pc.is_nan(sigma_ra_cos_dec_arcseconds), None, sigma_ra_cos_dec_arcseconds
+    )
+    sigma_dec_arcseconds = pc.if_else(
+        pc.is_nan(sigma_dec_arcseconds), None, sigma_dec_arcseconds
+    )
 
     # Serialize observations to an ADES table
     ades_observations = ADESObservations.from_kwargs(
@@ -95,13 +96,42 @@ def run_fo_od(
     }
 
     ades_string = ADES_to_string(ades_observations, obs_contexts)
+    return ades_string, ades_observations
+
+
+def run_fo_od(
+    observations: Observations,
+    fo_result_dir: str,
+) -> Tuple[Orbits, ADESObservations, Optional[str]]:
+    """Run Find_Orb orbit determination with directory-based paths
+
+    Parameters
+    ----------
+    observations : Observations
+        Observations to process
+    fo_result_dir : str
+        Directory where Find_Orb output files will be written
+
+    Returns
+    -------
+    Tuple[Orbits, ADESObservations, Optional[str]]
+        Tuple containing:
+        - Determined orbit
+        - Processed observations
+        - Error message (if any)
+    """
+    # This function is only valid for a single orbit_id
+    if len(observations.orbit_id.unique()) > 1:
+        raise ValueError("This function is only valid for a single orbit_id")
+
+    ades_string, rejected = observations_to_ades(observations)
 
     min_mjd = observations.coordinates.time.min().mjd()[0].as_py()
     max_mjd = observations.coordinates.time.max().mjd()[0].as_py()
-    logger.info(f"Running fo for {orbit_ids[0].as_py()} from {min_mjd} to {max_mjd}")
+    logger.info(
+        f"Running fo for {observations.orbit_id[0].as_py()} from {min_mjd} to {max_mjd}"
+    )
 
-    # TODO: We need to a way to pass an output directory to this function so we can store
-    # all the files find_orb likes to create for debugging purposes.
     orbit, rejected, error = fo(
         ades_string,
         clean_up=True,
@@ -110,6 +140,6 @@ def run_fo_od(
 
     # Re-assign orbit_id to the original value if we found an orbit
     if len(orbit) > 0:
-        orbit = orbit.set_column("orbit_id", orbit_ids[:1])
+        orbit = orbit.set_column("orbit_id", observations.orbit_id[:1])
 
     return orbit, rejected, error

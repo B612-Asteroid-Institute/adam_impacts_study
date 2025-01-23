@@ -5,7 +5,7 @@
 groups = ["default"]
 strategy = ["inherit_metadata"]
 lock_version = "4.5.0"
-content_hash = "sha256:6947aac3dc4aa0c229a058eb17bbcdde38fec2ba393e466d5ba84c7705a753d8"
+content_hash = "sha256:896459fe74d2679a4f954c00499dd5e464af6dbc54508c08f34cbfe63a1f371a"
 
 [[metadata.targets]]
 requires_python = ">=3.11,<3.13"
@@ -67,11 +67,11 @@ dependencies = [
 
 [[package]]
 name = "adam-fo"
-version = "0.1.dev3"
+version = "0.1.dev4"
 requires_python = "<3.13,>=3.11"
 git = "https://github.com/B612-Asteroid-Institute/adam_fo"
-ref = "552488e07a3fd1bef1b95a41f3591a157e87e2ee"
-revision = "552488e07a3fd1bef1b95a41f3591a157e87e2ee"
+ref = "1a900ad69577c9cf4ce2190156280e80d70f9ca1"
+revision = "1a900ad69577c9cf4ce2190156280e80d70f9ca1"
 summary = "Wrapper for Bill Gray's fo, the programmatic version of find_orb"
 groups = ["default"]
 dependencies = [
