@@ -24,6 +24,8 @@ class Observations(qv.Table):
     observers = Observers.as_column()
     photometry = Photometry.as_column(nullable=True)
     observing_night = qv.Int64Column(nullable=True)
+    #: Was this observation linked by Rubin's SSP
+    linked = qv.BooleanColumn(nullable=True)
 
 
 class PhotometricProperties(qv.Table):

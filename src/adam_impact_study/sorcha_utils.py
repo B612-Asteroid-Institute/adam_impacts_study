@@ -122,8 +122,6 @@ SSP_maximum_time = 0.0625
 SSP_number_tracklets = 3
 SSP_track_window = 15
 SSP_night_start_utc = 16.0
-
-[LINKING]
 drop_unlinked = False
 
 [OUTPUT]

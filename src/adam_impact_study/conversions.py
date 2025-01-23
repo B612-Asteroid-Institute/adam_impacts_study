@@ -95,52 +95,40 @@ def sorcha_output_to_od_observations(sorcha_output_file: str) -> Observations:
     sorcha_observations_table = sorcha_observations_table.take(sort_indices)
     observations = Observations.empty()
 
-    object_ids = pc.unique(sorcha_observations_table["ObjID"]).to_numpy(
-        zero_copy_only=False
-    )
+    object_ids = pc.unique(sorcha_observations_table["ObjID"])
 
     for obj in object_ids:
         object_obs = sorcha_observations_table.filter(
             pc.equal(sorcha_observations_table["ObjID"], obj)
         )
-        times = Timestamp.from_mjd(
-            object_obs["fieldMJD_TAI"].to_numpy(zero_copy_only=False), scale="tai"
-        )
+        times = Timestamp.from_mjd(object_obs["fieldMJD_TAI"], scale="tai")
         times = times.rescale("utc")
         sigmas = np.full((len(object_obs), 6), np.nan)
         sigmas[:, 1] = object_obs["astrometricSigma_deg"].to_numpy(zero_copy_only=False)
         sigmas[:, 2] = object_obs["astrometricSigma_deg"].to_numpy(zero_copy_only=False)
         photometry = Photometry.from_kwargs(
-            mag=object_obs["trailedSourceMag"].to_numpy(zero_copy_only=False),
-            mag_sigma=object_obs["trailedSourceMagSigma"].to_numpy(
-                zero_copy_only=False
-            ),
-            filter=object_obs["optFilter"].to_numpy(),
+            mag=object_obs["trailedSourceMag"],
+            mag_sigma=object_obs["trailedSourceMagSigma"],
+            filter=object_obs["optFilter"],
         )
         coordinates = SphericalCoordinates.from_kwargs(
-            lon=object_obs["RA_deg"].to_numpy(zero_copy_only=False),
-            lat=object_obs["Dec_deg"].to_numpy(zero_copy_only=False),
+            lon=object_obs["RA_deg"],
+            lat=object_obs["Dec_deg"],
             origin=Origin.from_kwargs(
-                code=np.full(len(object_obs), "X05", dtype="object")
+                code=pa.repeat("X05", len(object_obs)),
             ),
             time=times,
             frame="equatorial",
             covariance=CoordinateCovariances.from_sigmas(sigmas),
         )
-        coordinates_sorted = coordinates.sort_by(
-            [
-                ("time.days", "ascending"),
-                ("time.nanos", "ascending"),
-                ("origin.code", "ascending"),
-            ]
-        )
 
         object_observation = Observations.from_kwargs(
             obs_id=[f"{obj}_{i}" for i in range(len(object_obs))],
             orbit_id=pa.repeat(obj, len(object_obs)),
-            coordinates=coordinates_sorted,
-            observers=Observers.from_code("X05", coordinates_sorted.time),
+            coordinates=coordinates,
+            observers=Observers.from_codes(coordinates.origin.code, coordinates.time),
             photometry=photometry,
+            linked=object_obs["object_linked"],
         )
 
         observations = qv.concatenate([observations, object_observation])
