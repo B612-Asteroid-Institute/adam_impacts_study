@@ -15,6 +15,7 @@ from adam_core.observers.utils import calculate_observing_night
 from adam_core.orbits import VariantOrbits
 from adam_core.ray_cluster import initialize_use_ray
 from adam_core.time import Timestamp
+from adam_fo.config import check_build_exists
 
 from adam_impact_study.conversions import Observations
 from adam_impact_study.fo_od import run_fo_od
@@ -71,6 +72,8 @@ def run_impact_study_all(
         'day', and 'impact_probability'. If no impacts were found, returns None.
 
     """
+    # Test that the build fo script has been run
+    check_build_exists()
 
     class ImpactASSISTPropagator(ASSISTPropagator):
         def __init__(self, *args, **kwargs):
