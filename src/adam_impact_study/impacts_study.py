@@ -274,6 +274,10 @@ def run_impact_study_for_orbit(
         sorcha_start_time = time.perf_counter()
         observations = run_sorcha(
             impactor_orbit,
+            # We need to avoid propagation in sorcha past the impact time
+            # to avoid weird edge cases where the propagation gets ejected
+            # from the solar system / galaxy, etc...
+            impactor_orbit.impact_time.add_days(-1),
             pointing_file,
             paths["sorcha_dir"],
             assist_epsilon=assist_epsilon,

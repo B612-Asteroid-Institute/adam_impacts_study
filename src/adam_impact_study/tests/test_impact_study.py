@@ -309,6 +309,7 @@ def test_run_impact_study_for_orbit(
 
     mock_run_sorcha.assert_called_with(
         impactor_orbits,
+        impactor_orbits.impact_time.add_days(-1),
         pointing_file,
         f"{RUN_DIR}/Object1/sorcha",
         assist_epsilon=1e-9,

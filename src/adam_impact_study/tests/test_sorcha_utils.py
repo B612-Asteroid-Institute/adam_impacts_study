@@ -170,7 +170,6 @@ def test_write_phys_params_file(tmpdir, mock_photometric_properties):
     assert expected_table.equals(read_table)
 
 
-@pytest.mark.skip(reason="Fails due to edge cases with propagations (see TODO)")
 @patch("adam_impact_study.sorcha_utils.write_sorcha_orbits_file")
 @patch("adam_impact_study.sorcha_utils.write_phys_params_file")
 @patch("adam_impact_study.sorcha_utils.write_config_file_timeframe")
@@ -196,6 +195,7 @@ def test_run_sorcha(
 
     run_sorcha(
         single_impactor,
+        single_impactor.impact_time.add_days(-1),
         pointing_file,
         working_dir,
         assist_epsilon,
@@ -214,12 +214,9 @@ def test_run_sorcha(
         f"{working_dir}/params.csv",
         filter_band="r",
     )
-    # TODO: We expect this to fail since we are stopping propagations
-    # to -1 day from impact time to get around some weird corner cases with
-    # propagations getting ejected from the solar system / galaxy, etc...
     mock_config.assert_called_once_with(
         f"{working_dir}/config.ini",
-        single_impactor.impact_time,
+        single_impactor.impact_time.add_days(-1),
         assist_epsilon,
         assist_min_dt,
         assist_initial_dt,

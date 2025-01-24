@@ -259,6 +259,7 @@ def write_phys_params_file(
 
 def run_sorcha(
     impactor_orbit: ImpactorOrbits,
+    simulation_end_date: Timestamp,
     pointing_file: str,
     working_dir: str,
     assist_epsilon: float,
@@ -267,7 +268,28 @@ def run_sorcha(
     assist_adaptive_mode: int,
     seed: Optional[int] = None,
 ) -> Observations:
-    """Run Sorcha with directory-based paths"""
+    """Run Sorcha with directory-based paths
+
+    Parameters
+    ----------
+    impactor_orbit : `~adam_impact_study.types.ImpactorOrbits`
+        Orbit of the impactor.
+    simulation_end_date : `~adam_core.time.Timestamp`
+        End date of the simulation. Generally this is impact_date - 1 day to avoid problems with 
+        propagation of hyperbolic orbits in sorcha.
+    pointing_file : str
+        Path to the sorcha pointing database file. This will determine the start date of the simulation.
+    working_dir : str
+        Path to the working directory.
+    assist_epsilon : float
+        Epsilon value for ASSIST
+    assist_min_dt : float
+        Minimum time step for ASSIST
+    assist_initial_dt : float
+        Initial time step for ASSIST
+    assist_adaptive_mode : int
+        Adaptive mode for ASSIST
+    """
     assert len(impactor_orbit) == 1, "Currently only one object is supported"
     # Generate input files
     orbits_file = os.path.join(working_dir, "orbits.csv")
@@ -275,7 +297,6 @@ def run_sorcha(
     config_file = os.path.join(working_dir, "config.ini")
     output_stem = "observations"
 
-    impact_date = impactor_orbit.impact_time
     write_sorcha_orbits_file(impactor_orbit.orbits(), orbits_file)
     write_phys_params_file(
         impactor_orbit.photometric_properties(), params_file, filter_band="r"
@@ -286,7 +307,7 @@ def run_sorcha(
     # in sorcha approaches singularity-like behavior
     write_config_file_timeframe(
         config_file,
-        impact_date.add_days(-1),
+        simulation_end_date,
         assist_epsilon,
         assist_min_dt,
         assist_initial_dt,
