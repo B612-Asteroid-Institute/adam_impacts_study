@@ -145,7 +145,7 @@ def test_compute_discovery_dates():
     )
 
     # Compute discovery dates
-    discovery_dates = compute_discovery_dates(impactor_orbits, results)
+    discovery_dates = compute_discovery_dates(results)
 
     # Check we got results for all objects
     assert len(discovery_dates) == 3

@@ -10,6 +10,7 @@ from typing import Optional
 import pyarrow as pa
 import pyarrow.compute as pc
 from adam_core.time import Timestamp
+from adam_fo.config import check_build_exists
 
 from adam_impact_study.analysis.main import plot_ip_over_time
 from adam_impact_study.impacts_study import run_impact_study_all
@@ -26,6 +27,9 @@ def run_impact_study(
     overwrite: bool = False,
 ) -> None:
     """Run impact study on provided orbits."""
+    # Test that the build fo script has been run
+    check_build_exists()
+
     # Load orbits directly from parquet
     logger.info(f"Loading orbits from {orbit_file}")
     impactor_orbits = ImpactorOrbits.from_parquet(orbit_file)

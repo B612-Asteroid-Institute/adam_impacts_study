@@ -1,10 +1,6 @@
 from unittest.mock import patch
 
-from adam_impact_study.population import (
-    determine_ast_class,
-    select_albedo_from_range,
-    select_asteroid_size,
-)
+from adam_impact_study.population import determine_ast_class, select_albedo_from_range
 
 
 def test_select_albedo_from_range():
@@ -14,15 +10,6 @@ def test_select_albedo_from_range():
     albedo = select_albedo_from_range(albedo_min, albedo_max)
     assert albedo >= albedo_min
     assert albedo <= albedo_max
-
-
-def test_select_size():
-    min_diam = 0.1
-    max_diam = 1.0
-
-    dist = select_asteroid_size(min_diam, max_diam)
-    assert dist >= min_diam
-    assert dist <= max_diam
 
 
 @patch("numpy.random.default_rng")

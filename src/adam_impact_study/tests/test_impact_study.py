@@ -293,12 +293,16 @@ def test_run_impact_study_for_orbit(
     )
 
     # Call the function with the mocked inputs
-    results = run_impact_study_for_orbit(
+    window_result, timings = run_impact_study_for_orbit(
         impactor_orbits,
         ASSISTPropagator,
         pointing_file,
         str(RUN_DIR),
         monte_carlo_samples=100,
+        assist_epsilon=1e-9,
+        assist_min_dt=1e-9,
+        assist_initial_dt=1e-6,
+        assist_adaptive_mode=1,
         max_processes=1,
         seed=12345,
     )
@@ -307,6 +311,10 @@ def test_run_impact_study_for_orbit(
         impactor_orbits,
         pointing_file,
         f"{RUN_DIR}/Object1/sorcha",
+        assist_epsilon=1e-9,
+        assist_min_dt=1e-9,
+        assist_initial_dt=1e-6,
+        assist_adaptive_mode=1,
         seed=12345,
     )
 
@@ -316,19 +324,19 @@ def test_run_impact_study_for_orbit(
             sorcha_observations.apply_mask(
                 pc.less_equal(sorcha_observations.observing_night, 60002)
             ),
-            f"{RUN_DIR}/Object1/60000_60002/fo",
+            f"{RUN_DIR}/Object1/windows/60000_60002/fo",
         ),
         (
             sorcha_observations.apply_mask(
                 pc.less_equal(sorcha_observations.observing_night, 60004)
             ),
-            f"{RUN_DIR}/Object1/60000_60004/fo",
+            f"{RUN_DIR}/Object1/windows/60000_60004/fo",
         ),
         (
             sorcha_observations.apply_mask(
                 pc.less_equal(sorcha_observations.observing_night, 60005)
             ),
-            f"{RUN_DIR}/Object1/60000_60005/fo",
+            f"{RUN_DIR}/Object1/windows/60000_60005/fo",
         ),
     ]
     for i, call in enumerate(mock_run_fo_od.call_args_list):
@@ -366,7 +374,12 @@ def test_run_impact_study_for_orbit(
         impact_probability=[1 / 3, 1 / 3, 1 / 3],
     )
     # Convert both to pandas DataFrames for easier comparison
-    results_df = results.to_dataframe()
-    expected_df = expected.to_dataframe()
+    # We drop the runtime columns since they are not deterministic
+    results_df = window_result.to_dataframe().drop(
+        columns=["od_runtime", "ip_runtime", "window_runtime"]
+    )
+    expected_df = expected.to_dataframe().drop(
+        columns=["od_runtime", "ip_runtime", "window_runtime"]
+    )
 
     pd.testing.assert_frame_equal(results_df, expected_df)
