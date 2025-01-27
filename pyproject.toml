@@ -10,12 +10,12 @@ authors = [
 ]
 dependencies = [
     "matplotlib>=3.10.0",
-    "adam_assist>=0.2.0",
+    "adam_assist>=0.2.2",
     "ray[default]==2.39.0",
     "sorcha @ git+https://github.com/B612-Asteroid-Institute/sorcha@23a3392f0145f7dbbdbb7b17687b69902716bde8",
     "quivr @ git+https://github.com/B612-Asteroid-Institute/quivr@2d8ae0b40bdfb75bcceff0c73d41a52d4bffb5dc",
-    "adam-fo>=0.0.1",
     "ipdb>=0.13.13",
+    "adam-fo @ git+https://github.com/B612-Asteroid-Institute/adam_fo@f3c851fb46ba03f5e7d056e68e685a2e45f178f9",
 ]
 requires-python = "<3.13,>=3.11"
 readme = "README.md"
@@ -39,6 +39,7 @@ dev = [
     "pytest",
     "ruff",
     "seaborn>=0.13.2",
+    "memray>=1.15.0",
 ]
 
 [tool.pdm.scripts]
