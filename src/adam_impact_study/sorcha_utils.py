@@ -1,17 +1,24 @@
 import glob
 import logging
 import os
+import pathlib
 import subprocess
 from typing import Optional
 
 import pandas as pd
+import pooch
 import pyarrow as pa
 import quivr as qv
 from adam_core.observers.utils import calculate_observing_night
 from adam_core.orbits import Orbits
 from adam_core.time import Timestamp
-from jpl_small_bodies_de441_n16 import de441_n16
-from naif_de440 import de440
+from jpl_small_bodies_de441_n16 import _de441_n16_md5, de441_n16
+from mpc_obscodes import _mpc_obscodes_md5, mpc_obscodes
+from naif_de440 import _de440_md5, de440
+from naif_eop_high_prec import _eop_high_prec_md5, eop_high_prec
+from naif_eop_historical import _eop_historical_md5, eop_historical
+from naif_eop_predict import _eop_predict_md5, eop_predict
+from naif_leapseconds import _leapseconds_md5, leapseconds
 
 from adam_impact_study.conversions import sorcha_output_to_od_observations
 from adam_impact_study.types import ImpactorOrbits, Observations, PhotometricProperties
@@ -79,6 +86,45 @@ def write_config_file_timeframe(
     impact_date_tai = impact_date.rescale("tai")
     impact_date_mjd = impact_date_tai.mjd()[0]
 
+    # get the parent directory of the config file, with pathlib
+    config_dir = pathlib.Path(config_file).parent
+    meta_kernel_file = config_dir / "meta_kernel.txt"
+
+    sorcha_cache_dir = pooch.os_cache("sorcha")
+    site_packages_lib_dir = pathlib.Path(qv.__file__).parent.parent
+    # grab the last two elements of the path
+    kernels_to_load = [
+        f"'$B/{pathlib.Path(leapseconds).relative_to(site_packages_lib_dir)}'",
+        f"'$B/{pathlib.Path(eop_historical).relative_to(site_packages_lib_dir)}'",
+        f"'$B/{pathlib.Path(eop_predict).relative_to(site_packages_lib_dir)}'",
+        "'$A/pck00010.pck'",
+        f"'$B/{pathlib.Path(de440).relative_to(site_packages_lib_dir)}'",
+        f"'$B/{pathlib.Path(eop_high_prec).relative_to(site_packages_lib_dir)}'",
+    ]
+    # Manually create our meta_kernel.txt file
+    meta_kernel_txt = f"""\\begindata
+PATH_VALUES=(
+'{sorcha_cache_dir}',
+'{site_packages_lib_dir}',
+)
+PATH_SYMBOLS=(
+'A',
+'B',
+)
+
+KERNELS_TO_LOAD=(
+"""
+    for kernel in kernels_to_load:
+        meta_kernel_txt += f"{kernel},\n"
+    meta_kernel_txt += """
+)
+
+\\begintext
+"""
+
+    with open(meta_kernel_file, "w") as f:
+        f.write(meta_kernel_txt)
+
     pointing_command = f"SELECT observationId, observationStartMJD as observationStartMJD_TAI, visitTime, visitExposureTime, filter, seeingFwhmGeom as seeingFwhmGeom_arcsec, seeingFwhmEff as seeingFwhmEff_arcsec, fiveSigmaDepth as fieldFiveSigmaDepth_mag , fieldRA as fieldRA_deg, fieldDec as fieldDec_deg, rotSkyPos as fieldRotSkyPos_deg FROM observations WHERE observationStartMJD < {impact_date_mjd} ORDER BY observationId"
     config_text = f"""
 [Sorcha Configuration File]
@@ -135,10 +181,25 @@ lc_model = none
 
 [ACTIVITY]
 comet_activity = none
-    
+
 [AUXILIARY]
 jpl_planets = {assist_planets}
+# jpl_planets_version = {pathlib.Path(_de440_md5).read_text()}
 jpl_small_bodies = {assist_small_bodies}
+# jpl_small_bodies_version = {pathlib.Path(_de441_n16_md5).read_text()}
+planet_ephemeris = {assist_planets}
+# planet_ephemeris_version = {pathlib.Path(_de440_md5).read_text()}
+earth_predict = {eop_predict}
+# earth_predict_version = {pathlib.Path(_eop_predict_md5).read_text()}
+earth_historical = {eop_historical}
+# earth_historical_version = {pathlib.Path(_eop_historical_md5).read_text()}
+earth_high_precision = {eop_high_prec}
+# earth_high_precision_version = {pathlib.Path(_eop_high_prec_md5).read_text()}
+observatory_codes = {mpc_obscodes}
+# observatory_codes_version = {pathlib.Path(_mpc_obscodes_md5).read_text()}
+leap_seconds = {leapseconds}
+# leap_seconds_version = {pathlib.Path(_leapseconds_md5).read_text()}
+meta_kernel = {str(meta_kernel_file.absolute())}
 
 [EXPERT]
 ar_use_integrate = True
@@ -275,7 +336,7 @@ def run_sorcha(
     impactor_orbit : `~adam_impact_study.types.ImpactorOrbits`
         Orbit of the impactor.
     simulation_end_date : `~adam_core.time.Timestamp`
-        End date of the simulation. Generally this is impact_date - 1 day to avoid problems with 
+        End date of the simulation. Generally this is impact_date - 1 day to avoid problems with
         propagation of hyperbolic orbits in sorcha.
     pointing_file : str
         Path to the sorcha pointing database file. This will determine the start date of the simulation.
