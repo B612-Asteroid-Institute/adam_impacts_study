@@ -5,15 +5,18 @@
 groups = ["default"]
 strategy = ["inherit_metadata"]
 lock_version = "4.5.0"
-content_hash = "sha256:f3f319c669c51da30a47eeeba60b2a4d532d6439b3c8c1116cfe714901da43d1"
+content_hash = "sha256:d922deefa87080f0b8c96c982619bd194e1be4bee6c7aebb5a196560f50af0d0"
 
 [[metadata.targets]]
 requires_python = ">=3.11,<3.13"
 
 [[package]]
 name = "adam-assist"
-version = "0.2.2"
+version = "0.2.3.dev1"
 requires_python = "<3.13,>=3.11"
+git = "https://github.com/B612-Asteroid-Institute/adam-assist.git"
+ref = "51fd94b8df88f569d521f860d74ff7eebb9c12bd"
+revision = "51fd94b8df88f569d521f860d74ff7eebb9c12bd"
 summary = "ADAM Core Propagator class using ASSIST"
 groups = ["default"]
 dependencies = [
@@ -24,10 +27,6 @@ dependencies = [
     "numpy",
     "ray",
     "spiceypy>=6.0.0",
-]
-files = [
-    {file = "adam_assist-0.2.2-py3-none-any.whl", hash = "sha256:8fce6d6311cd0a9561dfe5707b471470375dd0b2c37020cf869d838a3c03204c"},
-    {file = "adam_assist-0.2.2.tar.gz", hash = "sha256:6ea6091c881fb54d22653ffe691788771a69a5e7252504bc1722bb7423f71b41"},
 ]
 
 [[package]]
