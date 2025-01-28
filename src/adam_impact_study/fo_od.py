@@ -22,6 +22,15 @@ logger = logging.getLogger(__name__)
 logger.setLevel(os.environ.get("ADAM_LOG_LEVEL", "INFO"))
 
 
+fo_file_whitelist = [
+    "total.json",
+    "covar.json",
+    "elem_short.json",
+    "debug.txt" "observations.ades",
+    "environ.dat",
+]
+
+
 def observations_to_ades(observations: Observations) -> Tuple[str, ADESObservations]:
     """
     Convert Observations to ADES format string.
@@ -102,6 +111,7 @@ def observations_to_ades(observations: Observations) -> Tuple[str, ADESObservati
 def run_fo_od(
     observations: Observations,
     fo_result_dir: str,
+    fo_dir_cleanup: bool = True,
 ) -> Tuple[Orbits, ADESObservations, Optional[str]]:
     """Run Find_Orb orbit determination with directory-based paths
 
@@ -134,9 +144,13 @@ def run_fo_od(
 
     orbit, rejected, error = fo(
         ades_string,
-        clean_up=True,
         out_dir=fo_result_dir,
     )
+
+    if fo_dir_cleanup:
+        for file in os.listdir(fo_result_dir):
+            if file not in fo_file_whitelist:
+                os.remove(os.path.join(fo_result_dir, file))
 
     # Re-assign orbit_id to the original value if we found an orbit
     if len(orbit) > 0:
