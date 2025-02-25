@@ -1,12 +1,16 @@
 import glob
 import logging
+import multiprocessing as mp
 import os
+from typing import Optional
 
 import matplotlib.pyplot as plt
 import numpy as np
 import pyarrow as pa
 import pyarrow.compute as pc
 import quivr as qv
+import ray
+from adam_core.ray_cluster import initialize_use_ray
 from adam_core.time import Timestamp
 
 from adam_impact_study.analysis.plots import make_analysis_plots
@@ -468,7 +472,7 @@ def summarize_impact_study_object_results(
     orbit_dir = paths["orbit_base_dir"]
     impact_results = collect_orbit_window_results(run_dir, orbit_id)
     impactor_orbits = ImpactorOrbits.from_parquet(
-        f"{orbit_dir}/impact_orbits_{orbit_id}.parquet"
+        f"{orbit_dir}/impactor_orbit.parquet"
     )
 
     if len(impact_results) == 0:
@@ -522,23 +526,58 @@ def summarize_impact_study_object_results(
     )
 
 
+summarize_impact_study_object_results_remote = ray.remote(summarize_impact_study_object_results)
+
+
+
 def summarize_impact_study_results(
-    run_dir: str, out_dir: str, plot: bool = True
+    run_dir: str, out_dir: str, plot: bool = True, max_processes: Optional[int] = 1
 ) -> ImpactorResultSummary:
     """
     Summarize the impact study results.
     """
     assert run_dir != out_dir, "run_dir and out_dir must be different"
 
+    if max_processes is None:
+        max_processes = mp.cpu_count()
+    
+    if max_processes > 1:
+        initialize_use_ray()
+
     orbit_ids = [os.path.basename(dir) for dir in glob.glob(f"{run_dir}/*")]
     results = ImpactorResultSummary.empty()
+    futures = []
     for orbit_id in orbit_ids:
 
-        results = qv.concatenate(
-            [results, summarize_impact_study_object_results(run_dir, orbit_id)]
-        )
+        if max_processes > 1:
+            futures.append(summarize_impact_study_object_results_remote.remote(run_dir, orbit_id))
+        else:
+            try:
+                result = summarize_impact_study_object_results(run_dir, orbit_id)
+                
+                results = qv.concatenate(
+                    [results, result]
+                )
+            except Exception as e:
+                logger.error(f"Error summarizing impact study results for {orbit_id}: {e}")
+        
+        if len(futures) > max_processes * 1.5:
+            finished, futures = ray.wait(futures, num_returns=1)
+            try:
+                result = ray.get(finished[0])
+                results = qv.concatenate([results, result])
+            except Exception as e:
+                logger.error(f"Error summarizing impact study results for {orbit_id}: {e}")
+    
+    while len(futures) > 0:
+        finished, futures = ray.wait(futures, num_returns=1)
+        try:
+            result = ray.get(finished[0])
+            results = qv.concatenate([results, result])
+        except Exception as e:
+            logger.error(f"Error summarizing impact study results for {orbit_id}: {e}")
 
-    os.makedirs(out_dir)
+    os.makedirs(out_dir, exist_ok=True)
     results.to_parquet(os.path.join(out_dir, "impactor_results_summary.parquet"))
     logger.info(f"Saved impact study results to {out_dir}")
 

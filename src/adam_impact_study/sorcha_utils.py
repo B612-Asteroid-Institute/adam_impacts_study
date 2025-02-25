@@ -84,7 +84,9 @@ def write_config_file_timeframe(
 
     # Ensure impact_date is in TAI before serializing to mjd
     impact_date_tai = impact_date.rescale("tai")
-    impact_date_mjd = impact_date_tai.mjd()[0]
+    # impact_date_mjd = impact_date_tai.mjd()[0]
+    # Go past impact date for testing
+    impact_date_mjd = impact_date_tai.add_days(1).mjd()[0]
 
     # get the parent directory of the config file, with pathlib
     config_dir = pathlib.Path(config_file).parent
@@ -203,10 +205,7 @@ meta_kernel = {str(meta_kernel_file.absolute())}
 
 [EXPERT]
 ar_use_integrate = True
-ar_initial_dt = {assist_initial_dt}
-ar_min_dt = {assist_min_dt}
-ar_adaptive_mode = {assist_adaptive_mode}
-ar_epsilon = {assist_epsilon}
+
 """
     with open(config_file, "w") as f:
         f.write(config_text)
