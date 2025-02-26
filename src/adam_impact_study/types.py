@@ -103,6 +103,18 @@ class WindowResult(qv.Table):
     window_runtime = qv.Float64Column(nullable=True)
 
 
+class ResultsTiming(qv.Table):
+    orbit_id = qv.LargeStringColumn()
+    sorcha_runtime = qv.Float64Column(nullable=True)
+    mean_od_runtime = qv.Float64Column(nullable=True)
+    total_od_runtime = qv.Float64Column(nullable=True)
+    mean_ip_runtime = qv.Float64Column(nullable=True)
+    total_ip_runtime = qv.Float64Column(nullable=True)
+    mean_window_runtime = qv.Float64Column(nullable=True)
+    total_window_runtime = qv.Float64Column(nullable=True)
+    total_runtime = qv.Float64Column(nullable=True)
+
+
 class ImpactorResultSummary(qv.Table):
     orbit = ImpactorOrbits.as_column()
     # This is a mean of means of the impact time from each window
@@ -129,6 +141,8 @@ class ImpactorResultSummary(qv.Table):
     # How close all the windows got to discovering the definite impact nature
     maximum_impact_probability = qv.Float64Column(nullable=True)
     error = qv.LargeStringColumn(nullable=True)
+    # Runtime of the impact study
+    results_timing = ResultsTiming.as_column(nullable=True)
 
     def discovered(self) -> pa.BooleanArray:
         return pc.invert(pc.is_null(self.discovery_time.days))
@@ -168,18 +182,6 @@ class DiscoverySummary(qv.Table):
     ast_class = qv.StringColumn()
     discovered = qv.Int64Column()
     total = qv.Int64Column()
-
-
-class ResultsTiming(qv.Table):
-    orbit_id = qv.LargeStringColumn()
-    sorcha_runtime = qv.Float64Column(nullable=True)
-    mean_od_runtime = qv.Float64Column(nullable=True)
-    total_od_runtime = qv.Float64Column(nullable=True)
-    mean_ip_runtime = qv.Float64Column(nullable=True)
-    total_ip_runtime = qv.Float64Column(nullable=True)
-    mean_window_runtime = qv.Float64Column(nullable=True)
-    total_window_runtime = qv.Float64Column(nullable=True)
-    total_runtime = qv.Float64Column(nullable=True)
 
 
 class VariantOrbitsWithWindowName(qv.Table):

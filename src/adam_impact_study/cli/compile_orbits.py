@@ -37,7 +37,7 @@ def main():
 
         # Take specified number of orbits
         if len(orbits) > args.num_orbits:
-            orbits = orbits[:10]
+            orbits = orbits[: args.num_orbits]
 
         # Add year suffix to object IDs
         new_ids = [f"{id.as_py()}_{year}" for id in orbits.orbit_id]
