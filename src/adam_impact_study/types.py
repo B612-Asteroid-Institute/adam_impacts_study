@@ -86,12 +86,15 @@ class WindowResult(qv.Table):
 
     orbit_id = qv.LargeStringColumn()
     object_id = qv.LargeStringColumn(nullable=True)
-    window = qv.LargeStringColumn(nullable=True)
-    observation_start = Timestamp.as_column()
-    observation_end = Timestamp.as_column()
-    observation_count = qv.UInt64Column()
+    window = qv.LargeStringColumn()
+    status = qv.LargeStringColumn(
+        default="incomplete"
+    )  # "complete", "incomplete", "failed"
+    observation_start = Timestamp.as_column(nullable=True)
+    observation_end = Timestamp.as_column(nullable=True)
+    observation_count = qv.UInt64Column(nullable=True)
     observations_rejected = qv.UInt64Column(nullable=True)
-    observation_nights = qv.UInt64Column()
+    observation_nights = qv.UInt64Column(nullable=True)
     impact_probability = qv.Float64Column(nullable=True)
     mean_impact_time = Timestamp.as_column(nullable=True)
     minimum_impact_time = Timestamp.as_column(nullable=True)
@@ -143,16 +146,39 @@ class ImpactorResultSummary(qv.Table):
     error = qv.LargeStringColumn(nullable=True)
     # Runtime of the impact study
     results_timing = ResultsTiming.as_column(nullable=True)
+    #: Processing status of this particular orbit
+    status = qv.LargeStringColumn(nullable=True, default="incomplete")
+
+    def complete(self) -> pa.BooleanArray:
+        return pc.equal(self.status, "complete")
+
+    def incomplete(self) -> pa.BooleanArray:
+        return pc.equal(self.status, "incomplete")
+
+    def failed(self) -> pa.BooleanArray:
+        return pc.equal(self.status, "failed")
 
     def discovered(self) -> pa.BooleanArray:
-        return pc.invert(pc.is_null(self.discovery_time.days))
+        return pc.and_(
+            pc.invert(pc.is_null(self.discovery_time.days)),
+            self.complete(),
+        )
 
     def observed_but_not_discovered(self) -> pa.BooleanArray:
-        return pc.and_(pc.invert(self.discovered()), pc.greater(self.observations, 0))
+        return pc.and_(
+            self.complete(),
+            pc.and_(
+                pc.is_null(self.discovery_time.days),
+                pc.greater(self.observations, 0),
+            ),
+        )
 
     def summarize_discoveries(self) -> "DiscoverySummary":
-        summary_table = self.flattened_table().append_column(
-            "discovered", self.discovered()
+        # Filter to completed orbits
+        completed_orbits = self.apply_mask(self.complete())
+
+        summary_table = completed_orbits.flattened_table().append_column(
+            "discovered", completed_orbits.discovered()
         )
         discoveries_by_diameter_class = summary_table.group_by(
             ["orbit.diameter", "orbit.ast_class"]
