@@ -163,7 +163,9 @@ fading_function_width = 0.1
 fading_function_peak_efficiency = 1.
 
 [LINKINGFILTER]
-SSP_detection_efficiency = 0.95
+# NOTE: Detection efficiency changed from LSST design specification
+# to show theoretical optimal performance.
+SSP_detection_efficiency = 1.0 
 SSP_number_observations = 2
 SSP_separation_threshold = 0.5
 SSP_maximum_time = 0.0625
