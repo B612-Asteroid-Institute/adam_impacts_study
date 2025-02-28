@@ -135,12 +135,10 @@ def plot_orbital_element_recovery_statistics(
 
     # Calculate the overall min and max for 'a' to ensure consistent x-axis
     a_min = min(
-        a_e_recovery_rates["a_bin_min"].min(),
-        a_i_recovery_rates["a_bin_min"].min()
+        a_e_recovery_rates["a_bin_min"].min(), a_i_recovery_rates["a_bin_min"].min()
     )
     a_max = max(
-        a_e_recovery_rates["a_bin_max"].max(),
-        a_i_recovery_rates["a_bin_max"].max()
+        a_e_recovery_rates["a_bin_max"].max(), a_i_recovery_rates["a_bin_max"].max()
     )
 
     a_samples = np.linspace(0.49, a_max, 100)
@@ -159,7 +157,7 @@ def plot_orbital_element_recovery_statistics(
 
     # Create scatter plots with same normalization
     norm = plt.Normalize(vmin=0, vmax=1)
-    
+
     sc1 = ax1.scatter(
         a_e_recovery_rates["a_bin_min"],
         a_e_recovery_rates["e_bin_min"],
@@ -186,6 +184,8 @@ def plot_orbital_element_recovery_statistics(
 
     # Add single colorbar at the bottom
     cbar_ax = fig.add_axes([0.15, 0.12, 0.7, 0.04])  # Adjusted position slightly higher
-    cbar = fig.colorbar(sc1, cax=cbar_ax, orientation='horizontal', label='Recovery Rate')
-    
+    cbar = fig.colorbar(
+        sc1, cax=cbar_ax, orientation="horizontal", label="Recovery Rate"
+    )
+
     plt.show()

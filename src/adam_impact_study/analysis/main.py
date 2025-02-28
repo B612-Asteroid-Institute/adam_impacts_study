@@ -2,10 +2,8 @@ import glob
 import logging
 import multiprocessing as mp
 import os
-from typing import Optional
+from typing import Optional, Tuple
 
-import matplotlib.pyplot as plt
-import numpy as np
 import pyarrow as pa
 import pyarrow.compute as pc
 import quivr as qv
@@ -13,7 +11,7 @@ import ray
 from adam_core.ray_cluster import initialize_use_ray
 from adam_core.time import Timestamp
 
-from adam_impact_study.analysis.plots import make_analysis_plots
+from adam_impact_study.analysis.plots import make_analysis_plots, plot_all_ip_over_time
 from adam_impact_study.analysis.utils import collect_orbit_window_results
 from adam_impact_study.types import (
     ImpactorOrbits,
@@ -321,7 +319,7 @@ def compute_observation_cadence(
 
 def summarize_impact_study_object_results(
     run_dir: str, orbit_id: str
-) -> ImpactorResultSummary:
+) -> Tuple[ImpactorResultSummary, WindowResult]:
     """
     Summarize the impact study results for a single object.
     """
@@ -331,16 +329,19 @@ def summarize_impact_study_object_results(
     impactor_orbits = ImpactorOrbits.from_parquet(f"{orbit_dir}/impactor_orbit.parquet")
 
     if len(impact_results) == 0:
-        return ImpactorResultSummary.from_kwargs(
-            orbit=impactor_orbits,
-            mean_impact_time=Timestamp.nulls(1, scale="tdb"),
-            windows=[0],
-            nights=[0],
-            observations=[0],
-            singletons=[0],
-            tracklets=[0],
-            discovery_time=Timestamp.nulls(1, scale="utc"),
-            maximum_impact_probability=[0],
+        return (
+            ImpactorResultSummary.from_kwargs(
+                orbit=impactor_orbits,
+                mean_impact_time=Timestamp.nulls(1, scale="tdb"),
+                windows=[0],
+                nights=[0],
+                observations=[0],
+                singletons=[0],
+                tracklets=[0],
+                discovery_time=Timestamp.nulls(1, scale="utc"),
+                maximum_impact_probability=[0],
+            ),
+            impact_results,
         )
 
     results_timings = ResultsTiming.from_parquet(f"{orbit_dir}/timings.parquet")
@@ -368,19 +369,22 @@ def summarize_impact_study_object_results(
     # Compute the number of singletons and tracklets in each window
     observation_cadence = compute_observation_cadence(observations)
 
-    return ImpactorResultSummary.from_kwargs(
-        orbit=impactor_orbits,
-        mean_impact_time=mean_impact_time,
-        windows=[len(impact_results)],
-        nights=[pc.max(impact_results.observation_nights)],
-        observations=[pc.max(impact_results.observation_count)],
-        singletons=[pc.sum(observation_cadence.singletons)],
-        tracklets=[pc.sum(observation_cadence.tracklets)],
-        discovery_time=discovery_dates.discovery_date,
-        warning_time=warning_times.warning_time,
-        realization_time=realization_times.realization_time,
-        maximum_impact_probability=[pc.max(impact_results.impact_probability)],
-        results_timing=results_timings,
+    return (
+        ImpactorResultSummary.from_kwargs(
+            orbit=impactor_orbits,
+            mean_impact_time=mean_impact_time,
+            windows=[len(impact_results)],
+            nights=[pc.max(impact_results.observation_nights)],
+            observations=[pc.max(impact_results.observation_count)],
+            singletons=[pc.sum(observation_cadence.singletons)],
+            tracklets=[pc.sum(observation_cadence.tracklets)],
+            discovery_time=discovery_dates.discovery_date,
+            warning_time=warning_times.warning_time,
+            realization_time=realization_times.realization_time,
+            maximum_impact_probability=[pc.max(impact_results.impact_probability)],
+            results_timing=results_timings,
+        ),
+        impact_results,
     )
 
 
@@ -390,8 +394,12 @@ summarize_impact_study_object_results_remote = ray.remote(
 
 
 def summarize_impact_study_results(
-    run_dir: str, out_dir: str, plot: bool = True, max_processes: Optional[int] = 1
-) -> ImpactorResultSummary:
+    run_dir: str,
+    out_dir: str,
+    summary_plots: bool = True,
+    per_object_plots: bool = False,
+    max_processes: Optional[int] = 1,
+) -> Tuple[ImpactorResultSummary, WindowResult]:
     """
     Summarize the impact study results.
     """
@@ -405,6 +413,7 @@ def summarize_impact_study_results(
 
     orbit_ids = [os.path.basename(dir) for dir in glob.glob(f"{run_dir}/*")]
     results = ImpactorResultSummary.empty()
+    window_results = WindowResult.empty()
     futures = []
     for orbit_id in orbit_ids:
 
@@ -416,7 +425,8 @@ def summarize_impact_study_results(
             try:
                 result = summarize_impact_study_object_results(run_dir, orbit_id)
 
-                results = qv.concatenate([results, result])
+                results = qv.concatenate([results, result[0]])
+                window_results = qv.concatenate([window_results, result[1]])
             except Exception as e:
                 logger.error(
                     f"Error summarizing impact study results for {orbit_id}: {e}"
@@ -426,7 +436,8 @@ def summarize_impact_study_results(
             finished, futures = ray.wait(futures, num_returns=1)
             try:
                 result = ray.get(finished[0])
-                results = qv.concatenate([results, result])
+                results = qv.concatenate([results, result[0]])
+                window_results = qv.concatenate([window_results, result[1]])
             except Exception as e:
                 logger.error(
                     f"Error summarizing impact study results for {orbit_id}: {e}"
@@ -436,15 +447,26 @@ def summarize_impact_study_results(
         finished, futures = ray.wait(futures, num_returns=1)
         try:
             result = ray.get(finished[0])
-            results = qv.concatenate([results, result])
+            results = qv.concatenate([results, result[0]])
+            window_results = qv.concatenate([window_results, result[1]])
         except Exception as e:
             logger.error(f"Error summarizing impact study results for {orbit_id}: {e}")
 
     os.makedirs(out_dir, exist_ok=True)
     results.to_parquet(os.path.join(out_dir, "impactor_results_summary.parquet"))
+    window_results.to_parquet(os.path.join(out_dir, "window_results.parquet"))
     logger.info(f"Saved impact study results to {out_dir}")
 
-    if plot:
-        make_analysis_plots(results, run_dir, out_dir)
+    if summary_plots:
+        make_analysis_plots(results, out_dir)
 
-    return results
+    if per_object_plots:
+        os.makedirs(os.path.join(out_dir, "ip_over_time"), exist_ok=True)
+        plot_all_ip_over_time(
+            results.orbit,
+            window_results,
+            run_dir,
+            out_dir=os.path.join(out_dir, "ip_over_time"),
+        )
+
+    return results, window_results

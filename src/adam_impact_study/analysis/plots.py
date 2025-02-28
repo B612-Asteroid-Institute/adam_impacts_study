@@ -175,7 +175,6 @@ def plot_runtime_by_diameter(
             pc.mean(orbits_at_diameter.results_timing.total_window_runtime),
             60,  # Convert seconds to minutes
         ).as_py()
-        print(mean_runtime)
 
         ax.bar(i, height=mean_runtime, color=color)
         ax.text(
@@ -338,6 +337,7 @@ def plot_ip_over_time(
 
 def plot_all_ip_over_time(
     impacting_orbits: ImpactorOrbits,
+    window_results: WindowResult,
     run_dir: str,
     out_dir: str | None = None,
 ) -> None:
@@ -347,19 +347,17 @@ def plot_all_ip_over_time(
     ----------
     impacting_orbits : ImpactorOrbits
         The impactor orbits to plot
+    window_results : WindowResult
+        The window results to plot
     run_dir : str
         Directory containing the run results
     out_dir : str | None, optional
         Directory to save plots to. If None, plots will be saved in run_dir/plots/ip_over_time
     """
-
-    # Collect all window results
-    all_window_results = collect_all_window_results(run_dir)
-
     try:
         plot_ip_over_time(
             impacting_orbits,
-            all_window_results,
+            window_results,
             run_dir,
             out_dir=out_dir,
         )
@@ -369,9 +367,7 @@ def plot_all_ip_over_time(
 
 def make_analysis_plots(
     summary: ImpactorResultSummary,
-    run_dir: str,
     out_dir: str,
-    plot_ip_over_time: bool = False,
 ) -> None:
 
     fig, ax = plot_warning_time_histogram(summary)
@@ -409,14 +405,5 @@ def make_analysis_plots(
     )
     logger.info("Generated runtime by diameter plot")
     plt.close(fig)
-
-    if plot_ip_over_time:
-        # ensure the ip_over_time directory exists
-        os.makedirs(os.path.join(out_dir, "ip_over_time"), exist_ok=True)
-        plot_all_ip_over_time(
-            summary.orbit,
-            run_dir,
-            out_dir=os.path.join(out_dir, "ip_over_time"),
-        )
 
     return
