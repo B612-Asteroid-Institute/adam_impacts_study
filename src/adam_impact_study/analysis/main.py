@@ -325,10 +325,19 @@ def summarize_impact_study_object_results(
     """
     paths = get_study_paths(run_dir, orbit_id)
     orbit_dir = paths["orbit_base_dir"]
-    impact_results = collect_orbit_window_results(run_dir, orbit_id)
-    impactor_orbits = ImpactorOrbits.from_parquet(f"{orbit_dir}/impactor_orbit.parquet")
 
-    if len(impact_results) == 0:
+    # Read the orbit if the file exists
+    orbit_file = f"{orbit_dir}/impactor_orbit.parquet"
+    if not os.path.exists(orbit_file):
+        raise ValueError(f"Orbit file {orbit_file} does not exist")
+
+    impactor_orbits = ImpactorOrbits.from_parquet(orbit_file)
+
+    # Load sorcha observations
+    observations = Observations.from_parquet(
+        f"{paths['sorcha_dir']}/observations_{orbit_id}.parquet"
+    )
+    if len(observations) == 0:
         return (
             ImpactorResultSummary.from_kwargs(
                 orbit=impactor_orbits,
@@ -339,53 +348,83 @@ def summarize_impact_study_object_results(
                 singletons=[0],
                 tracklets=[0],
                 discovery_time=Timestamp.nulls(1, scale="utc"),
-                maximum_impact_probability=[0],
             ),
-            impact_results,
+            WindowResult.empty(),
         )
-
-    results_timings = ResultsTiming.from_parquet(f"{orbit_dir}/timings.parquet")
-
-    discovery_dates = compute_discovery_dates(impact_results)
-    warning_times = compute_warning_time(impactor_orbits, impact_results)
-    realization_times = compute_realization_time(
-        impactor_orbits, impact_results, discovery_dates
-    )
-
-    mean_impact_mjd = pc.mean(impact_results.mean_impact_time.mjd()).as_py()
-    if mean_impact_mjd is None:
-        mean_impact_time = Timestamp.nulls(1, scale="tdb")
-    else:
-        mean_impact_time = Timestamp.from_mjd(
-            [mean_impact_mjd],
-            impact_results.mean_impact_time.scale,
-        )
-
-    # Load sorcha observations
-    observations = Observations.from_parquet(
-        f"{paths['sorcha_dir']}/observations_{orbit_id}.parquet"
-    )
 
     # Compute the number of singletons and tracklets in each window
     observation_cadence = compute_observation_cadence(observations)
 
-    return (
-        ImpactorResultSummary.from_kwargs(
-            orbit=impactor_orbits,
-            mean_impact_time=mean_impact_time,
-            windows=[len(impact_results)],
-            nights=[pc.max(impact_results.observation_nights)],
-            observations=[pc.max(impact_results.observation_count)],
-            singletons=[pc.sum(observation_cadence.singletons)],
-            tracklets=[pc.sum(observation_cadence.tracklets)],
-            discovery_time=discovery_dates.discovery_date,
-            warning_time=warning_times.warning_time,
-            realization_time=realization_times.realization_time,
-            maximum_impact_probability=[pc.max(impact_results.impact_probability)],
-            results_timing=results_timings,
-        ),
-        impact_results,
-    )
+    results_timings = ResultsTiming.from_parquet(f"{orbit_dir}/timings.parquet")
+    impact_results = collect_orbit_window_results(run_dir, orbit_id)
+    if len(impact_results) == 0:
+        return (
+            ImpactorResultSummary.from_kwargs(
+                orbit=impactor_orbits,
+                mean_impact_time=Timestamp.nulls(1, scale="tdb"),
+                windows=[len(impact_results)],
+                nights=[len(observations.observing_night.unique())],
+                observations=[len(observations)],
+                singletons=[pc.sum(observation_cadence.singletons)],
+                tracklets=[pc.sum(observation_cadence.tracklets)],
+                discovery_time=Timestamp.nulls(1, scale="utc"),
+                results_timing=results_timings,
+            ),
+            impact_results,
+        )
+
+    if pc.any(pc.equal(observations.linked, True)).as_py():
+        # sorcha currently assumes perfect linking and precovery
+        assert pc.all(pc.equal(observations.linked, True)).as_py()
+
+        discovery_dates = compute_discovery_dates(impact_results)
+        warning_times = compute_warning_time(impactor_orbits, impact_results)
+        realization_times = compute_realization_time(
+            impactor_orbits, impact_results, discovery_dates
+        )
+
+        mean_impact_mjd = pc.mean(impact_results.mean_impact_time.mjd()).as_py()
+        if mean_impact_mjd is None:
+            mean_impact_time = Timestamp.nulls(1, scale="tdb")
+        else:
+            mean_impact_time = Timestamp.from_mjd(
+                [mean_impact_mjd],
+                impact_results.mean_impact_time.scale,
+            )
+
+        return (
+            ImpactorResultSummary.from_kwargs(
+                orbit=impactor_orbits,
+                mean_impact_time=mean_impact_time,
+                windows=[len(impact_results)],
+                nights=[len(observations.observing_night.unique())],
+                observations=[len(observations)],
+                singletons=[pc.sum(observation_cadence.singletons)],
+                tracklets=[pc.sum(observation_cadence.tracklets)],
+                discovery_time=discovery_dates.discovery_date,
+                warning_time=warning_times.warning_time,
+                realization_time=realization_times.realization_time,
+                maximum_impact_probability=[pc.max(impact_results.impact_probability)],
+                results_timing=results_timings,
+            ),
+            impact_results,
+        )
+
+    else:
+        return (
+            ImpactorResultSummary.from_kwargs(
+                orbit=impactor_orbits,
+                mean_impact_time=Timestamp.nulls(1, scale="tdb"),
+                windows=[len(impact_results)],
+                nights=[len(observations.observing_night.unique())],
+                observations=[len(observations)],
+                singletons=[pc.sum(observation_cadence.singletons)],
+                tracklets=[pc.sum(observation_cadence.tracklets)],
+                discovery_time=Timestamp.nulls(1, scale="utc"),
+                results_timing=results_timings,
+            ),
+            impact_results,
+        )
 
 
 summarize_impact_study_object_results_remote = ray.remote(

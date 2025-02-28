@@ -118,7 +118,7 @@ class ResultsTiming(qv.Table):
 class ImpactorResultSummary(qv.Table):
     orbit = ImpactorOrbits.as_column()
     # This is a mean of means of the impact time from each window
-    mean_impact_time = Timestamp.as_column()
+    mean_impact_time = Timestamp.as_column(nullable=True)
     # Number of distinct orbit fitting windows
     windows = qv.UInt64Column()
     # Number of distinct nights of observations
@@ -146,6 +146,9 @@ class ImpactorResultSummary(qv.Table):
 
     def discovered(self) -> pa.BooleanArray:
         return pc.invert(pc.is_null(self.discovery_time.days))
+
+    def observed_but_not_discovered(self) -> pa.BooleanArray:
+        return pc.and_(pc.invert(self.discovered()), pc.greater(self.observations, 0))
 
     def summarize_discoveries(self) -> "DiscoverySummary":
         summary_table = self.flattened_table().append_column(
