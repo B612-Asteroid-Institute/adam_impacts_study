@@ -12,7 +12,7 @@ import pyarrow.compute as pc
 from adam_core.time import Timestamp
 from adam_fo.config import check_build_exists
 
-from adam_impact_study.analysis.main import plot_ip_over_time
+from adam_impact_study.analysis.plots import plot_ip_over_time
 from adam_impact_study.impacts_study import run_impact_study_all
 from adam_impact_study.types import ImpactorOrbits, RunConfiguration
 
@@ -92,7 +92,9 @@ def run_impact_study(
     )
 
     logger.info("Generating plots...")
-    plot_ip_over_time(filtered_orbits, impact_study_results, run_dir, survey_start)
+    plot_ip_over_time(
+        filtered_orbits, impact_study_results, run_dir, survey_start=survey_start
+    )
     logger.info(f"Results saved to {run_dir}")
 
 
@@ -139,7 +141,7 @@ def main():
 
     # Use a default run config, unless one is specified
     run_config = RunConfiguration(
-        monte_carlo_samples=100,
+        monte_carlo_samples=1000,
         assist_epsilon=1e-6,
         assist_min_dt=1e-9,
         assist_initial_dt=1e-6,

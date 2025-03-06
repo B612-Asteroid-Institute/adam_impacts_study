@@ -276,7 +276,7 @@ def plot_ip_over_time(
             pc.equal(impacting_orbits.orbit_id, orbit_id)
         )
         if len(impact_orbit) > 0:
-            impact_time = impact_orbit.coordinates.time.add_days(30).mjd()[0].as_py()
+            impact_time = impact_orbit.impact_time.mjd()[0].as_py()
 
             # Add days until impact axis
             ax2 = ax1.twiny()
@@ -326,12 +326,15 @@ def plot_ip_over_time(
             )
             ax3.set_xlabel("Days Since Survey Start")
 
-        plt.title(orbit_id)
-        plt.tight_layout()
+        fig.suptitle(orbit_id)
         if out_dir is not None:
-            plt.savefig(os.path.join(out_dir, f"IP_{orbit_id}.png"))
+            fig.savefig(
+                os.path.join(out_dir, f"IP_{orbit_id}.png"), bbox_inches="tight"
+            )
         else:
-            plt.savefig(os.path.join(orbit_dir, f"IP_{orbit_id}.png"))
+            fig.savefig(
+                os.path.join(orbit_dir, f"IP_{orbit_id}.png"), bbox_inches="tight"
+            )
         plt.close()
 
 

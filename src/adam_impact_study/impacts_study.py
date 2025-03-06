@@ -88,13 +88,13 @@ def run_impact_study_all(
     if os.path.exists(run_dir):
         if overwrite:
             logger.warning(f"Overwriting run directory {run_dir}")
-            shutil.rmtree(f"{run_dir}")
+            shutil.rmtree(run_dir)
         else:
             logger.warning(
                 f"Run directory {run_dir} already exists, attempting to continue previous run..."
             )
 
-    os.makedirs(f"{run_dir}", exist_ok=True)
+    os.makedirs(run_dir, exist_ok=True)
 
     # Initialize ray cluster
     use_ray = initialize_use_ray(num_cpus=max_processes)
