@@ -219,7 +219,10 @@ meta_kernel = {str(meta_kernel_file.absolute())}
 
 [EXPERT]
 ar_use_integrate = True
-
+ar_initial_dt = {assist_initial_dt}
+ar_min_dt = {assist_min_dt}
+ar_epsilon = {assist_epsilon}
+ar_adaptive_mode = {assist_adaptive_mode}
 """
     with open(config_file, "w") as f:
         f.write(config_text)
