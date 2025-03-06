@@ -10,12 +10,19 @@ authors = [
 ]
 dependencies = [
     "matplotlib>=3.10.0",
+    "adam_core",
     "adam-assist @ git+https://github.com/B612-Asteroid-Institute/adam-assist.git@51fd94b8df88f569d521f860d74ff7eebb9c12bd",
     "ray[default]==2.39.0",
     "quivr @ git+https://github.com/B612-Asteroid-Institute/quivr@2d8ae0b40bdfb75bcceff0c73d41a52d4bffb5dc",
     "ipdb>=0.13.13",
     "adam-fo @ git+https://github.com/B612-Asteroid-Institute/adam_fo@f3c851fb46ba03f5e7d056e68e685a2e45f178f9",
     "sorcha @ git+https://github.com/B612-Asteroid-Institute/sorcha@bd054a1742b44eb64dfba7cafff57995e8058001",
+    "naif-de440",
+    "naif-leapseconds",
+    "naif-eop-high-prec",
+    "naif-eop-predict",
+    "naif-eop-historical",
+    "naif-earth-itrf93",
 ]
 requires-python = "<3.13,>=3.11"
 readme = "README.md"

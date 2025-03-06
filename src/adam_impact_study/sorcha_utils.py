@@ -89,25 +89,37 @@ def write_config_file_timeframe(
     impact_date_mjd = impact_date_tai.add_days(1).mjd()[0]
 
     # get the parent directory of the config file, with pathlib
-    config_dir = pathlib.Path(config_file).parent
-    meta_kernel_file = config_dir / "meta_kernel.txt"
-
+    sorcha_run_dir = pathlib.Path(config_file).parent
+    meta_kernel_file = sorcha_run_dir / "meta_kernel.txt"
     sorcha_cache_dir = pooch.os_cache("sorcha")
-    site_packages_lib_dir = pathlib.Path(qv.__file__).parent.parent
-    # grab the last two elements of the path
+
+    # Create a symlink from the data package to the config (sorcha run) directory.
+    # If the paths to the data packages are too long then SPICE struggles
+    # to find them due to a maximum path length. By creating symlinks from the data packages
+    # located in site-packages to the sorcha run directory we can avoid this issue.
+    data_packages = [
+        pathlib.Path(leapseconds),
+        pathlib.Path(eop_historical),
+        pathlib.Path(eop_predict),
+        pathlib.Path(de440),
+        pathlib.Path(eop_high_prec),
+    ]
+    for data_package in data_packages:
+        sorcha_run_dir.joinpath(data_package.name).symlink_to(data_package)
+
     kernels_to_load = [
-        f"'$B/{pathlib.Path(leapseconds).relative_to(site_packages_lib_dir)}'",
-        f"'$B/{pathlib.Path(eop_historical).relative_to(site_packages_lib_dir)}'",
-        f"'$B/{pathlib.Path(eop_predict).relative_to(site_packages_lib_dir)}'",
+        f"'$B/{os.path.basename(leapseconds)}'",
+        f"'$B/{os.path.basename(eop_historical)}'",
+        f"'$B/{os.path.basename(eop_predict)}'",
         "'$A/pck00010.pck'",
-        f"'$B/{pathlib.Path(de440).relative_to(site_packages_lib_dir)}'",
-        f"'$B/{pathlib.Path(eop_high_prec).relative_to(site_packages_lib_dir)}'",
+        f"'$B/{os.path.basename(de440)}'",
+        f"'$B/{os.path.basename(eop_high_prec)}'",
     ]
     # Manually create our meta_kernel.txt file
     meta_kernel_txt = f"""\\begindata
 PATH_VALUES=(
 '{sorcha_cache_dir}',
-'{site_packages_lib_dir}',
+'{sorcha_run_dir}',
 )
 PATH_SYMBOLS=(
 'A',
@@ -413,5 +425,10 @@ def run_sorcha(
             observations.coordinates.origin.code, observations.coordinates.time
         ),
     )
+
+    # Remove the symlinks from the sorcha run directory
+    for f in glob.glob(os.path.join(working_dir, "*")):
+        if os.path.islink(f):
+            os.unlink(f)
 
     return observations
