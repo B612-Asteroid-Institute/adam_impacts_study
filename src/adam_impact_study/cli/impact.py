@@ -9,6 +9,10 @@ from typing import Optional
 
 import pyarrow as pa
 import pyarrow.compute as pc
+from adam_core.constants import KM_P_AU
+from adam_core.constants import Constants as c
+from adam_core.coordinates import Origin
+from adam_core.dynamics.impacts import CollisionConditions
 from adam_core.time import Timestamp
 from adam_fo.config import check_build_exists
 
@@ -17,6 +21,8 @@ from adam_impact_study.impacts_study import run_impact_study_all
 from adam_impact_study.types import ImpactorOrbits, RunConfiguration
 
 logger = logging.getLogger(__name__)
+
+EARTH_RADIUS_KM = c.R_EARTH_EQUATORIAL * KM_P_AU
 
 
 def run_impact_study(
@@ -75,6 +81,14 @@ def run_impact_study(
     logger.info(f"Run configuration: {asdict(run_config)}")
     run_config.to_json(os.path.join(run_dir, "run_config.json"))
 
+    # Set default collision conditions
+    conditions = CollisionConditions.from_kwargs(
+        condition_id=["Default - Earth"],
+        collision_object=Origin.from_kwargs(code=["EARTH"]),
+        collision_distance=[EARTH_RADIUS_KM],
+        stopping_condition=[True],
+    )
+
     # Run impact study
     logger.info("Starting impact study...")
     impact_study_results, results_timings = run_impact_study_all(
@@ -86,6 +100,7 @@ def run_impact_study(
         assist_adaptive_mode=run_config.assist_adaptive_mode,
         assist_epsilon=run_config.assist_epsilon,
         monte_carlo_samples=run_config.monte_carlo_samples,
+        conditions=conditions,
         max_processes=run_config.max_processes,
         seed=run_config.seed,
         overwrite=overwrite,
@@ -93,7 +108,10 @@ def run_impact_study(
 
     logger.info("Generating plots...")
     plot_ip_over_time(
-        filtered_orbits, impact_study_results, run_dir, survey_start=survey_start
+        filtered_orbits,
+        impact_study_results,
+        run_dir,
+        survey_start=survey_start,
     )
     logger.info(f"Results saved to {run_dir}")
 

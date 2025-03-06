@@ -87,6 +87,9 @@ class WindowResult(qv.Table):
     orbit_id = qv.LargeStringColumn()
     object_id = qv.LargeStringColumn(nullable=True)
     window = qv.LargeStringColumn()
+    condition_id = qv.LargeStringColumn(
+        nullable=True
+    )  # nullable for backwards compatibility
     status = qv.LargeStringColumn(
         default="incomplete"
     )  # "complete", "incomplete", "failed"

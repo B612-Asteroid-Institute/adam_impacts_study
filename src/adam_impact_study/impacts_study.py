@@ -9,7 +9,13 @@ import pyarrow.compute as pc
 import quivr as qv
 import ray
 from adam_assist import ASSISTPropagator
-from adam_core.dynamics.impacts import calculate_impact_probabilities
+from adam_core.constants import KM_P_AU
+from adam_core.constants import Constants as c
+from adam_core.coordinates import Origin
+from adam_core.dynamics.impacts import (
+    CollisionConditions,
+    calculate_impact_probabilities,
+)
 from adam_core.observations.ades import ADESObservations
 from adam_core.observers.utils import calculate_observing_night
 from adam_core.orbits import VariantOrbits
@@ -36,6 +42,9 @@ logger = logging.getLogger(__name__)
 logger.setLevel(os.environ.get("ADAM_LOG_LEVEL", "INFO"))
 
 
+EARTH_RADIUS_KM = c.R_EARTH_EQUATORIAL * KM_P_AU
+
+
 def run_impact_study_all(
     impactor_orbits: ImpactorOrbits,
     pointing_file: str,
@@ -45,6 +54,7 @@ def run_impact_study_all(
     assist_min_dt: float,
     assist_initial_dt: float,
     assist_adaptive_mode: int,
+    conditions: Optional[CollisionConditions] = None,
     max_processes: Optional[int] = 1,
     overwrite: bool = False,
     seed: Optional[int] = 13612,
@@ -94,6 +104,17 @@ def run_impact_study_all(
                 f"Run directory {run_dir} already exists, attempting to continue previous run..."
             )
 
+    if conditions is None:
+        logger.info(
+            "No collision conditions provided, using default Earth impact conditions"
+        )
+        conditions = CollisionConditions.from_kwargs(
+            condition_id=["Default - Earth"],
+            collision_object=Origin.from_kwargs(code=["EARTH"]),
+            collision_distance=[EARTH_RADIUS_KM],
+            stopping_condition=[True],
+        )
+
     os.makedirs(run_dir, exist_ok=True)
 
     # Initialize ray cluster
@@ -128,6 +149,7 @@ def run_impact_study_all(
                 assist_min_dt,
                 assist_initial_dt,
                 assist_adaptive_mode,
+                conditions=conditions,
                 max_processes=1,
                 seed=orbit_seed,
             )
@@ -149,6 +171,7 @@ def run_impact_study_all(
                     assist_min_dt,
                     assist_initial_dt,
                     assist_adaptive_mode,
+                    conditions=conditions,
                     max_processes=sub_remote_max_processes,
                     seed=orbit_seed,
                 )
@@ -199,6 +222,7 @@ def run_impact_study_for_orbit(
     assist_min_dt: float,
     assist_initial_dt: float,
     assist_adaptive_mode: int,
+    conditions: Optional[CollisionConditions] = None,
     max_processes: Optional[int] = 1,
     seed: Optional[int] = None,
 ) -> Tuple[WindowResult, ResultsTiming]:
@@ -267,6 +291,17 @@ def run_impact_study_for_orbit(
             orbit_id=[orbit_id],
         )
 
+    if conditions is None:
+        logger.info(
+            "No collision conditions provided, using default Earth impact conditions"
+        )
+        conditions = CollisionConditions.from_kwargs(
+            condition_id=["Default - Earth"],
+            collision_object=Origin.from_kwargs(code=["EARTH"]),
+            collision_distance=[EARTH_RADIUS_KM],
+            stopping_condition=[True],
+        )
+
     observations_file = f"{paths['sorcha_dir']}/observations_{orbit_id}.parquet"
     sorcha_runtime = None
     if not os.path.exists(observations_file):
@@ -329,6 +364,7 @@ def run_impact_study_for_orbit(
                 propagator_class,
                 run_dir,
                 monte_carlo_samples,
+                conditions,
                 max_processes=max_processes,
                 seed=seed,
             )
@@ -345,6 +381,7 @@ def run_impact_study_for_orbit(
                     propagator_class,
                     run_dir,
                     monte_carlo_samples,
+                    conditions,
                     max_processes=max_processes,
                     seed=seed,
                 )
@@ -396,6 +433,7 @@ def calculate_window_impact_probability(
     propagator_class: Type[ASSISTPropagator],
     run_dir: str,
     monte_carlo_samples: int,
+    conditions: CollisionConditions,
     max_processes: int = 1,
     seed: Optional[int] = None,
 ) -> WindowResult:
@@ -411,6 +449,10 @@ def calculate_window_impact_probability(
         Propagator class
     run_dir : str
         Directory for this study run
+    monte_carlo_samples : int
+        Number of monte carlo samples to use for impact calculation
+    conditions : CollisionConditions
+        Collision conditions to use for impact calculation
     max_processes : int
         Maximum number of processes to use for impact calculation
 
@@ -528,11 +570,16 @@ def calculate_window_impact_probability(
         # for future analysis
         variants_with_window.to_parquet(f"{paths['time_dir']}/initial_variants.parquet")
 
-        final_orbit_states, impacts = propagator.detect_impacts(
+        final_orbit_states, impacts = propagator.detect_collisions(
             variants_with_window.variant,
             days_until_impact_plus_thirty,
+            conditions=conditions,
             max_processes=max_processes,
         )
+        if len(impacts.condition_id.unique()) > 1:
+            logger.warning(
+                f"Multiple collision conditions detected: {impacts.condition_id.unique()}"
+            )
 
         final_orbit_states_with_window = VariantOrbitsWithWindowName.from_kwargs(
             window=pa.repeat(window, len(final_orbit_states)),
@@ -544,7 +591,9 @@ def calculate_window_impact_probability(
         )
 
         impacts.to_parquet(f"{paths['time_dir']}/impacts.parquet")
-        ip = calculate_impact_probabilities(final_orbit_states, impacts)
+        ip = calculate_impact_probabilities(
+            final_orbit_states, impacts, conditions=conditions
+        )
         ip_runtime = time.perf_counter() - ip_start_time
 
     except Exception as e:
@@ -571,23 +620,24 @@ def calculate_window_impact_probability(
     window_end_time = time.perf_counter()
 
     window_result = WindowResult.from_kwargs(
-        orbit_id=[orbit_id],
-        object_id=[object_id],
-        window=[window],
-        status=["complete"],
-        observation_start=start_date,
-        observation_end=end_date,
-        observation_count=[observations_count],
-        observation_nights=[num_observation_nights],
-        observations_rejected=[len(rejected_observations)],
+        orbit_id=pa.repeat(orbit_id, len(ip)),
+        object_id=pa.repeat(object_id, len(ip)),
+        window=pa.repeat(window, len(ip)),
+        condition_id=ip.condition_id,
+        status=pa.repeat("complete", len(ip)),
+        observation_start=start_date.take([0 for _ in range(len(ip))]),
+        observation_end=end_date.take([0 for _ in range(len(ip))]),
+        observation_count=pa.repeat(observations_count, len(ip)),
+        observation_nights=pa.repeat(num_observation_nights, len(ip)),
+        observations_rejected=pa.repeat(len(rejected_observations), len(ip)),
         impact_probability=ip.cumulative_probability,
         mean_impact_time=ip.mean_impact_time,
         minimum_impact_time=ip.minimum_impact_time,
         maximum_impact_time=ip.maximum_impact_time,
         stddev_impact_time=ip.stddev_impact_time,
-        window_runtime=[window_end_time - window_start_time],
-        od_runtime=[od_runtime],
-        ip_runtime=[ip_runtime],
+        window_runtime=pa.repeat(window_end_time - window_start_time, len(ip)),
+        od_runtime=pa.repeat(od_runtime, len(ip)),
+        ip_runtime=pa.repeat(ip_runtime, len(ip)),
     )
     window_result.to_parquet(f"{paths['time_dir']}/window_result.parquet")
 

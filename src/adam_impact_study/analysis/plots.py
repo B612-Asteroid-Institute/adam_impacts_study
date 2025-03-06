@@ -6,6 +6,7 @@ import matplotlib.pyplot as plt
 import numpy as np
 import pyarrow as pa
 import pyarrow.compute as pc
+from adam_core.dynamics.impacts import CollisionConditions
 from adam_core.time import Timestamp
 
 from adam_impact_study.analysis.utils import collect_all_window_results
@@ -252,10 +253,21 @@ def plot_ip_over_time(
         probabilities = probabilities[sort_indices]
 
         # Plot sorted data on primary axis (MJD)
-        ax1.scatter(mjd_times, probabilities)
         ax1.set_xlabel("MJD")
         ax1.set_ylabel("Impact Probability")
-        ax1.plot(mjd_times, probabilities)
+        for condition in ips.condition_id.unique():
+            results_at_condition = ips.select("condition_id", condition)
+            ax1.plot(
+                results_at_condition.observation_end.mjd(),
+                results_at_condition.impact_probability,
+                label=condition,
+                lw=1,
+            )
+            ax1.scatter(
+                results_at_condition.observation_end.mjd(),
+                results_at_condition.impact_probability,
+                label=condition,
+            )
 
         # Create x-axis labels, 10 in total over the range of mjd_times (to the nearest integers)
         # make the number of labels dynamic for when we have less than 10 days of data
@@ -271,7 +283,7 @@ def plot_ip_over_time(
         y_ticks = np.arange(0, 1.1, 0.1)
         ax1.set_yticks(y_ticks)
         ax1.set_yticklabels([f"{y_tick:.1f}" for y_tick in y_ticks])
-        # Get impact time for this object (30 days after coordinates.time)
+        # Get impact time for this object
         impact_orbit = impacting_orbits.apply_mask(
             pc.equal(impacting_orbits.orbit_id, orbit_id)
         )
@@ -329,11 +341,11 @@ def plot_ip_over_time(
         fig.suptitle(orbit_id)
         if out_dir is not None:
             fig.savefig(
-                os.path.join(out_dir, f"IP_{orbit_id}.png"), bbox_inches="tight"
+                os.path.join(out_dir, f"IP_{orbit_id}.png"),
             )
         else:
             fig.savefig(
-                os.path.join(orbit_dir, f"IP_{orbit_id}.png"), bbox_inches="tight"
+                os.path.join(orbit_dir, f"IP_{orbit_id}.png"),
             )
         plt.close()
 
