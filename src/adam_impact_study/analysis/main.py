@@ -109,58 +109,58 @@ class DiscoveryDates(qv.Table):
 
 
 def compute_discovery_dates(
-    results: WindowResult,
+    observations: Observations,
+    min_tracklets: int = 3,
+    max_nights: float = 15,
 ) -> DiscoveryDates:
     """
-    Return when each object is considered to be discoverable.
-
-    TODO: Define what "discoverable" means in more detail.
+    Return when each object is considered to be discoverable. Any object is considered
+    discoverable if it has at least 3 tracklets within a 15 day window.
 
     Parameters
     ----------
-    impactor_orbits: ImpactorOrbits
-        The impactor orbits to compute the discovery dates for.
-    results: ImpactStudyResults
-        The impact study results to compute the discovery dates for.
+    observations: Observations
+        The observations for a single object.
+    min_tracklets: int, optional
+        The minimum number of tracklets to consider an object discoverable. Default is 3.
+    max_nights: float, optional
+        The maximum number of nights over which to find the number of required tracklets. Default is 15.
 
     Returns
     -------
     DiscoveryDates
         The discovery dates for each object.
     """
-    # For now, we will consider an object discoverable if it has 3 unique nights of data
-    results_sorted = results.sort_by(
-        ["orbit_id", "observation_end.days", "observation_end.nanos"]
+    orbit_ids = observations.orbit_id.unique()
+    assert len(orbit_ids) == 1, "Observations must be for a single object"
+
+    observing_nights = observations.observing_night.unique().sort()
+    discovery_time = Timestamp.nulls(1, scale=observations.coordinates.time.scale)
+    if len(observing_nights) < min_tracklets:
+        return DiscoveryDates.from_kwargs(
+            orbit_id=orbit_ids,
+            discovery_date=discovery_time,
+        )
+
+    for observing_night in observing_nights[min_tracklets - 1 :].to_pylist():
+        observations_window = observations.apply_mask(
+            pc.and_(
+                pc.less_equal(observations.observing_night, observing_night),
+                pc.greater_equal(
+                    observations.observing_night, observing_night - max_nights
+                ),
+            )
+        )
+
+        observing_cadence = compute_observation_cadence(observations_window)
+        if observing_cadence.tracklets[0].as_py() >= min_tracklets:
+            discovery_time = observations_window.coordinates.time.max()
+            break
+
+    return DiscoveryDates.from_kwargs(
+        orbit_id=orbit_ids,
+        discovery_date=discovery_time,
     )
-
-    # only consider the first 3 nights of data
-    results_sorted = results_sorted.apply_mask(
-        pc.greater_equal(results_sorted.observation_nights, 3)
-    )
-
-    results_sorted = results_sorted.drop_duplicates(subset=["orbit_id"], keep="first")
-
-    discovery_dates = DiscoveryDates.from_kwargs(
-        orbit_id=results_sorted.orbit_id,
-        discovery_date=results_sorted.observation_end,
-    )
-
-    # get the orbit_ids which did not have 3 unique nights of data
-    orbit_ids_without_3_nights = set(results.orbit_id.unique().to_pylist()) - set(
-        results_sorted.orbit_id.unique().to_pylist()
-    )
-
-    non_discovery_dates = DiscoveryDates.from_kwargs(
-        orbit_id=list(orbit_ids_without_3_nights),
-        discovery_date=Timestamp.nulls(
-            len(orbit_ids_without_3_nights),
-            scale="utc",
-        ),
-    )
-
-    discovery_dates = qv.concatenate([discovery_dates, non_discovery_dates])
-
-    return discovery_dates
 
 
 class RealizationTimes(qv.Table):
@@ -358,8 +358,10 @@ def summarize_impact_study_object_results(
 
     results_timings = ResultsTiming.from_parquet(f"{orbit_dir}/timings.parquet")
     impact_results = collect_orbit_window_results(run_dir, orbit_id)
+    print(impact_results)
 
     complete = pc.all(pc.equal(impact_results.status, "complete")).as_py()
+    print(complete)
 
     if not complete:
         logger.warning(f"Orbit {orbit_id} has no complete windows")
@@ -398,12 +400,13 @@ def summarize_impact_study_object_results(
 
     # Filter out incomplete windows
     impact_results_filtered = impact_results.select("status", "complete")
+    print(impact_results_filtered)
 
     if pc.any(pc.equal(observations.linked, True)).as_py():
         # sorcha currently assumes perfect linking and precovery
         assert pc.all(pc.equal(observations.linked, True)).as_py()
 
-        discovery_dates = compute_discovery_dates(impact_results_filtered)
+        discovery_dates = compute_discovery_dates(observations)
         warning_times = compute_warning_time(impactor_orbits, impact_results_filtered)
         realization_times = compute_realization_time(
             impactor_orbits, impact_results_filtered, discovery_dates
@@ -482,7 +485,7 @@ def summarize_impact_study_results(
     if max_processes > 1:
         initialize_use_ray()
 
-    orbit_ids = [os.path.basename(dir) for dir in glob.glob(f"{run_dir}/*")]
+    orbit_ids = [os.path.basename(dir) for dir in glob.glob(f"{run_dir}/*") if os.path.isdir(dir)]
     results = ImpactorResultSummary.empty()
     window_results = WindowResult.empty()
     futures = []

@@ -50,14 +50,14 @@ def collect_orbit_window_results(run_dir: str, orbit_id: str) -> WindowResult:
         else:
             # TODO: Backwards compatibility with old window results (DELETE THIS LATER)
             window_result_table = pq.read_table(window_result_file)
-            if "status" not in window_result_table.columns:
-                window_result = WindowResult.from_pyarrow(
-                    window_result_table.add_column(
-                        3, "status", pa.array(["complete"], pa.large_string())
-                    )
-                )
-            else:
-                window_result = WindowResult.from_pyarrow(window_result_table)
+            # if "status" not in window_result_table.columns:
+            #     window_result = WindowResult.from_pyarrow(
+            #         window_result_table.add_column(
+            #             3, "status", pa.array(["complete"], pa.large_string())
+            #         )
+            #     )
+            # else:
+            window_result = WindowResult.from_pyarrow(window_result_table)
 
         window_results = qv.concatenate([window_results, window_result])
 

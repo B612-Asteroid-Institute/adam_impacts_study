@@ -357,6 +357,12 @@ def run_impact_study_for_orbit(
         mask = pc.less_equal(observations.observing_night, night)
         observations_window = observations.apply_mask(mask)
 
+        if len(observations_window) < 6:
+            logger.warning(
+                f"Not enough observations for a least-squares fit for nights up to {night}"
+            )
+            continue
+
         if not use_ray:
             result = calculate_window_impact_probability(
                 observations_window,
@@ -616,6 +622,8 @@ def calculate_window_impact_probability(
         )
         window_result.to_parquet(window_out_file)
         return window_result
+
+    print(ip.mean_impact_time.scale)
 
     window_end_time = time.perf_counter()
 
