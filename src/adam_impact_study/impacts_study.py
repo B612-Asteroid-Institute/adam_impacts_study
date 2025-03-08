@@ -623,8 +623,6 @@ def calculate_window_impact_probability(
         window_result.to_parquet(window_out_file)
         return window_result
 
-    print(ip.mean_impact_time.scale)
-
     window_end_time = time.perf_counter()
 
     window_result = WindowResult.from_kwargs(

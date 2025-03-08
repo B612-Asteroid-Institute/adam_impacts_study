@@ -358,10 +358,8 @@ def summarize_impact_study_object_results(
 
     results_timings = ResultsTiming.from_parquet(f"{orbit_dir}/timings.parquet")
     impact_results = collect_orbit_window_results(run_dir, orbit_id)
-    print(impact_results)
 
     complete = pc.all(pc.equal(impact_results.status, "complete")).as_py()
-    print(complete)
 
     if not complete:
         logger.warning(f"Orbit {orbit_id} has no complete windows")
@@ -400,7 +398,6 @@ def summarize_impact_study_object_results(
 
     # Filter out incomplete windows
     impact_results_filtered = impact_results.select("status", "complete")
-    print(impact_results_filtered)
 
     if pc.any(pc.equal(observations.linked, True)).as_py():
         # sorcha currently assumes perfect linking and precovery
@@ -485,7 +482,9 @@ def summarize_impact_study_results(
     if max_processes > 1:
         initialize_use_ray()
 
-    orbit_ids = [os.path.basename(dir) for dir in glob.glob(f"{run_dir}/*") if os.path.isdir(dir)]
+    orbit_ids = [
+        os.path.basename(dir) for dir in glob.glob(f"{run_dir}/*") if os.path.isdir(dir)
+    ]
     results = ImpactorResultSummary.empty()
     window_results = WindowResult.empty()
     futures = []
