@@ -10,8 +10,8 @@ authors = [
 ]
 dependencies = [
     "matplotlib>=3.10.0",
-    "adam_core @ git+https://github.com/B612-Asteroid-Institute/adam_core@kk/close-approach",
-    "adam-assist @ git+https://github.com/B612-Asteroid-Institute/adam-assist@kk/close-approach",
+    "adam-core @ git+https://github.com/B612-Asteroid-Institute/adam_core@fc592d1cfa3cba688089ca6f94dbd3d759f02dbe",
+    "adam-assist @ git+https://github.com/B612-Asteroid-Institute/adam-assist@f60f4a99f414fd42d200199eb91a69d07ac5ef07",
     "ray[default]==2.39.0",
     "quivr @ git+https://github.com/B612-Asteroid-Institute/quivr@2d8ae0b40bdfb75bcceff0c73d41a52d4bffb5dc",
     "ipdb>=0.13.13",
