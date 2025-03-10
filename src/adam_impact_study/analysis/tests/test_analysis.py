@@ -13,7 +13,8 @@ from adam_impact_study.analysis import (
     compute_warning_time,
 )
 from adam_impact_study.analysis.plots import plot_ip_over_time
-from adam_impact_study.types import ImpactorOrbits, WindowResult, Observations
+from adam_impact_study.types import ImpactorOrbits, Observations, WindowResult
+
 
 @pytest.fixture
 def impact_study_results():
@@ -28,7 +29,14 @@ def impact_study_results():
     observation_nights = [1.0, 2.0, 3.0, 1.0, 2.0, 3.0]
     observations_rejected = [0, 0, 0, 0, 0, 0]
     impact_probabilities = [0.01, 0.02, 0.03, 0.04, 0.05, 0.06]
-    windows = ["60000_60002", "60000_60012", "60000_60002", "60000_60012", "60000_60002", "60000_60012"]
+    windows = [
+        "60000_60002",
+        "60000_60012",
+        "60000_60002",
+        "60000_60012",
+        "60000_60002",
+        "60000_60012",
+    ]
     condition_ids = ["Default - Earth"] * 6
     statuses = ["complete"] * 6
     impact_result = WindowResult.from_kwargs(
@@ -116,33 +124,37 @@ def test_compute_discovery_dates():
         coordinates=SphericalCoordinates.from_kwargs(
             lon=[180.0, 181.0, 182.0, 183.0, 184.0, 185.0],
             lat=[0.0, 1.0, 2.0, 3.0, 4.0, 5.0],
-            time=Timestamp.from_mjd([60001.1, 60001.2, 60002.1, 60002.2, 60003.1, 60003.2]),
+            time=Timestamp.from_mjd(
+                [60001.1, 60001.2, 60002.1, 60002.2, 60003.1, 60003.2]
+            ),
             origin=Origin.from_kwargs(code=["X05", "X05", "X05", "X05", "X05", "X05"]),
             frame="equatorial",
         ),
     )
 
-    #first test min_tracklets is working
+    # first test min_tracklets is working
     min_tracklets = 5
     discovery_dates = compute_discovery_dates(observations, min_tracklets=min_tracklets)
     assert pc.all(pc.is_null(discovery_dates.discovery_date.days)).as_py()
     assert len(discovery_dates) == 1
 
-    #now test max_nights is working
+    # now test max_nights is working
     max_nights = 1
     discovery_dates = compute_discovery_dates(observations, max_nights=max_nights)
     assert pc.all(pc.is_null(discovery_dates.discovery_date.days)).as_py()
     assert len(discovery_dates) == 1
 
-    #now run for real
+    # now run for real
     discovery_dates = compute_discovery_dates(observations)
     assert discovery_dates.discovery_date.mjd().to_pylist() == [60003.2]
     assert len(discovery_dates) == 1
 
-    #now run for real
+    # now run for real
     max_nights = 2
     min_tracklets = 2
-    discovery_dates = compute_discovery_dates(observations, max_nights=max_nights, min_tracklets=min_tracklets)
+    discovery_dates = compute_discovery_dates(
+        observations, max_nights=max_nights, min_tracklets=min_tracklets
+    )
     assert discovery_dates.discovery_date.mjd().to_pylist() == [60002.2]
     assert len(discovery_dates) == 1
 
@@ -178,7 +190,12 @@ def test_compute_warning_time():
     # Create test results
     results = WindowResult.from_kwargs(
         orbit_id=["test1", "test1", "test2", "test3"],
-        condition_id=["Default - Earth", "Default - Earth", "Default - Earth", "Default - Earth"],
+        condition_id=[
+            "Default - Earth",
+            "Default - Earth",
+            "Default - Earth",
+            "Default - Earth",
+        ],
         status=["complete", "complete", "complete", "complete"],
         observation_start=Timestamp.from_mjd([60000, 60010, 60000, 60000]),
         observation_end=Timestamp.from_mjd([60050, 60060, 60150, 60250]),
@@ -333,7 +350,12 @@ def test_compute_realization_time():
     # Create test results
     results = WindowResult.from_kwargs(
         orbit_id=["test1", "test1", "test2", "test3"],
-        condition_id=["Default - Earth", "Default - Earth", "Default - Earth", "Default - Earth"],
+        condition_id=[
+            "Default - Earth",
+            "Default - Earth",
+            "Default - Earth",
+            "Default - Earth",
+        ],
         status=["complete", "complete", "complete", "complete"],
         observation_start=Timestamp.from_mjd([60000, 60010, 60000, 60000]),
         observation_end=Timestamp.from_mjd([60050, 60075, 60150, 60250]),

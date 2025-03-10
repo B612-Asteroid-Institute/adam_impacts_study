@@ -145,16 +145,28 @@ def pointing_file(tmpdir):
 def sorcha_observations():
     return Observations.from_kwargs(
         obs_id=["obs1", "obs2", "obs3", "obs4", "obs5", "obs6"],
-        orbit_id=["Test_1001", "Test_1001", "Test_1001", "Test_1001", "Test_1001", "Test_1001"],
+        orbit_id=[
+            "Test_1001",
+            "Test_1001",
+            "Test_1001",
+            "Test_1001",
+            "Test_1001",
+            "Test_1001",
+        ],
         coordinates=SphericalCoordinates.from_kwargs(
             lon=[180.0, 180.5, 181.0, 181.5, 182.0, 182.5],
             lat=[0.0, 0.5, 1.0, 1.5, 2.0, 2.5],
-            time=Timestamp.from_mjd([60000.1, 60000.9, 60001.1, 60001.9, 60002.1, 60002.9], scale="utc"),
+            time=Timestamp.from_mjd(
+                [60000.1, 60000.9, 60001.1, 60001.9, 60002.1, 60002.9], scale="utc"
+            ),
             origin=Origin.from_kwargs(code=["X05"] * 6),
             frame="equatorial",
         ),
         observers=Observers.from_code(
-            "X05", Timestamp.from_mjd([60000.1, 60000.9, 60001.1, 60001.9, 60002.1, 60002.9], scale="utc")
+            "X05",
+            Timestamp.from_mjd(
+                [60000.1, 60000.9, 60001.1, 60001.9, 60002.1, 60002.9], scale="utc"
+            ),
         ),
         photometry=Photometry.from_kwargs(
             mag=[21.0, 21.2, 21.4, 21.6, 21.8, 22.0],
