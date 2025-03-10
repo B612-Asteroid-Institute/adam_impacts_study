@@ -59,7 +59,7 @@ def test_run_fo_od(mock_fo, tmpdir):
     assert mock_fo.call_count == 1
     assert mock_fo.call_args[0][0] == observations_to_ades(observations)[0]
     # keyword arguments clean_up=True, output_dir=fo_result_dir
-    assert mock_fo.call_args[1]["clean_up"] == True
+    assert mock_fo.call_args[1]["clean_up"] == False
     assert mock_fo.call_args[1]["out_dir"] == fo_result_dir
 
 

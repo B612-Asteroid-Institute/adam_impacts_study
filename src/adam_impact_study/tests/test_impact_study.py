@@ -12,7 +12,7 @@ from adam_core.coordinates import (
     Origin,
     SphericalCoordinates,
 )
-from adam_core.dynamics.impacts import EarthImpacts, ImpactProbabilities
+from adam_core.dynamics.impacts import CollisionEvent, ImpactProbabilities
 from adam_core.observations.ades import ADESObservations
 from adam_core.observers import Observers
 from adam_core.orbits import Orbits
@@ -144,24 +144,24 @@ def pointing_file(tmpdir):
 @pytest.fixture
 def sorcha_observations():
     return Observations.from_kwargs(
-        obs_id=["obs1", "obs2", "obs3", "obs4", "obs5"],
-        orbit_id=["Test_1001", "Test_1001", "Test_1001", "Test_1002", "Test_1002"],
+        obs_id=["obs1", "obs2", "obs3", "obs4", "obs5", "obs6"],
+        orbit_id=["Test_1001", "Test_1001", "Test_1001", "Test_1001", "Test_1001", "Test_1001"],
         coordinates=SphericalCoordinates.from_kwargs(
-            lon=[180.0, 181.0, 182.0, 183.0, 184.0],
-            lat=[0.0, 1.0, 2.0, 3.0, 4.0],
-            time=Timestamp.from_mjd([60001, 60002, 60003, 60005, 60006], scale="utc"),
-            origin=Origin.from_kwargs(code=["X05", "X05", "X05", "X05", "X05"]),
+            lon=[180.0, 180.5, 181.0, 181.5, 182.0, 182.5],
+            lat=[0.0, 0.5, 1.0, 1.5, 2.0, 2.5],
+            time=Timestamp.from_mjd([60000.1, 60000.9, 60001.1, 60001.9, 60002.1, 60002.9], scale="utc"),
+            origin=Origin.from_kwargs(code=["X05"] * 6),
             frame="equatorial",
         ),
         observers=Observers.from_code(
-            "X05", Timestamp.from_mjd([60001, 60002, 60003, 60005, 60006], scale="utc")
+            "X05", Timestamp.from_mjd([60000.1, 60000.9, 60001.1, 60001.9, 60002.1, 60002.9], scale="utc")
         ),
         photometry=Photometry.from_kwargs(
-            mag=[21.0, 22.0, 23.0, 24.0, 25.0],
-            mag_sigma=[0.1, 0.2, 0.3, 0.4, 0.5],
-            filter=["i", "r", "z", "r", "i"],
+            mag=[21.0, 21.2, 21.4, 21.6, 21.8, 22.0],
+            mag_sigma=[0.1, 0.1, 0.1, 0.1, 0.1, 0.1],
+            filter=["r", "i", "r", "i", "r", "i"],
         ),
-        observing_night=[60000, 60001, 60002, 60004, 60005],
+        observing_night=[60000, 60000, 60001, 60001, 60002, 60002],
     )
 
 
@@ -267,26 +267,18 @@ def test_run_impact_study_for_orbit(
         None,
     )
 
-    # mock_calculate_impacts.return_value = (
-    #     Orbits.from_kwargs(
-    #         orbit_id=["Object1"],
-    #         object_id=["Object1"],
-    #         coordinates=cartesian_coords,
-    #     ),
-    #     EarthImpacts.nulls(1),
-    # )
-
     mock_propagator.detect_impacts.return_value = (
         Orbits.from_kwargs(
             orbit_id=["Object1"],
             object_id=["Object1"],
             coordinates=cartesian_coords,
         ),
-        EarthImpacts.nulls(1),
+        CollisionEvent.nulls(1),
     )
 
     mock_calculate_impact_probabilities.return_value = ImpactProbabilities.from_kwargs(
         orbit_id=["Object1"],
+        condition_id=["Default - Earth"],
         impacts=[1],
         variants=[3],
         cumulative_probability=[1 / 3],
@@ -364,15 +356,17 @@ def test_run_impact_study_for_orbit(
         assert kwargs["seed"] == expected_calculate_impacts_calls[i][5]
 
     expected = WindowResult.from_kwargs(
-        orbit_id=["Object1", "Object1", "Object1"],
-        object_id=["Object1", "Object1", "Object1"],
-        window=["60000_60002", "60000_60004", "60000_60005"],
-        observation_start=Timestamp.from_mjd([60001, 60001, 60001], scale="utc"),
-        observation_end=Timestamp.from_mjd([60003, 60005, 60006], scale="utc"),
-        observation_count=[3, 4, 5],
-        observation_nights=[3, 4, 5],
-        observations_rejected=[0, 0, 0],
-        impact_probability=[1 / 3, 1 / 3, 1 / 3],
+        orbit_id=["Object1"],
+        object_id=["Object1"],
+        condition_id=["Default - Earth"],
+        status=["complete"],
+        window=["60000_60002"],
+        observation_start=Timestamp.from_mjd([60000.1], scale="utc"),
+        observation_end=Timestamp.from_mjd([60002.9], scale="utc"),
+        observation_count=[6],
+        observation_nights=[3],
+        observations_rejected=[0],
+        impact_probability=[1 / 3],
     )
     # Convert both to pandas DataFrames for easier comparison
     # We drop the runtime columns since they are not deterministic

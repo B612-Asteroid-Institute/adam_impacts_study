@@ -45,6 +45,12 @@ def test_write_config_file_timeframe(tmpdir):
         f"fieldRA as fieldRA_deg, fieldDec as fieldDec_deg, rotSkyPos as fieldRotSkyPos_deg FROM observations "
         f"WHERE observationStartMJD < {impact_date.rescale('tai').mjd()[0].as_py()} ORDER BY observationId"
     )
+
+    print("pointing_command")
+    print(pointing_command)
+    print("content")
+    print(content)
+
     assert pointing_command in content
 
     assert f"ar_min_dt = {assist_min_dt}" in content

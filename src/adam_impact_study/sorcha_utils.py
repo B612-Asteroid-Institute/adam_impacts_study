@@ -49,7 +49,7 @@ def remove_quotes(file_path: str) -> None:
 
 def write_config_file_timeframe(
     config_file: str,
-    impact_date: Timestamp,
+    simulation_end_date: Timestamp,
     assist_epsilon: float,
     assist_min_dt: float,
     assist_initial_dt: float,
@@ -62,8 +62,8 @@ def write_config_file_timeframe(
     ----------
     config_file : str
         Path to the file where the Sorcha configuration data will be saved.
-    impact_date : float
-        Impact date in MJD.
+    simulation_end_date : Timestamp
+        Impact date in MJD, minus 1 day to prevent propagation issues.
     assist_epsilon : float
         Epsilon value for ASSIST
     assist_min_dt : float
@@ -82,11 +82,10 @@ def write_config_file_timeframe(
     assist_planets = de440
     assist_small_bodies = de441_n16
 
-    # Ensure impact_date is in TAI before serializing to mjd
-    impact_date_tai = impact_date.rescale("tai")
-    # impact_date_mjd = impact_date_tai.mjd()[0]
-    # Go past impact date for testing
-    impact_date_mjd = impact_date_tai.add_days(1).mjd()[0]
+    # Ensure simulation_end_date is in TAI before serializing to mjd
+    simulation_end_date_tai = simulation_end_date.rescale("tai")
+
+    simulation_end_date_mjd = simulation_end_date_tai.mjd()[0]
 
     # get the parent directory of the config file, with pathlib
     sorcha_run_dir = pathlib.Path(config_file).parent
@@ -139,7 +138,7 @@ KERNELS_TO_LOAD=(
     with open(meta_kernel_file, "w") as f:
         f.write(meta_kernel_txt)
 
-    pointing_command = f"SELECT observationId, observationStartMJD as observationStartMJD_TAI, visitTime, visitExposureTime, filter, seeingFwhmGeom as seeingFwhmGeom_arcsec, seeingFwhmEff as seeingFwhmEff_arcsec, fiveSigmaDepth as fieldFiveSigmaDepth_mag , fieldRA as fieldRA_deg, fieldDec as fieldDec_deg, rotSkyPos as fieldRotSkyPos_deg FROM observations WHERE observationStartMJD < {impact_date_mjd} ORDER BY observationId"
+    pointing_command = f"SELECT observationId, observationStartMJD as observationStartMJD_TAI, visitTime, visitExposureTime, filter, seeingFwhmGeom as seeingFwhmGeom_arcsec, seeingFwhmEff as seeingFwhmEff_arcsec, fiveSigmaDepth as fieldFiveSigmaDepth_mag , fieldRA as fieldRA_deg, fieldDec as fieldDec_deg, rotSkyPos as fieldRotSkyPos_deg FROM observations WHERE observationStartMJD < {simulation_end_date_mjd} ORDER BY observationId"
     config_text = f"""
 [Sorcha Configuration File]
 

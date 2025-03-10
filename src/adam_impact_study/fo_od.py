@@ -145,6 +145,8 @@ def run_fo_od(
     orbit, rejected, error = fo(
         ades_string,
         out_dir=fo_result_dir,
+        # Ignore clean_up in favor of keeping whitelisted files below
+        clean_up=False,
     )
 
     if fo_dir_cleanup:

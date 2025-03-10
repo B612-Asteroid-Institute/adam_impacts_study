@@ -2,7 +2,7 @@ import os
 
 import pyarrow.compute as pc
 import pytest
-from adam_core.coordinates import CartesianCoordinates, Origin
+from adam_core.coordinates import CartesianCoordinates, Origin, SphericalCoordinates
 from adam_core.orbits import Orbits
 from adam_core.time import Timestamp
 
@@ -11,10 +11,9 @@ from adam_impact_study.analysis import (
     compute_discovery_dates,
     compute_realization_time,
     compute_warning_time,
-    plot_ip_over_time,
 )
-from adam_impact_study.types import ImpactorOrbits, WindowResult
-
+from adam_impact_study.analysis.plots import plot_ip_over_time
+from adam_impact_study.types import ImpactorOrbits, WindowResult, Observations
 
 @pytest.fixture
 def impact_study_results():
@@ -29,8 +28,14 @@ def impact_study_results():
     observation_nights = [1.0, 2.0, 3.0, 1.0, 2.0, 3.0]
     observations_rejected = [0, 0, 0, 0, 0, 0]
     impact_probabilities = [0.01, 0.02, 0.03, 0.04, 0.05, 0.06]
+    windows = ["60000_60002", "60000_60012", "60000_60002", "60000_60012", "60000_60002", "60000_60012"]
+    condition_ids = ["Default - Earth"] * 6
+    statuses = ["complete"] * 6
     impact_result = WindowResult.from_kwargs(
         orbit_id=orbit_ids,
+        condition_id=condition_ids,
+        status=statuses,
+        window=windows,
         observation_start=start_dates,
         observation_end=end_dates,
         observation_count=observation_counts,
@@ -58,10 +63,22 @@ def impacting_orbits():
         origin=Origin.from_kwargs(code=["SUN", "SUN"]),
         frame="ecliptic",
     )
-    orbits = Orbits.from_kwargs(
+    orbits = ImpactorOrbits.from_kwargs(
         orbit_id=["obj1", "obj2"],
         object_id=["obj1", "obj2"],
         coordinates=cartesian_coords,
+        impact_time=Timestamp.from_mjd([60100, 60200], scale="utc"),
+        dynamical_class=["APO", "APO"],
+        ast_class=["C", "S"],
+        diameter=[1.0, 1.0],
+        albedo=[0.1, 0.1],
+        H_r=[20.0, 20.0],
+        i_r=[0.0, 0.0],
+        u_r=[0.0, 0.0],
+        g_r=[0.0, 0.0],
+        z_r=[0.0, 0.0],
+        y_r=[0.0, 0.0],
+        GS=[0.15, 0.15],
     )
     return orbits
 
@@ -90,80 +107,44 @@ def test_plot_ip_over_time(impact_study_results, impacting_orbits, tmpdir):
 
 
 def test_compute_discovery_dates():
-    # Create test impactor orbits
-    impactor_orbits = ImpactorOrbits.from_kwargs(
-        orbit_id=["test1", "test2", "test3"],
-        object_id=["obj1", "obj2", "obj3"],
-        coordinates=CartesianCoordinates.from_kwargs(
-            x=[1, 1, 1],
-            y=[1, 1, 1],
-            z=[1, 1, 1],
-            vx=[0, 0, 0],
-            vy=[0, 0, 0],
-            vz=[0, 0, 0],
-            time=Timestamp.from_mjd([60000, 60000, 60000]),
-        ),
-        impact_time=Timestamp.from_mjd([60100, 60200, 60300]),
-        dynamical_class=["APO", "APO", "APO"],
-        ast_class=["C", "S", "C"],
-        diameter=[1.0, 1.0, 1.0],
-        albedo=[0.1, 0.1, 0.1],
-        H_r=[20.0, 20.0, 20.0],
-        u_r=[0.0, 0.0, 0.0],
-        g_r=[0.0, 0.0, 0.0],
-        i_r=[0.0, 0.0, 0.0],
-        z_r=[0.0, 0.0, 0.0],
-        y_r=[0.0, 0.0, 0.0],
-        GS=[0.15, 0.15, 0.15],
-    )
 
     # Create test results with varying observation nights
-    results = WindowResult.from_kwargs(
-        orbit_id=["test1", "test1", "test2", "test2", "test3"],
-        object_id=["obj1", "obj1", "obj2", "obj2", "obj3"],
-        observation_start=Timestamp.from_mjd(
-            [60000, 60000, 60000, 60010, 60000], scale="utc"
+    observations = Observations.from_kwargs(
+        orbit_id=["test1", "test1", "test1", "test1", "test1", "test1"],
+        obs_id=["obs1", "obs1", "obs1", "obs1", "obs1", "obs1"],
+        observing_night=[60001, 60001, 60002, 60002, 60003, 60003],
+        coordinates=SphericalCoordinates.from_kwargs(
+            lon=[180.0, 181.0, 182.0, 183.0, 184.0, 185.0],
+            lat=[0.0, 1.0, 2.0, 3.0, 4.0, 5.0],
+            time=Timestamp.from_mjd([60001.1, 60001.2, 60002.1, 60002.2, 60003.1, 60003.2]),
+            origin=Origin.from_kwargs(code=["X05", "X05", "X05", "X05", "X05", "X05"]),
+            frame="equatorial",
         ),
-        observation_end=Timestamp.from_mjd(
-            [60002, 60012, 60002, 60012, 60002], scale="utc"
-        ),
-        observation_count=[10, 15, 5, 8, 3],
-        observations_rejected=[0, 0, 0, 0, 0],
-        observation_nights=[2, 4, 1, 2, 1],  # obj1 has 4 nights, obj2 has 2, obj3 has 1
-        impact_probability=[0.1, 0.2, 0.1, 0.2, 0.1],
-        mean_impact_time=Timestamp.from_mjd(
-            [60100, 60100, 60200, 60200, 60300], scale="utc"
-        ),
-        minimum_impact_time=Timestamp.from_mjd(
-            [60100, 60100, 60200, 60200, 60300], scale="utc"
-        ),
-        maximum_impact_time=Timestamp.from_mjd(
-            [60100, 60100, 60200, 60200, 60300], scale="utc"
-        ),
-        stddev_impact_time=[0.0, 0.0, 0.0, 0.0, 0.0],
-        error=[None, None, None, None, None],
     )
 
-    # Compute discovery dates
-    discovery_dates = compute_discovery_dates(results)
+    #first test min_tracklets is working
+    min_tracklets = 5
+    discovery_dates = compute_discovery_dates(observations, min_tracklets=min_tracklets)
+    assert pc.all(pc.is_null(discovery_dates.discovery_date.days)).as_py()
+    assert len(discovery_dates) == 1
 
-    # Check we got results for all objects
-    assert len(discovery_dates) == 3
+    #now test max_nights is working
+    max_nights = 1
+    discovery_dates = compute_discovery_dates(observations, max_nights=max_nights)
+    assert pc.all(pc.is_null(discovery_dates.discovery_date.days)).as_py()
+    assert len(discovery_dates) == 1
 
-    # Only obj1 should have a discovery date since it's the only one with >= 3 nights
-    obj1_date = discovery_dates.select("orbit_id", "test1").discovery_date[0]
-    assert obj1_date is not None
-    assert obj1_date.equals(Timestamp.from_mjd([60012], scale="utc")).to_pylist()[
-        0
-    ]  # Should be the end time of the window with 4 nights
+    #now run for real
+    discovery_dates = compute_discovery_dates(observations)
+    assert discovery_dates.discovery_date.mjd().to_pylist() == [60003.2]
+    assert len(discovery_dates) == 1
 
-    # obj2 and obj3 should have null discovery dates
-    assert pc.all(
-        discovery_dates.select("orbit_id", "test2").discovery_date.null_mask()
-    )
-    assert pc.all(
-        discovery_dates.select("orbit_id", "test3").discovery_date.null_mask()
-    )
+    #now run for real
+    max_nights = 2
+    min_tracklets = 2
+    discovery_dates = compute_discovery_dates(observations, max_nights=max_nights, min_tracklets=min_tracklets)
+    assert discovery_dates.discovery_date.mjd().to_pylist() == [60002.2]
+    assert len(discovery_dates) == 1
 
 
 def test_compute_warning_time():
@@ -197,8 +178,11 @@ def test_compute_warning_time():
     # Create test results
     results = WindowResult.from_kwargs(
         orbit_id=["test1", "test1", "test2", "test3"],
+        condition_id=["Default - Earth", "Default - Earth", "Default - Earth", "Default - Earth"],
+        status=["complete", "complete", "complete", "complete"],
         observation_start=Timestamp.from_mjd([60000, 60010, 60000, 60000]),
         observation_end=Timestamp.from_mjd([60050, 60060, 60150, 60250]),
+        window=["60000_60050", "60000_60060", "60000_60150", "60000_60250"],
         observation_count=[10, 15, 5, 20],
         observations_rejected=[0, 0, 0, 0],
         observation_nights=[1, 1, 1, 1],
@@ -277,8 +261,11 @@ def test_compute_warning_time_edge_cases():
     # Test all probabilities below threshold
     low_prob_results = WindowResult.from_kwargs(
         orbit_id=["obj1"],
+        condition_id=["Default - Earth"],
+        status=["complete"],
         observation_start=Timestamp.from_mjd([60000]),
         observation_end=Timestamp.from_mjd([60050]),
+        window=["60000_60050"],
         observation_count=[10],
         observations_rejected=[0],
         observation_nights=[1],
@@ -346,8 +333,11 @@ def test_compute_realization_time():
     # Create test results
     results = WindowResult.from_kwargs(
         orbit_id=["test1", "test1", "test2", "test3"],
+        condition_id=["Default - Earth", "Default - Earth", "Default - Earth", "Default - Earth"],
+        status=["complete", "complete", "complete", "complete"],
         observation_start=Timestamp.from_mjd([60000, 60010, 60000, 60000]),
         observation_end=Timestamp.from_mjd([60050, 60075, 60150, 60250]),
+        window=["60000_60050", "60000_60075", "60000_60150", "60000_60250"],
         observation_count=[10, 15, 5, 20],
         observations_rejected=[0, 0, 0, 0],
         observation_nights=[1, 1, 1, 1],
