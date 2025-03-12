@@ -48,16 +48,22 @@ def collect_orbit_window_results(run_dir: str, orbit_id: str) -> WindowResult:
                 maximum_impact_time=Timestamp.nulls(1, scale="tdb"),
             )
         else:
-            # TODO: Backwards compatibility with old window results (DELETE THIS LATER)
-            window_result_table = pq.read_table(window_result_file)
-            # if "status" not in window_result_table.columns:
-            #     window_result = WindowResult.from_pyarrow(
-            #         window_result_table.add_column(
-            #             3, "status", pa.array(["complete"], pa.large_string())
-            #         )
-            #     )
-            # else:
-            window_result = WindowResult.from_pyarrow(window_result_table)
+            # Backwards compatibility for older results
+            try:
+                window_result = WindowResult.from_parquet(window_result_file)
+
+            except ValueError as e:
+                window_result_table = pq.read_table(window_result_file)
+                if "condition_id" not in window_result_table.columns:
+                    window_result_table = window_result_table.add_column(
+                        3, "condition_id", pa.array(["default"], pa.large_string())
+                    )
+
+                if "status" not in window_result_table.columns:
+                    window_result_table = window_result_table.add_column(
+                        4, "status", pa.array(["complete"], pa.large_string())
+                    )
+                window_result = WindowResult.from_pyarrow(window_result_table)
 
         window_results = qv.concatenate([window_results, window_result])
 
