@@ -1,8 +1,8 @@
-import glob
 import logging
 import multiprocessing as mp
 import os
-from typing import Optional, Tuple
+import pathlib
+from typing import Optional, Tuple, Union
 
 import pyarrow as pa
 import pyarrow.compute as pc
@@ -318,25 +318,25 @@ def compute_observation_cadence(
 
 
 def summarize_impact_study_object_results(
-    run_dir: str, orbit_id: str
+    run_dir: Union[str, pathlib.Path], orbit_id: str
 ) -> Tuple[ImpactorResultSummary, WindowResult]:
     """
     Summarize the impact study results for a single object.
     """
-    paths = get_study_paths(run_dir, orbit_id)
+    run_dir_path = pathlib.Path(run_dir).absolute()
+    paths = get_study_paths(run_dir_path, orbit_id)
     orbit_dir = paths["orbit_base_dir"]
 
     # Read the orbit if the file exists
-    orbit_file = f"{orbit_dir}/impactor_orbit.parquet"
-    if not os.path.exists(orbit_file):
+    orbit_file = orbit_dir / "impactor_orbit.parquet"
+    if not orbit_file.exists():
         raise ValueError(f"Orbit file {orbit_file} does not exist")
 
     impactor_orbits = ImpactorOrbits.from_parquet(orbit_file)
 
     # Load sorcha observations
-    observations = Observations.from_parquet(
-        f"{paths['sorcha_dir']}/observations_{orbit_id}.parquet"
-    )
+    observations_file = paths["sorcha_dir"] / f"observations_{orbit_id}.parquet"
+    observations = Observations.from_parquet(observations_file)
     if len(observations) == 0:
         return (
             ImpactorResultSummary.from_kwargs(
@@ -356,8 +356,9 @@ def summarize_impact_study_object_results(
     # Compute the number of singletons and tracklets in each window
     observation_cadence = compute_observation_cadence(observations)
 
-    results_timings = ResultsTiming.from_parquet(f"{orbit_dir}/timings.parquet")
-    impact_results = collect_orbit_window_results(run_dir, orbit_id)
+    results_timings_file = orbit_dir / "timings.parquet"
+    results_timings = ResultsTiming.from_parquet(results_timings_file)
+    impact_results = collect_orbit_window_results(run_dir_path, orbit_id)
 
     complete = pc.all(pc.equal(impact_results.status, "complete")).as_py()
 
@@ -465,8 +466,8 @@ summarize_impact_study_object_results_remote = ray.remote(
 
 
 def summarize_impact_study_results(
-    run_dir: str,
-    out_dir: str,
+    run_dir: Union[str, pathlib.Path],
+    out_dir: Union[str, pathlib.Path],
     summary_plots: bool = True,
     per_object_plots: bool = False,
     max_processes: Optional[int] = 1,
@@ -475,6 +476,8 @@ def summarize_impact_study_results(
     Summarize the impact study results.
     """
     assert run_dir != out_dir, "run_dir and out_dir must be different"
+    run_dir_path = pathlib.Path(run_dir).absolute()
+    out_dir_path = pathlib.Path(out_dir).absolute()
 
     if max_processes is None:
         max_processes = mp.cpu_count()
@@ -483,7 +486,7 @@ def summarize_impact_study_results(
         initialize_use_ray()
 
     orbit_ids = [
-        os.path.basename(dir) for dir in glob.glob(f"{run_dir}/*") if os.path.isdir(dir)
+        pathlib.Path(dir).name for dir in run_dir_path.glob("*") if dir.is_dir()
     ]
     results = ImpactorResultSummary.empty()
     window_results = WindowResult.empty()
@@ -492,11 +495,13 @@ def summarize_impact_study_results(
 
         if max_processes > 1:
             futures.append(
-                summarize_impact_study_object_results_remote.remote(run_dir, orbit_id)
+                summarize_impact_study_object_results_remote.remote(
+                    run_dir_path, orbit_id
+                )
             )
         else:
             try:
-                result = summarize_impact_study_object_results(run_dir, orbit_id)
+                result = summarize_impact_study_object_results(run_dir_path, orbit_id)
 
                 results = qv.concatenate([results, result[0]])
                 window_results = qv.concatenate([window_results, result[1]])
@@ -525,10 +530,10 @@ def summarize_impact_study_results(
         except Exception as e:
             logger.error(f"Error summarizing impact study results for {orbit_id}: {e}")
 
-    os.makedirs(out_dir, exist_ok=True)
-    results.to_parquet(os.path.join(out_dir, "impactor_results_summary.parquet"))
-    window_results.to_parquet(os.path.join(out_dir, "window_results.parquet"))
-    logger.info(f"Saved impact study results to {out_dir}")
+    out_dir_path.mkdir(parents=True, exist_ok=True)
+    results.to_parquet(out_dir_path / "impactor_results_summary.parquet")
+    window_results.to_parquet(out_dir_path / "window_results.parquet")
+    logger.info(f"Saved impact study results to {out_dir_path}")
 
     # Filter to only include completed orbits
     completed_results = results.apply_mask(results.complete())
@@ -540,12 +545,12 @@ def summarize_impact_study_results(
         make_analysis_plots(completed_results, out_dir)
 
     if per_object_plots:
-        os.makedirs(os.path.join(out_dir, "ip_over_time"), exist_ok=True)
+        out_dir_path.mkdir(parents=True, exist_ok=True)
         plot_all_ip_over_time(
             completed_results.orbit,
             window_results,
-            run_dir,
-            out_dir=os.path.join(out_dir, "ip_over_time"),
+            run_dir_path,
+            out_dir=out_dir_path / "ip_over_time",
         )
 
     return results, window_results

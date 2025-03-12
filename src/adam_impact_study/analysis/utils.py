@@ -1,6 +1,7 @@
-import glob
 import logging
 import os
+import pathlib
+from typing import Union
 
 import pyarrow as pa
 import pyarrow.parquet as pq
@@ -13,7 +14,9 @@ from adam_impact_study.utils import get_study_paths
 logger = logging.getLogger(__name__)
 
 
-def collect_orbit_window_results(run_dir: str, orbit_id: str) -> WindowResult:
+def collect_orbit_window_results(
+    run_dir: Union[str, pathlib.Path], orbit_id: str
+) -> WindowResult:
     """Collect window results for a single orbit.
 
     Parameters
@@ -28,10 +31,11 @@ def collect_orbit_window_results(run_dir: str, orbit_id: str) -> WindowResult:
     WindowResult
         Combined window results for the orbit
     """
-    paths = get_study_paths(run_dir, orbit_id)
+    run_dir_path = pathlib.Path(run_dir).absolute()
+    paths = get_study_paths(run_dir_path, orbit_id)
     orbit_dir = paths["orbit_base_dir"]
     window_results = WindowResult.empty()
-    window_dirs = sorted(glob.glob(f"{orbit_dir}/windows/*"))
+    window_dirs = sorted(orbit_dir.glob("windows/*"))
     if len(window_dirs) == 0:
         return WindowResult.empty()
     for window_dir in window_dirs:
@@ -70,7 +74,7 @@ def collect_orbit_window_results(run_dir: str, orbit_id: str) -> WindowResult:
     return window_results
 
 
-def collect_all_window_results(run_dir: str) -> WindowResult:
+def collect_all_window_results(run_dir: Union[str, pathlib.Path]) -> WindowResult:
     """Collect all window results from a run directory.
 
     Parameters
@@ -83,23 +87,23 @@ def collect_all_window_results(run_dir: str) -> WindowResult:
     WindowResult
         Combined window results for all orbits
     """
+    run_dir_path = pathlib.Path(run_dir).absolute()
+
     # Initialize empty results
     window_results = []
 
     # Get all window result files directly
-    window_files = glob.glob(f"{run_dir}/*/windows/*/window_result.parquet")
+    orbit_dirs = run_dir_path.glob("*")
 
-    if not window_files:
-        logger.warning(f"No window results found in {run_dir}")
+    if not orbit_dirs:
+        logger.warning(f"No orbit directories found in {run_dir_path}")
         return WindowResult.empty()
 
-    # Single pass concatenation
-    for f in window_files:
-        try:
-            window_results.append(WindowResult.from_parquet(f))
-        except Exception as e:
-            logger.warning(f"Failed to load {f}: {e}")
-
-    window_results = qv.concatenate(window_results)
+    window_results = WindowResult.empty()
+    for orbit_dir in orbit_dirs:
+        window_results_orbit = collect_orbit_window_results(
+            run_dir_path, orbit_dir.name
+        )
+        window_results = qv.concatenate([window_results, window_results_orbit])
 
     return window_results
