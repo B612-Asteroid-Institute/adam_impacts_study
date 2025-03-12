@@ -1,8 +1,9 @@
 import logging
 import os
+import pathlib
 import shutil
 import time
-from typing import Iterator, Optional, Tuple, Type
+from typing import Iterator, Optional, Tuple, Type, Union
 
 import pyarrow as pa
 import pyarrow.compute as pc
@@ -47,8 +48,8 @@ EARTH_RADIUS_KM = c.R_EARTH_EQUATORIAL * KM_P_AU
 
 def run_impact_study_all(
     impactor_orbits: ImpactorOrbits,
-    pointing_file: str,
-    run_dir: str,
+    pointing_file: Union[str, pathlib.Path],
+    run_dir: Union[str, pathlib.Path],
     monte_carlo_samples: int,
     assist_epsilon: float,
     assist_min_dt: float,
@@ -68,7 +69,7 @@ def run_impact_study_all(
         Orbits of the impactors to study
     pointing_file : str
         Path to the file containing pointing data for Sorcha.
-    run_dir : str
+    run_dir : Union[str, pathlib.Path]
         Directory for this specific study run
     max_processes : int, optional
         Maximum number of processes to use for impact calculation (default: 1)
@@ -85,6 +86,9 @@ def run_impact_study_all(
     # Test that the build fo script has been run
     check_build_exists()
 
+    run_dir_path = pathlib.Path(run_dir).absolute()
+    pointing_file_path = pathlib.Path(pointing_file).absolute()
+
     class ImpactASSISTPropagator(ASSISTPropagator):
         def __init__(self, *args, **kwargs):
             super().__init__(*args, **kwargs)
@@ -95,10 +99,10 @@ def run_impact_study_all(
 
     # If the run directory already exists, throw an exception
     # unless the user has specified the overwrite flag
-    if os.path.exists(run_dir):
+    if run_dir_path.exists():
         if overwrite:
             logger.warning(f"Overwriting run directory {run_dir}")
-            shutil.rmtree(run_dir)
+            shutil.rmtree(run_dir_path)
         else:
             logger.warning(
                 f"Run directory {run_dir} already exists, attempting to continue previous run..."
@@ -115,7 +119,7 @@ def run_impact_study_all(
             stopping_condition=[True],
         )
 
-    os.makedirs(run_dir, exist_ok=True)
+    run_dir_path.mkdir(parents=True, exist_ok=True)
 
     # Initialize ray cluster
     use_ray = initialize_use_ray(num_cpus=max_processes)
@@ -142,8 +146,8 @@ def run_impact_study_all(
             impact_result, results_timing = run_impact_study_for_orbit(
                 impactor_orbit,
                 ImpactASSISTPropagator,
-                pointing_file,
-                run_dir,
+                pointing_file_path,
+                run_dir_path,
                 monte_carlo_samples,
                 assist_epsilon,
                 assist_min_dt,
@@ -164,8 +168,8 @@ def run_impact_study_all(
                 run_impact_study_for_orbit_remote.remote(
                     impactor_orbit,
                     ImpactASSISTPropagator,
-                    pointing_file,
-                    run_dir,
+                    pointing_file_path,
+                    run_dir_path,
                     monte_carlo_samples,
                     assist_epsilon,
                     assist_min_dt,
@@ -215,8 +219,8 @@ def get_observation_windows(
 def run_impact_study_for_orbit(
     impactor_orbit: ImpactorOrbits,
     propagator_class: Type[ASSISTPropagator],
-    pointing_file: str,
-    run_dir: str,
+    pointing_file: Union[str, pathlib.Path],
+    run_dir: Union[str, pathlib.Path],
     monte_carlo_samples: int,
     assist_epsilon: float,
     assist_min_dt: float,
@@ -263,7 +267,9 @@ def run_impact_study_for_orbit(
     assert len(impactor_orbit) == 1, "Only one object supported at a time"
     orbit_id = impactor_orbit.orbit_id[0].as_py()
 
-    paths = get_study_paths(run_dir, orbit_id)
+    run_dir_path = pathlib.Path(run_dir).absolute()
+    pointing_file_path = pathlib.Path(pointing_file).absolute()
+    paths = get_study_paths(run_dir_path, orbit_id)
 
     # Serialize the ImpactorOrbit to a file for future analysis use
     impactor_orbit_file = f"{paths['orbit_base_dir']}/impactor_orbit.parquet"
@@ -313,7 +319,7 @@ def run_impact_study_for_orbit(
             # to avoid weird edge cases where the propagation gets ejected
             # from the solar system / galaxy, etc...
             impactor_orbit.impact_time.add_days(-1),
-            pointing_file,
+            pointing_file_path,
             paths["sorcha_dir"],
             assist_epsilon=assist_epsilon,
             assist_min_dt=assist_min_dt,
@@ -368,7 +374,7 @@ def run_impact_study_for_orbit(
                 observations_window,
                 impactor_orbit,
                 propagator_class,
-                run_dir,
+                run_dir_path,
                 monte_carlo_samples,
                 conditions,
                 max_processes=max_processes,
@@ -385,7 +391,7 @@ def run_impact_study_for_orbit(
                     observations_window,
                     impactor_orbit,
                     propagator_class,
-                    run_dir,
+                    run_dir_path,
                     monte_carlo_samples,
                     conditions,
                     max_processes=max_processes,
@@ -437,7 +443,7 @@ def calculate_window_impact_probability(
     observations: Observations,
     impactor_orbit: ImpactorOrbits,
     propagator_class: Type[ASSISTPropagator],
-    run_dir: str,
+    run_dir: pathlib.Path,
     monte_carlo_samples: int,
     conditions: CollisionConditions,
     max_processes: int = 1,
@@ -504,6 +510,7 @@ def calculate_window_impact_probability(
         orbit, rejected_observations, error = run_fo_od(
             observations,
             paths["fo_dir"],
+            fo_dir_cleanup=True,
         )
         od_runtime = time.perf_counter() - od_start_time
         # Persist the window orbit with the window name for future analysis

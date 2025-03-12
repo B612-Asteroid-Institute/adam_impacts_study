@@ -1,4 +1,5 @@
 import os
+import pathlib
 from dataclasses import asdict
 
 os.environ["RAY_DEDUP_LOGS"] = "0"
@@ -75,11 +76,12 @@ def run_impact_study(
     logger.info(f"Processing {len(filtered_orbits)} orbits")
 
     # Create output directory
-    os.makedirs(run_dir, exist_ok=True)
+    run_dir_path = pathlib.Path(run_dir).absolute()
+    run_dir_path.mkdir(parents=True, exist_ok=True)
 
     # Load run configuration
     logger.info(f"Run configuration: {asdict(run_config)}")
-    run_config.to_json(os.path.join(run_dir, "run_config.json"))
+    run_config.to_json(run_dir_path / "run_config.json")
 
     # Set default collision conditions
     conditions = CollisionConditions.from_kwargs(
@@ -94,7 +96,7 @@ def run_impact_study(
     impact_study_results, results_timings = run_impact_study_all(
         filtered_orbits,
         run_config.pointing_database_file,
-        run_dir,
+        run_dir_path,
         assist_initial_dt=run_config.assist_initial_dt,
         assist_min_dt=run_config.assist_min_dt,
         assist_adaptive_mode=run_config.assist_adaptive_mode,
@@ -105,15 +107,6 @@ def run_impact_study(
         seed=run_config.seed,
         overwrite=overwrite,
     )
-
-    logger.info("Generating plots...")
-    plot_ip_over_time(
-        filtered_orbits,
-        impact_study_results,
-        run_dir,
-        survey_start=survey_start,
-    )
-    logger.info(f"Results saved to {run_dir}")
 
 
 def main():

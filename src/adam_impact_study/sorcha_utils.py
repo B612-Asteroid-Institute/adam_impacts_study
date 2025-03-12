@@ -2,8 +2,10 @@ import glob
 import logging
 import os
 import pathlib
+import shutil
 import subprocess
-from typing import Optional
+import tempfile
+from typing import Optional, Union
 
 import pandas as pd
 import pooch
@@ -27,16 +29,16 @@ logger = logging.getLogger(__name__)
 logger.setLevel(os.environ.get("ADAM_LOG_LEVEL", "INFO"))
 
 
-def remove_quotes(file_path: str) -> None:
+def remove_quotes(file_path: pathlib.Path) -> None:
     """
     Remove quotes from a file.
 
     Parameters
     ----------
-    file_path : str
+    file_path : pathlib.Path
         Path to the file to remove quotes from.
     """
-    temp_file_path = file_path + ".tmp"
+    temp_file_path = file_path.with_suffix(".tmp")
     with open(file_path, "rb") as infile, open(temp_file_path, "wb") as outfile:
         while True:
             chunk = infile.read(65536)
@@ -228,7 +230,9 @@ ar_adaptive_mode = {assist_adaptive_mode}
     return config_file
 
 
-def write_sorcha_orbits_file(orbits: Orbits, sorcha_orbits_file: str) -> None:
+def write_sorcha_orbits_file(
+    orbits: Orbits, sorcha_orbits_file: Union[str, pathlib.Path]
+) -> None:
     """
     Generate a Sorcha orbit file from a DataFrame of impactor data.
 
@@ -237,7 +241,7 @@ def write_sorcha_orbits_file(orbits: Orbits, sorcha_orbits_file: str) -> None:
     orbits : `~adam_core.orbits.orbits.Orbits`
         ADAM core Orbits object containing orbital parameters for the impactors.
 
-    sorcha_orbits_file : str
+    sorcha_orbits_file : Union[str, pathlib.Path]
         Path to the file where the Sorcha orbit data will be saved.
 
     Returns
@@ -302,7 +306,7 @@ def photometric_properties_to_sorcha_table(
 
 def write_phys_params_file(
     photometric_properties: PhotometricProperties,
-    properties_file: str,
+    properties_file: Union[str, pathlib.Path],
     filter_band: str = "r",
 ) -> None:
     """
@@ -312,7 +316,7 @@ def write_phys_params_file(
     ----------
     photometric_properties : `PhotometricProperties`
         Table containing the physical parameters of the impactors.
-    properties_file : str
+    properties_file : Union[str, pathlib.Path]
         Path to the file where the physical parameters will be saved.
     filter_band : str, optional
         Filter band to use for the photometric properties (default: "r").
@@ -336,8 +340,8 @@ def write_phys_params_file(
 def run_sorcha(
     impactor_orbit: ImpactorOrbits,
     simulation_end_date: Timestamp,
-    pointing_file: str,
-    working_dir: str,
+    pointing_file: Union[str, pathlib.Path],
+    output_dir: Union[str, pathlib.Path],
     assist_epsilon: float,
     assist_min_dt: float,
     assist_initial_dt: float,
@@ -353,10 +357,11 @@ def run_sorcha(
     simulation_end_date : `~adam_core.time.Timestamp`
         End date of the simulation. Generally this is impact_date - 1 day to avoid problems with
         propagation of hyperbolic orbits in sorcha.
-    pointing_file : str
+    pointing_file : Union[str, pathlib.Path]
         Path to the sorcha pointing database file. This will determine the start date of the simulation.
-    working_dir : str
-        Path to the working directory.
+    output_dir : Union[str, pathlib.Path]
+        Path to the output directory. To run sorcha, this function will first create a temporary directory
+        in /tmp/ and then copy the output to the output_dir.
     assist_epsilon : float
         Epsilon value for ASSIST
     assist_min_dt : float
@@ -367,10 +372,15 @@ def run_sorcha(
         Adaptive mode for ASSIST
     """
     assert len(impactor_orbit) == 1, "Currently only one object is supported"
+
+    tmp_dir = tempfile.mkdtemp()
+    tmp_dir_path = pathlib.Path(tmp_dir)
+    logger.debug(f"Temporary directory {tmp_dir} for {output_dir}")
+
     # Generate input files
-    orbits_file = os.path.join(working_dir, "orbits.csv")
-    params_file = os.path.join(working_dir, "params.csv")
-    config_file = os.path.join(working_dir, "config.ini")
+    orbits_file = tmp_dir_path / "orbits.csv"
+    params_file = tmp_dir_path / "params.csv"
+    config_file = tmp_dir_path / "config.ini"
     output_stem = "observations"
 
     write_sorcha_orbits_file(impactor_orbit.orbits(), orbits_file)
@@ -378,9 +388,6 @@ def run_sorcha(
         impactor_orbit.photometric_properties(), params_file, filter_band="r"
     )
 
-    # TODO: Investigate if we can avoid limiting the observation time span
-    # to 1 day prior to impact to avoid edge cases where the propagation
-    # in sorcha approaches singularity-like behavior
     write_config_file_timeframe(
         config_file,
         simulation_end_date,
@@ -395,7 +402,7 @@ def run_sorcha(
         f"SORCHA_SEED={seed} "
         f"sorcha run -c {config_file} -p {params_file} "
         f"--orbits {orbits_file} --pointing-db {pointing_file} "
-        f"-o {working_dir} --stem {output_stem} -f"
+        f"-o {tmp_dir} --stem {output_stem} -f"
     )
 
     logger.info(f"Running sorcha for {impactor_orbit.orbit_id[0].as_py()}")
@@ -403,8 +410,17 @@ def run_sorcha(
 
     subprocess.run(sorcha_command, shell=True)
 
+    # Unlink the symlinks from the sorcha run directory
+    for f in glob.glob(str(tmp_dir_path / "*")):
+        if os.path.islink(f):
+            os.unlink(f)
+
+    # Copy the output to the output directory
+    shutil.copytree(tmp_dir, output_dir, dirs_exist_ok=True)
+    shutil.rmtree(tmp_dir)
+
     # Process results
-    result_files = glob.glob(f"{working_dir}/{output_stem}*.csv")
+    result_files = glob.glob(str(output_dir / f"{output_stem}*.csv"))
     if not result_files:
         return Observations.empty()
 
@@ -427,10 +443,5 @@ def run_sorcha(
             observations.coordinates.origin.code, observations.coordinates.time
         ),
     )
-
-    # Remove the symlinks from the sorcha run directory
-    for f in glob.glob(os.path.join(working_dir, "*")):
-        if os.path.islink(f):
-            os.unlink(f)
 
     return observations

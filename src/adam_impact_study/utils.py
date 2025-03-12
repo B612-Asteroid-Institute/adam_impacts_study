@@ -1,5 +1,6 @@
 import hashlib
 import os
+import pathlib
 from typing import Optional
 
 
@@ -28,7 +29,7 @@ def seed_from_string(s: str, seed: Optional[int] = None) -> int:
 
 def get_study_paths(
     run_dir: str, orbit_id: str, time_range: Optional[str] = None
-) -> dict:
+) -> dict[str, pathlib.Path]:
     """Get standardized paths for impact study results.
 
     Parameters
@@ -45,26 +46,26 @@ def get_study_paths(
     dict
         Dictionary containing all relevant paths
     """
-
-    obj_dir = os.path.join(run_dir, orbit_id)
+    assert pathlib.Path(run_dir).is_absolute(), "run_dir must be an absolute path"
+    obj_dir = pathlib.Path(run_dir) / orbit_id
 
     paths = {
         "orbit_base_dir": obj_dir,
-        "sorcha_dir": os.path.join(obj_dir, "sorcha"),
+        "sorcha_dir": obj_dir / "sorcha",
     }
 
     if time_range:
-        time_dir = os.path.join(obj_dir, "windows", time_range)
+        time_dir = obj_dir / "windows" / time_range
         paths.update(
             {
                 "time_dir": time_dir,
-                "fo_dir": os.path.join(time_dir, "fo"),
+                "fo_dir": time_dir / "fo",
             }
         )
 
     # Create directories
     for path in paths.values():
-        if not path.endswith(".parquet"):
-            os.makedirs(path, exist_ok=True)
+        if not str(path).endswith(".parquet"):
+            path.mkdir(parents=True, exist_ok=True)
 
     return paths
