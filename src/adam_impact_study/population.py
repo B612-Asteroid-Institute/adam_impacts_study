@@ -45,7 +45,7 @@ class PopulationConfig(qv.Table):
             ast_class=["C"],
             albedo_min=[0.03],
             albedo_max=[0.09],
-            albedo_scale_factor=[0.029], # d in Wright's paper
+            albedo_scale_factor=[0.029],  # d in Wright's paper
             percentage=[0.233],
             u_r=[1.786],
             g_r=[0.474],
@@ -59,7 +59,7 @@ class PopulationConfig(qv.Table):
             ast_class=["S"],
             albedo_min=[0.10],
             albedo_max=[0.22],
-            albedo_scale_factor=[0.170], # b in Wright's paper
+            albedo_scale_factor=[0.170],  # b in Wright's paper
             percentage=[0.767],
             u_r=[2.182],
             g_r=[0.65],
@@ -132,9 +132,9 @@ def determine_ast_class(percent_C: float, percent_S: float, seed: int = 13612) -
         Asteroid class.
     """
     # Note: when using the bimodal distribution described in Wright et al:
-    # p(pV) = fd*(pV/d²)*exp(-pV²/2d²) + (1-fd)*(pV/b²)*exp(-pV²/2b²) 
-    # percent_C is equivalent to fd (the fraction of dark asteroids) and 
-    # percent_S is equivalent to 1 - fd. 
+    # p(pV) = fd*(pV/d²)*exp(-pV²/2d²) + (1-fd)*(pV/b²)*exp(-pV²/2b²)
+    # percent_C is equivalent to fd (the fraction of dark asteroids) and
+    # percent_S is equivalent to 1 - fd.
     assert percent_C + percent_S == 1, "Percentage of C and S asteroids must equal 1"
     rng = np.random.default_rng(seed)
     return "C" if rng.random() < percent_C else "S"
