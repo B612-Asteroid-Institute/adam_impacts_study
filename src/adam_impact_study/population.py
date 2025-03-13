@@ -97,9 +97,7 @@ def select_albedo_from_range(
 
 def select_albedo_rayleigh(scale: float, seed: int = 13612):
     """
-    Sample albedo values based on Wright's bimodal distribution formula:
-    p(pV) = fd*(pV/d²)*exp(-pV²/2d²) + (1-fd)*(pV/b²)*exp(-pV²/2b²)
-
+    Sample albedo using a Rayleigh distribution.
     Parameters
     ----------
     scale : float
@@ -133,8 +131,10 @@ def determine_ast_class(percent_C: float, percent_S: float, seed: int = 13612) -
     ast_class : str
         Asteroid class.
     """
-    # Note: when using the method in Wright et al, percent_C is equivalent to fd 
-    # (the fraction of dark asteroids). percent_S is equivalent to 1 - fd.
+    # Note: when using the bimodal distribution described in Wright et al:
+    # p(pV) = fd*(pV/d²)*exp(-pV²/2d²) + (1-fd)*(pV/b²)*exp(-pV²/2b²) 
+    # percent_C is equivalent to fd (the fraction of dark asteroids) and 
+    # percent_S is equivalent to 1 - fd. 
     assert percent_C + percent_S == 1, "Percentage of C and S asteroids must equal 1"
     rng = np.random.default_rng(seed)
     return "C" if rng.random() < percent_C else "S"
