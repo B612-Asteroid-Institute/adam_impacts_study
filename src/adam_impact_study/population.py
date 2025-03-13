@@ -18,8 +18,9 @@ logger = logging.getLogger(__name__)
 class PopulationConfig(qv.Table):
     config_id = qv.LargeStringColumn()
     ast_class = qv.LargeStringColumn()
-    albedo_min = qv.Float64Column()
-    albedo_max = qv.Float64Column()
+    albedo_min = qv.Float64Column(Nullable=True)
+    albedo_max = qv.Float64Column(Nullable=True)
+    albedo_scale_factor = qv.Float64Column(Nullable=True)
     percentage = qv.Float64Column()
     u_r = qv.Float64Column()
     g_r = qv.Float64Column()
@@ -44,7 +45,8 @@ class PopulationConfig(qv.Table):
             ast_class=["C"],
             albedo_min=[0.03],
             albedo_max=[0.09],
-            percentage=[0.5],
+            albedo_scale_factor=[0.029], # d in Wright's paper
+            percentage=[0.233],
             u_r=[1.786],
             g_r=[0.474],
             i_r=[-0.119],
@@ -57,7 +59,8 @@ class PopulationConfig(qv.Table):
             ast_class=["S"],
             albedo_min=[0.10],
             albedo_max=[0.22],
-            percentage=[0.5],
+            albedo_scale_factor=[0.170], # b in Wright's paper
+            percentage=[0.767],
             u_r=[2.182],
             g_r=[0.65],
             i_r=[-0.2],
@@ -92,6 +95,28 @@ def select_albedo_from_range(
     return rng.uniform(albedo_min, albedo_max)
 
 
+def select_albedo_rayleigh(scale: float, seed: int = 13612):
+    """
+    Sample albedo values based on Wright's bimodal distribution formula:
+    p(pV) = fd*(pV/d²)*exp(-pV²/2d²) + (1-fd)*(pV/b²)*exp(-pV²/2b²)
+
+    Parameters
+    ----------
+    scale : float
+        The scale parameter for the Rayleigh distribution.
+    seed : int, optional
+        Seed for the random number generator.
+
+    Returns
+    -------
+    albedo : float
+        The sampled albedo value.
+    """
+    rng = np.random.default_rng(seed)
+
+    return rng.rayleigh(scale=scale)
+
+
 def determine_ast_class(percent_C: float, percent_S: float, seed: int = 13612) -> str:
     """
     Determine the asteroid class based on the percentage of C and S asteroids.
@@ -108,6 +133,8 @@ def determine_ast_class(percent_C: float, percent_S: float, seed: int = 13612) -
     ast_class : str
         Asteroid class.
     """
+    # Note: when using the method in Wright et al, percent_C is equivalent to fd 
+    # (the fraction of dark asteroids). percent_S is equivalent to 1 - fd.
     assert percent_C + percent_S == 1, "Percentage of C and S asteroids must equal 1"
     rng = np.random.default_rng(seed)
     return "C" if rng.random() < percent_C else "S"
@@ -199,6 +226,7 @@ def generate_population(
     diameters: List[float] = [0.01, 0.05, 0.14, 0.25, 0.5, 1.0],
     seed: int = 0,
     variants: int = 1,
+    albedo_distribution: str = "rayleigh",
 ) -> ImpactorOrbits:
     """
     Generate a population of impactors from a set of orbits and impact dates. Each orbit is duplicated once per size bin with a
@@ -260,11 +288,17 @@ def generate_population(
                 elif ast_class == "S":
                     config = S_type
 
-                albedo = select_albedo_from_range(
-                    config.albedo_min.to_numpy()[0],
-                    config.albedo_max.to_numpy()[0],
-                    variant_seed,
-                )
+                if albedo_distribution == "rayleigh":
+                    albedo = select_albedo_rayleigh(
+                        config.albedo_scale_factor.to_numpy()[0],
+                        variant_seed,
+                    )
+                elif albedo_distribution == "uniform":
+                    albedo = select_albedo_from_range(
+                        config.albedo_min.to_numpy()[0],
+                        config.albedo_max.to_numpy()[0],
+                        variant_seed,
+                    )
 
                 # Determine the asteroid's absolute magnitude
                 H = calculate_H(diameter, albedo)
