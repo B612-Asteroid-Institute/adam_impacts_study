@@ -18,9 +18,9 @@ logger = logging.getLogger(__name__)
 class PopulationConfig(qv.Table):
     config_id = qv.LargeStringColumn()
     ast_class = qv.LargeStringColumn()
-    albedo_min = qv.Float64Column(Nullable=True)
-    albedo_max = qv.Float64Column(Nullable=True)
-    albedo_scale_factor = qv.Float64Column(Nullable=True)
+    albedo_min = qv.Float64Column(nullable=True)
+    albedo_max = qv.Float64Column(nullable=True)
+    albedo_scale_factor = qv.Float64Column(nullable=True)
     percentage = qv.Float64Column()
     u_r = qv.Float64Column()
     g_r = qv.Float64Column()
@@ -188,7 +188,7 @@ def load_config(file_path: str, run_id: str = None) -> PopulationConfig:
         albedo_min=[config_data.get("S_albedo_min", 0.10)],
         albedo_max=[config_data.get("S_albedo_max", 0.22)],
         albedo_distribution=["uniform"],
-        percentage=[config_data.get("percent_S", 0.5)],
+        percentage=[config_data.get("percent_S", 0.767)],
         min_diam=[config_data.get("min_diam", 0.01)],
         max_diam=[config_data.get("max_diam", 1)],
         u_r=[config_data.get("u_r_S", 2.182)],
@@ -204,7 +204,7 @@ def load_config(file_path: str, run_id: str = None) -> PopulationConfig:
         albedo_min=[config_data.get("C_albedo_min", 0.03)],
         albedo_max=[config_data.get("C_albedo_max", 0.09)],
         albedo_distribution=["uniform"],
-        percentage=[config_data.get("percent_C", 0.5)],
+        percentage=[config_data.get("percent_C", 0.233)],
         min_diam=[config_data.get("min_diam", 0.01)],
         max_diam=[config_data.get("max_diam", 1)],
         u_r=[config_data.get("u_r_C", 1.786)],
