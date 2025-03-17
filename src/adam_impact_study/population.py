@@ -72,7 +72,7 @@ class PopulationConfig(qv.Table):
 
 
 def select_albedo_from_range(
-    albedo_min: float, albedo_max: float, seed: int = 13612
+    albedo_min: float, albedo_max: float, rng: np.random.Generator = None
 ) -> float:
     """
     Select an albedo from a range.
@@ -91,11 +91,11 @@ def select_albedo_from_range(
     albedo : float
         Albedo value.
     """
-    rng = np.random.default_rng(seed)
+    if rng is None:
+        rng = np.random.default_rng()
     return rng.uniform(albedo_min, albedo_max)
 
-
-def select_albedo_rayleigh(scale: float, seed: int = 13612):
+def select_albedo_rayleigh(scale: float, rng: np.random.Generator = None):
     """
     Sample albedo using a Rayleigh distribution.
     Parameters
@@ -110,12 +110,12 @@ def select_albedo_rayleigh(scale: float, seed: int = 13612):
     albedo : float
         The sampled albedo value.
     """
-    rng = np.random.default_rng(seed)
-
+    if rng is None:
+        rng = np.random.default_rng()
     return rng.rayleigh(scale=scale)
 
 
-def determine_ast_class(percent_C: float, percent_S: float, seed: int = 13612) -> str:
+def determine_ast_class(percent_C: float, percent_S: float, rng: np.random.Generator = None) -> str:
     """
     Determine the asteroid class based on the percentage of C and S asteroids.
 
@@ -136,9 +136,9 @@ def determine_ast_class(percent_C: float, percent_S: float, seed: int = 13612) -
     # percent_C is equivalent to fd (the fraction of dark asteroids) and
     # percent_S is equivalent to 1 - fd.
     assert percent_C + percent_S == 1, "Percentage of C and S asteroids must equal 1"
-    rng = np.random.default_rng(seed)
+    if rng is None:
+        rng = np.random.default_rng()
     return "C" if rng.random() < percent_C else "S"
-
 
 def calculate_H(diameter: float, albedo: float) -> float:
     """
@@ -276,11 +276,14 @@ def generate_population(
                 # Generate a random seed based on on object id
                 variant_seed = seed_from_string(variant_id, seed)
 
+                # Initialize the random number generator from the variant seed
+                rng = np.random.default_rng(variant_seed)
+
                 # Determine the asteroid's taxonomic type
                 ast_class = determine_ast_class(
                     C_type.percentage[0].as_py(),
                     S_type.percentage[0].as_py(),
-                    variant_seed,
+                    rng,
                 )
 
                 if ast_class == "C":
@@ -291,13 +294,13 @@ def generate_population(
                 if albedo_distribution == "rayleigh":
                     albedo = select_albedo_rayleigh(
                         config.albedo_scale_factor.to_numpy()[0],
-                        variant_seed,
+                        rng,
                     )
                 elif albedo_distribution == "uniform":
                     albedo = select_albedo_from_range(
                         config.albedo_min.to_numpy()[0],
                         config.albedo_max.to_numpy()[0],
-                        variant_seed,
+                        rng,
                     )
 
                 # Determine the asteroid's absolute magnitude
