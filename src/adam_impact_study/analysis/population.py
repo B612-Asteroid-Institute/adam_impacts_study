@@ -184,8 +184,6 @@ def plot_orbital_element_recovery_statistics(
 
     # Add single colorbar at the bottom
     cbar_ax = fig.add_axes([0.15, 0.12, 0.7, 0.04])  # Adjusted position slightly higher
-    fig.colorbar(
-        sc1, cax=cbar_ax, orientation="horizontal", label="Recovery Rate"
-    )
+    fig.colorbar(sc1, cax=cbar_ax, orientation="horizontal", label="Recovery Rate")
 
     plt.show()
