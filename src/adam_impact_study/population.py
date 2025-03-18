@@ -7,8 +7,13 @@ import numpy as np
 import quivr as qv
 from adam_core.orbits import Orbits
 from adam_core.time import Timestamp
-
-from .types import ImpactorOrbits
+import numpy.typing as npt
+import ray
+import multiprocessing as mp
+from typing import Optional, Union
+from adam_core.utils.iter import _iterate_chunks
+from adam_core.ray_cluster import initialize_use_ray
+from adam_impact_study.types import ImpactorOrbits
 from .utils import seed_from_string
 
 logging.basicConfig(level=logging.INFO)
@@ -219,61 +224,57 @@ def load_config(file_path: str, run_id: str = None) -> PopulationConfig:
     return config
 
 
-def generate_population(
+def population_worker(
+    orbit_indices: npt.NDArray[np.int64],
     orbits: Orbits,
     impact_dates: Timestamp,
     population_config: PopulationConfig,
-    diameters: List[float] = [0.01, 0.05, 0.14, 0.25, 0.5, 1.0],
-    seed: int = 0,
-    variants: int = 1,
-    albedo_distribution: str = "rayleigh",
+    diameters: List[float],
+    seed: int,
+    variants: int,
+    albedo_distribution: str,
 ) -> ImpactorOrbits:
-    """
-    Generate a population of impactors from a set of orbits and impact dates. Each orbit is duplicated once per size bin with a
-    a random diameter assigned between the size bin's minimum and maximum. Optionally, generate multiple variants of each orbit with
-    different physical parameters within the size bin.
-
+    """Worker function to generate population for a chunk of orbits. 
+    Each orbit is duplicated once per size bin with a random diameter 
+    assigned between the size bin's minimum and maximum. Optionally, 
+    generate multiple variants of each orbit with different physical 
+    parameters within the size bin.
+    
     Parameters
     ----------
+    orbit_indices : npt.NDArray[np.int64]
+        Indices of the orbits to process.
     orbits : Orbits
-        The orbits to generate the population from.
+        Orbits to process.
     impact_dates : Timestamp
-        The impact dates to generate the population for.
+        Impact dates to process.
     population_config : PopulationConfig
-        The population configuration to use.
-    diameter_bins : List[float], optional
-        The diameter bins (in km) to use for the population generation.
-    seed : int, optional
-        The seed to use for the population generation.
-    variants : int, optional
-        The number of variants to generate for each orbit.
+        Population configuration.
+    diameters : List[float]
+        Diameters to process.
+    seed : int
+        Seed for the random number generator.
+    variants : int
+        Number of variants to process.
+    albedo_distribution : str
+        Albedo distribution to use.
 
     Returns
     -------
-    ImpactorOrbits
-        The generated population of impactors.
+    impactor_orbits : ImpactorOrbits
+        Impactor orbits.
     """
-    # TODO: Add support for more than just C and S-type asteroids
-    S_type = population_config.select("ast_class", "S")
-    C_type = population_config.select("ast_class", "C")
-
-    if len(diameters) < 2:
-        raise ValueError("At least two diameter bins must be provided")
-
-    if len(diameters) > 999:
-        raise ValueError("Too many diameter bins requested")
-
-    if variants > 999999:
-        raise ValueError("Too many variants requested")
-
+    orbits_chunk = orbits.take(orbit_indices)
+    impact_dates_chunk = impact_dates.take(orbit_indices)
+    
     impactor_orbits = ImpactorOrbits.empty()
-    for orbit, impact_date in zip(orbits, impact_dates):
+    for orbit, impact_date in zip(orbits_chunk, impact_dates_chunk):
         for i, diameter in enumerate(diameters):
             for variant in range(variants):
                 # Create a unique identifier for the variant
                 variant_id = f"{orbit.orbit_id[0].as_py()}_b{i:03d}_v{variant:06d}"
 
-                # Generate a random seed based on on object id
+                # Generate a random seed based on object id
                 variant_seed = seed_from_string(variant_id, seed)
 
                 # Initialize the random number generator from the variant seed
@@ -281,15 +282,15 @@ def generate_population(
 
                 # Determine the asteroid's taxonomic type
                 ast_class = determine_ast_class(
-                    C_type.percentage[0].as_py(),
-                    S_type.percentage[0].as_py(),
+                    population_config.select("ast_class", "C").percentage[0].as_py(),
+                    population_config.select("ast_class", "S").percentage[0].as_py(),
                     rng,
                 )
 
                 if ast_class == "C":
-                    config = C_type
+                    config = population_config.select("ast_class", "C")
                 elif ast_class == "S":
-                    config = S_type
+                    config = population_config.select("ast_class", "S")
 
                 if albedo_distribution == "rayleigh":
                     albedo = select_albedo_rayleigh(
@@ -330,3 +331,86 @@ def generate_population(
                     impactor_orbits = qv.defragment(impactor_orbits)
 
     return impactor_orbits
+
+# Create remote version of worker
+population_worker_remote = ray.remote(population_worker)
+
+def generate_population(
+    orbits: Union[Orbits, ray.ObjectRef],
+    impact_dates: Union[Timestamp, ray.ObjectRef],
+    population_config: PopulationConfig,
+    diameters: List[float] = [0.01, 0.05, 0.14, 0.25, 0.5, 1.0],
+    seed: int = 0,
+    variants: int = 1,
+    albedo_distribution: str = "rayleigh",
+    chunk_size: int = 100,
+    max_processes: Optional[int] = 1,
+) -> ImpactorOrbits:
+    """
+    Generate a population of impactors from a set of orbits and impact dates.
+    
+    Parameters
+    ----------
+    [previous parameters...]
+    chunk_size : int, optional
+        Number of orbits to process in each chunk.
+    max_processes : int, optional
+        Maximum number of processes to use. If None, uses all available CPUs.
+    """
+    if max_processes is None:
+        max_processes = mp.cpu_count()
+
+    use_ray = initialize_use_ray(num_cpus=max_processes)
+    
+    if not use_ray:
+        return population_worker(
+            np.arange(len(orbits)),
+            orbits,
+            impact_dates,
+            population_config,
+            diameters,
+            seed,
+            variants,
+            albedo_distribution,
+        )
+
+    if isinstance(orbits, ray.ObjectRef):
+        orbits_ref = orbits
+        orbits = ray.get(orbits)
+    else:
+        orbits_ref = ray.put(orbits)
+
+    if isinstance(impact_dates, ray.ObjectRef):
+        impact_dates_ref = impact_dates
+        impact_dates = ray.get(impact_dates)
+    else:
+        impact_dates_ref = ray.put(impact_dates)
+
+    population_config_ref = ray.put(population_config)
+    
+    futures = []
+    idx = np.arange(len(orbits))
+    for idx_chunk in _iterate_chunks(idx, chunk_size):
+        futures.append(
+            population_worker_remote.remote(
+                idx_chunk,
+                orbits_ref,
+                impact_dates_ref,
+                population_config_ref,
+                diameters,
+                seed,
+                variants,
+                albedo_distribution,
+            )
+        )
+
+    impactor_orbits = ImpactorOrbits.empty()
+    while futures:
+        finished, futures = ray.wait(futures, num_returns=1)
+        result = ray.get(finished[0])
+        impactor_orbits = qv.concatenate([impactor_orbits, result])
+        if impactor_orbits.fragmented():
+            impactor_orbits = qv.defragment(impactor_orbits)
+
+    return impactor_orbits
+
