@@ -142,7 +142,7 @@ def plot_orbital_element_recovery_statistics(
     )
 
     a_samples = np.linspace(0.49, a_max, 100)
-    e_samples = np.linspace(
+    np.linspace(
         np.min(grouped_by_a_e.column("e_bin_min").to_numpy()),
         np.max(grouped_by_a_e.column("e_bin_max").to_numpy()),
         100,
@@ -171,7 +171,7 @@ def plot_orbital_element_recovery_statistics(
     ax1.set_xlim(a_min, a_max)
     ax1.plot(a_samples, perihelion_line_neo, "k--")
 
-    sc2 = ax2.scatter(
+    ax2.scatter(
         a_i_recovery_rates["a_bin_min"],
         a_i_recovery_rates["i_bin_min"],
         c=a_i_recovery_rates["recovered_sum"] / a_i_recovery_rates["total_sum"],
@@ -184,7 +184,7 @@ def plot_orbital_element_recovery_statistics(
 
     # Add single colorbar at the bottom
     cbar_ax = fig.add_axes([0.15, 0.12, 0.7, 0.04])  # Adjusted position slightly higher
-    cbar = fig.colorbar(
+    fig.colorbar(
         sc1, cax=cbar_ax, orientation="horizontal", label="Recovery Rate"
     )
 
