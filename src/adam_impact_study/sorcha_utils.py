@@ -38,7 +38,7 @@ def remove_quotes(file_path: pathlib.Path) -> None:
     file_path : pathlib.Path
         Path to the file to remove quotes from.
     """
-    temp_file_path = file_path.with_suffix(".tmp")
+    temp_file_path = pathlib.Path(file_path).with_suffix(".tmp")
     with open(file_path, "rb") as infile, open(temp_file_path, "wb") as outfile:
         while True:
             chunk = infile.read(65536)
@@ -373,6 +373,8 @@ def run_sorcha(
     """
     assert len(impactor_orbit) == 1, "Currently only one object is supported"
 
+    output_dir_path = pathlib.Path(output_dir)
+    output_dir_path.mkdir(parents=True, exist_ok=True)
     tmp_dir = tempfile.mkdtemp()
     tmp_dir_path = pathlib.Path(tmp_dir)
     logger.debug(f"Temporary directory {tmp_dir} for {output_dir}")
@@ -416,11 +418,11 @@ def run_sorcha(
             os.unlink(f)
 
     # Copy the output to the output directory
-    shutil.copytree(tmp_dir, output_dir, dirs_exist_ok=True)
+    shutil.copytree(tmp_dir, output_dir_path, dirs_exist_ok=True)
     shutil.rmtree(tmp_dir)
 
     # Process results
-    result_files = glob.glob(str(output_dir / f"{output_stem}*.csv"))
+    result_files = glob.glob(str(output_dir_path / f"{output_stem}*.csv"))
     if not result_files:
         return Observations.empty()
 

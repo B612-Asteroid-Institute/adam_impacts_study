@@ -6,10 +6,8 @@ import matplotlib.pyplot as plt
 import numpy as np
 import pyarrow as pa
 import pyarrow.compute as pc
-from adam_core.dynamics.impacts import CollisionConditions
 from adam_core.time import Timestamp
 
-from adam_impact_study.analysis.utils import collect_all_window_results
 from adam_impact_study.types import ImpactorOrbits, ImpactorResultSummary, WindowResult
 from adam_impact_study.utils import get_study_paths
 

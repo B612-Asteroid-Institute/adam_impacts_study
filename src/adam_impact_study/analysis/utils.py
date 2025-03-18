@@ -56,7 +56,7 @@ def collect_orbit_window_results(
             try:
                 window_result = WindowResult.from_parquet(window_result_file)
 
-            except ValueError as e:
+            except ValueError:
                 window_result_table = pq.read_table(window_result_file)
                 if "condition_id" not in window_result_table.columns:
                     window_result_table = window_result_table.add_column(

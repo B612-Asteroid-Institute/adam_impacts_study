@@ -1,14 +1,20 @@
 import json
 import logging
+import multiprocessing as mp
 import os
-from typing import List
+from typing import List, Optional, Union
 
 import numpy as np
+import numpy.typing as npt
 import quivr as qv
+import ray
 from adam_core.orbits import Orbits
+from adam_core.ray_cluster import initialize_use_ray
 from adam_core.time import Timestamp
+from adam_core.utils.iter import _iterate_chunks
 
-from .types import ImpactorOrbits
+from adam_impact_study.types import ImpactorOrbits
+
 from .utils import seed_from_string
 
 logging.basicConfig(level=logging.INFO)
@@ -18,8 +24,9 @@ logger = logging.getLogger(__name__)
 class PopulationConfig(qv.Table):
     config_id = qv.LargeStringColumn()
     ast_class = qv.LargeStringColumn()
-    albedo_min = qv.Float64Column()
-    albedo_max = qv.Float64Column()
+    albedo_min = qv.Float64Column(nullable=True)
+    albedo_max = qv.Float64Column(nullable=True)
+    albedo_scale_factor = qv.Float64Column(nullable=True)
     percentage = qv.Float64Column()
     u_r = qv.Float64Column()
     g_r = qv.Float64Column()
@@ -44,7 +51,8 @@ class PopulationConfig(qv.Table):
             ast_class=["C"],
             albedo_min=[0.03],
             albedo_max=[0.09],
-            percentage=[0.5],
+            albedo_scale_factor=[0.029],  # d in Wright's paper
+            percentage=[0.233],
             u_r=[1.786],
             g_r=[0.474],
             i_r=[-0.119],
@@ -57,7 +65,8 @@ class PopulationConfig(qv.Table):
             ast_class=["S"],
             albedo_min=[0.10],
             albedo_max=[0.22],
-            percentage=[0.5],
+            albedo_scale_factor=[0.170],  # b in Wright's paper
+            percentage=[0.767],
             u_r=[2.182],
             g_r=[0.65],
             i_r=[-0.2],
@@ -69,7 +78,7 @@ class PopulationConfig(qv.Table):
 
 
 def select_albedo_from_range(
-    albedo_min: float, albedo_max: float, seed: int = 13612
+    albedo_min: float, albedo_max: float, rng: np.random.Generator = None
 ) -> float:
     """
     Select an albedo from a range.
@@ -88,11 +97,34 @@ def select_albedo_from_range(
     albedo : float
         Albedo value.
     """
-    rng = np.random.default_rng(seed)
+    if rng is None:
+        rng = np.random.default_rng()
     return rng.uniform(albedo_min, albedo_max)
 
 
-def determine_ast_class(percent_C: float, percent_S: float, seed: int = 13612) -> str:
+def select_albedo_rayleigh(scale: float, rng: np.random.Generator = None):
+    """
+    Sample albedo using a Rayleigh distribution.
+    Parameters
+    ----------
+    scale : float
+        The scale parameter for the Rayleigh distribution.
+    seed : int, optional
+        Seed for the random number generator.
+
+    Returns
+    -------
+    albedo : float
+        The sampled albedo value.
+    """
+    if rng is None:
+        rng = np.random.default_rng()
+    return rng.rayleigh(scale=scale)
+
+
+def determine_ast_class(
+    percent_C: float, percent_S: float, rng: np.random.Generator = None
+) -> str:
     """
     Determine the asteroid class based on the percentage of C and S asteroids.
 
@@ -108,8 +140,13 @@ def determine_ast_class(percent_C: float, percent_S: float, seed: int = 13612) -
     ast_class : str
         Asteroid class.
     """
+    # Note: when using the bimodal distribution described in Wright et al:
+    # p(pV) = fd*(pV/d²)*exp(-pV²/2d²) + (1-fd)*(pV/b²)*exp(-pV²/2b²)
+    # percent_C is equivalent to fd (the fraction of dark asteroids) and
+    # percent_S is equivalent to 1 - fd.
     assert percent_C + percent_S == 1, "Percentage of C and S asteroids must equal 1"
-    rng = np.random.default_rng(seed)
+    if rng is None:
+        rng = np.random.default_rng()
     return "C" if rng.random() < percent_C else "S"
 
 
@@ -161,7 +198,7 @@ def load_config(file_path: str, run_id: str = None) -> PopulationConfig:
         albedo_min=[config_data.get("S_albedo_min", 0.10)],
         albedo_max=[config_data.get("S_albedo_max", 0.22)],
         albedo_distribution=["uniform"],
-        percentage=[config_data.get("percent_S", 0.5)],
+        percentage=[config_data.get("percent_S", 0.767)],
         min_diam=[config_data.get("min_diam", 0.01)],
         max_diam=[config_data.get("max_diam", 1)],
         u_r=[config_data.get("u_r_S", 2.182)],
@@ -177,7 +214,7 @@ def load_config(file_path: str, run_id: str = None) -> PopulationConfig:
         albedo_min=[config_data.get("C_albedo_min", 0.03)],
         albedo_max=[config_data.get("C_albedo_max", 0.09)],
         albedo_distribution=["uniform"],
-        percentage=[config_data.get("percent_C", 0.5)],
+        percentage=[config_data.get("percent_C", 0.233)],
         min_diam=[config_data.get("min_diam", 0.01)],
         max_diam=[config_data.get("max_diam", 1)],
         u_r=[config_data.get("u_r_C", 1.786)],
@@ -192,79 +229,85 @@ def load_config(file_path: str, run_id: str = None) -> PopulationConfig:
     return config
 
 
-def generate_population(
+def population_worker(
+    orbit_indices: npt.NDArray[np.int64],
     orbits: Orbits,
     impact_dates: Timestamp,
     population_config: PopulationConfig,
-    diameters: List[float] = [0.01, 0.05, 0.14, 0.25, 0.5, 1.0],
-    seed: int = 0,
-    variants: int = 1,
+    diameters: List[float],
+    seed: int,
+    variants: int,
+    albedo_distribution: str,
 ) -> ImpactorOrbits:
-    """
-    Generate a population of impactors from a set of orbits and impact dates. Each orbit is duplicated once per size bin with a
-    a random diameter assigned between the size bin's minimum and maximum. Optionally, generate multiple variants of each orbit with
-    different physical parameters within the size bin.
+    """Worker function to generate population for a chunk of orbits.
+    Each orbit is duplicated once per size bin with a random diameter
+    assigned between the size bin's minimum and maximum. Optionally,
+    generate multiple variants of each orbit with different physical
+    parameters within the size bin.
 
     Parameters
     ----------
+    orbit_indices : npt.NDArray[np.int64]
+        Indices of the orbits to process.
     orbits : Orbits
-        The orbits to generate the population from.
+        Orbits to process.
     impact_dates : Timestamp
-        The impact dates to generate the population for.
+        Impact dates to process.
     population_config : PopulationConfig
-        The population configuration to use.
-    diameter_bins : List[float], optional
-        The diameter bins (in km) to use for the population generation.
-    seed : int, optional
-        The seed to use for the population generation.
-    variants : int, optional
-        The number of variants to generate for each orbit.
+        Population configuration.
+    diameters : List[float]
+        Diameters to process.
+    seed : int
+        Seed for the random number generator.
+    variants : int
+        Number of variants to process.
+    albedo_distribution : str
+        Albedo distribution to use.
 
     Returns
     -------
-    ImpactorOrbits
-        The generated population of impactors.
+    impactor_orbits : ImpactorOrbits
+        Impactor orbits.
     """
-    # TODO: Add support for more than just C and S-type asteroids
-    S_type = population_config.select("ast_class", "S")
-    C_type = population_config.select("ast_class", "C")
-
-    if len(diameters) < 2:
-        raise ValueError("At least two diameter bins must be provided")
-
-    if len(diameters) > 999:
-        raise ValueError("Too many diameter bins requested")
-
-    if variants > 999999:
-        raise ValueError("Too many variants requested")
+    orbits_chunk = orbits.take(orbit_indices)
+    impact_dates_chunk = impact_dates.take(orbit_indices)
 
     impactor_orbits = ImpactorOrbits.empty()
-    for orbit, impact_date in zip(orbits, impact_dates):
+    for orbit, impact_date in zip(orbits_chunk, impact_dates_chunk):
         for i, diameter in enumerate(diameters):
             for variant in range(variants):
                 # Create a unique identifier for the variant
                 variant_id = f"{orbit.orbit_id[0].as_py()}_b{i:03d}_v{variant:06d}"
 
-                # Generate a random seed based on on object id
+                # Generate a random seed based on object id
                 variant_seed = seed_from_string(variant_id, seed)
+
+                # Initialize the random number generator from the variant seed
+                rng = np.random.default_rng(variant_seed)
 
                 # Determine the asteroid's taxonomic type
                 ast_class = determine_ast_class(
-                    C_type.percentage[0].as_py(),
-                    S_type.percentage[0].as_py(),
-                    variant_seed,
+                    population_config.select("ast_class", "C").percentage[0].as_py(),
+                    population_config.select("ast_class", "S").percentage[0].as_py(),
+                    rng,
                 )
 
                 if ast_class == "C":
-                    config = C_type
+                    config = population_config.select("ast_class", "C")
                 elif ast_class == "S":
-                    config = S_type
+                    config = population_config.select("ast_class", "S")
 
-                albedo = select_albedo_from_range(
-                    config.albedo_min.to_numpy()[0],
-                    config.albedo_max.to_numpy()[0],
-                    variant_seed,
-                )
+                if albedo_distribution == "rayleigh":
+                    albedo = select_albedo_rayleigh(
+                        config.albedo_scale_factor.to_numpy()[0],
+                        rng,
+                    )
+                elif albedo_distribution == "uniform":
+                    albedo = select_albedo_from_range(
+                        config.albedo_min.to_numpy()[0],
+                        config.albedo_max.to_numpy()[0],
+                        rng,
+                    )
 
                 # Determine the asteroid's absolute magnitude
                 H = calculate_H(diameter, albedo)
@@ -291,5 +334,89 @@ def generate_population(
                 impactor_orbits = qv.concatenate([impactor_orbits, impactor_orbit])
                 if impactor_orbits.fragmented():
                     impactor_orbits = qv.defragment(impactor_orbits)
+
+    return impactor_orbits
+
+
+# Create remote version of worker
+population_worker_remote = ray.remote(population_worker)
+
+
+def generate_population(
+    orbits: Union[Orbits, ray.ObjectRef],
+    impact_dates: Union[Timestamp, ray.ObjectRef],
+    population_config: PopulationConfig,
+    diameters: List[float] = [0.01, 0.05, 0.14, 0.25, 0.5, 1.0],
+    seed: int = 0,
+    variants: int = 1,
+    albedo_distribution: str = "rayleigh",
+    chunk_size: int = 100,
+    max_processes: Optional[int] = 1,
+) -> ImpactorOrbits:
+    """
+    Generate a population of impactors from a set of orbits and impact dates.
+
+    Parameters
+    ----------
+    [previous parameters...]
+    chunk_size : int, optional
+        Number of orbits to process in each chunk.
+    max_processes : int, optional
+        Maximum number of processes to use. If None, uses all available CPUs.
+    """
+    if max_processes is None:
+        max_processes = mp.cpu_count()
+
+    use_ray = initialize_use_ray(num_cpus=max_processes)
+
+    if not use_ray:
+        return population_worker(
+            np.arange(len(orbits)),
+            orbits,
+            impact_dates,
+            population_config,
+            diameters,
+            seed,
+            variants,
+            albedo_distribution,
+        )
+
+    if isinstance(orbits, ray.ObjectRef):
+        orbits_ref = orbits
+        orbits = ray.get(orbits)
+    else:
+        orbits_ref = ray.put(orbits)
+
+    if isinstance(impact_dates, ray.ObjectRef):
+        impact_dates_ref = impact_dates
+        impact_dates = ray.get(impact_dates)
+    else:
+        impact_dates_ref = ray.put(impact_dates)
+
+    population_config_ref = ray.put(population_config)
+
+    futures = []
+    idx = np.arange(len(orbits))
+    for idx_chunk in _iterate_chunks(idx, chunk_size):
+        futures.append(
+            population_worker_remote.remote(
+                idx_chunk,
+                orbits_ref,
+                impact_dates_ref,
+                population_config_ref,
+                diameters,
+                seed,
+                variants,
+                albedo_distribution,
+            )
+        )
+
+    impactor_orbits = ImpactorOrbits.empty()
+    while futures:
+        finished, futures = ray.wait(futures, num_returns=1)
+        result = ray.get(finished[0])
+        impactor_orbits = qv.concatenate([impactor_orbits, result])
+        if impactor_orbits.fragmented():
+            impactor_orbits = qv.defragment(impactor_orbits)
 
     return impactor_orbits

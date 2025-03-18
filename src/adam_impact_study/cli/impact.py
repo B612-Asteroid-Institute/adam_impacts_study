@@ -17,7 +17,6 @@ from adam_core.dynamics.impacts import CollisionConditions
 from adam_core.time import Timestamp
 from adam_fo.config import check_build_exists
 
-from adam_impact_study.analysis.plots import plot_ip_over_time
 from adam_impact_study.impacts_study import run_impact_study_all
 from adam_impact_study.types import ImpactorOrbits, RunConfiguration
 
