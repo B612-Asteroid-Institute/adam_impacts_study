@@ -1,19 +1,20 @@
-import os
 import json
 import logging
-from typing import List
+import multiprocessing as mp
+import os
+from typing import List, Optional, Union
 
 import numpy as np
-import quivr as qv
-from adam_core.orbits import Orbits
-from adam_core.time import Timestamp
 import numpy.typing as npt
+import quivr as qv
 import ray
-import multiprocessing as mp
-from typing import Optional, Union
-from adam_core.utils.iter import _iterate_chunks
+from adam_core.orbits import Orbits
 from adam_core.ray_cluster import initialize_use_ray
+from adam_core.time import Timestamp
+from adam_core.utils.iter import _iterate_chunks
+
 from adam_impact_study.types import ImpactorOrbits
+
 from .utils import seed_from_string
 
 logging.basicConfig(level=logging.INFO)
@@ -100,6 +101,7 @@ def select_albedo_from_range(
         rng = np.random.default_rng()
     return rng.uniform(albedo_min, albedo_max)
 
+
 def select_albedo_rayleigh(scale: float, rng: np.random.Generator = None):
     """
     Sample albedo using a Rayleigh distribution.
@@ -120,7 +122,9 @@ def select_albedo_rayleigh(scale: float, rng: np.random.Generator = None):
     return rng.rayleigh(scale=scale)
 
 
-def determine_ast_class(percent_C: float, percent_S: float, rng: np.random.Generator = None) -> str:
+def determine_ast_class(
+    percent_C: float, percent_S: float, rng: np.random.Generator = None
+) -> str:
     """
     Determine the asteroid class based on the percentage of C and S asteroids.
 
@@ -144,6 +148,7 @@ def determine_ast_class(percent_C: float, percent_S: float, rng: np.random.Gener
     if rng is None:
         rng = np.random.default_rng()
     return "C" if rng.random() < percent_C else "S"
+
 
 def calculate_H(diameter: float, albedo: float) -> float:
     """
@@ -234,12 +239,12 @@ def population_worker(
     variants: int,
     albedo_distribution: str,
 ) -> ImpactorOrbits:
-    """Worker function to generate population for a chunk of orbits. 
-    Each orbit is duplicated once per size bin with a random diameter 
-    assigned between the size bin's minimum and maximum. Optionally, 
-    generate multiple variants of each orbit with different physical 
+    """Worker function to generate population for a chunk of orbits.
+    Each orbit is duplicated once per size bin with a random diameter
+    assigned between the size bin's minimum and maximum. Optionally,
+    generate multiple variants of each orbit with different physical
     parameters within the size bin.
-    
+
     Parameters
     ----------
     orbit_indices : npt.NDArray[np.int64]
@@ -266,7 +271,7 @@ def population_worker(
     """
     orbits_chunk = orbits.take(orbit_indices)
     impact_dates_chunk = impact_dates.take(orbit_indices)
-    
+
     impactor_orbits = ImpactorOrbits.empty()
     for orbit, impact_date in zip(orbits_chunk, impact_dates_chunk):
         for i, diameter in enumerate(diameters):
@@ -332,8 +337,10 @@ def population_worker(
 
     return impactor_orbits
 
+
 # Create remote version of worker
 population_worker_remote = ray.remote(population_worker)
+
 
 def generate_population(
     orbits: Union[Orbits, ray.ObjectRef],
@@ -348,7 +355,7 @@ def generate_population(
 ) -> ImpactorOrbits:
     """
     Generate a population of impactors from a set of orbits and impact dates.
-    
+
     Parameters
     ----------
     [previous parameters...]
@@ -361,7 +368,7 @@ def generate_population(
         max_processes = mp.cpu_count()
 
     use_ray = initialize_use_ray(num_cpus=max_processes)
-    
+
     if not use_ray:
         return population_worker(
             np.arange(len(orbits)),
@@ -387,7 +394,7 @@ def generate_population(
         impact_dates_ref = ray.put(impact_dates)
 
     population_config_ref = ray.put(population_config)
-    
+
     futures = []
     idx = np.arange(len(orbits))
     for idx_chunk in _iterate_chunks(idx, chunk_size):
@@ -413,4 +420,3 @@ def generate_population(
             impactor_orbits = qv.defragment(impactor_orbits)
 
     return impactor_orbits
-
