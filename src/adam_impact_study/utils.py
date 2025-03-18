@@ -1,5 +1,4 @@
 import hashlib
-import os
 import pathlib
 from typing import Optional
 

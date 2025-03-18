@@ -3,7 +3,6 @@ import os
 import pyarrow.compute as pc
 import pytest
 from adam_core.coordinates import CartesianCoordinates, Origin, SphericalCoordinates
-from adam_core.orbits import Orbits
 from adam_core.time import Timestamp
 
 from adam_impact_study.analysis import (
