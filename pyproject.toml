@@ -58,7 +58,7 @@ lint = { composite = [
   "black --check ./src/adam_impact_study",
   "isort --check-only ./src/adam_impact_study",
 ] }
-fix = "ruff ./src/adam_impact_study --fix"
+fix = "ruff check --fix ./src/adam_impact_study"
 typecheck = "mypy --strict ./src/adam_impact_study"
 
 test = "pytest --benchmark-disable {args} -rs"

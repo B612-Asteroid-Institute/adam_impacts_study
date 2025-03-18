@@ -1,4 +1,5 @@
 import logging
+import pathlib
 from unittest.mock import patch
 
 import numpy as np
@@ -314,8 +315,8 @@ def test_run_impact_study_for_orbit(
     mock_run_sorcha.assert_called_with(
         impactor_orbits,
         impactor_orbits.impact_time.add_days(-1),
-        pointing_file,
-        f"{RUN_DIR}/Object1/sorcha",
+        pathlib.Path(pointing_file),
+        pathlib.Path(f"{RUN_DIR}/Object1/sorcha"),
         assist_epsilon=1e-9,
         assist_min_dt=1e-9,
         assist_initial_dt=1e-6,
@@ -329,19 +330,19 @@ def test_run_impact_study_for_orbit(
             sorcha_observations.apply_mask(
                 pc.less_equal(sorcha_observations.observing_night, 60002)
             ),
-            f"{RUN_DIR}/Object1/windows/60000_60002/fo",
+            pathlib.Path(f"{RUN_DIR}/Object1/windows/60000_60002/fo"),
         ),
         (
             sorcha_observations.apply_mask(
                 pc.less_equal(sorcha_observations.observing_night, 60004)
             ),
-            f"{RUN_DIR}/Object1/windows/60000_60004/fo",
+            pathlib.Path(f"{RUN_DIR}/Object1/windows/60000_60004/fo"),
         ),
         (
             sorcha_observations.apply_mask(
                 pc.less_equal(sorcha_observations.observing_night, 60005)
             ),
-            f"{RUN_DIR}/Object1/windows/60000_60005/fo",
+            pathlib.Path(f"{RUN_DIR}/Object1/windows/60000_60005/fo"),
         ),
     ]
     for i, call in enumerate(mock_run_fo_od.call_args_list):

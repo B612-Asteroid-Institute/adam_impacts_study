@@ -3,7 +3,8 @@ import os
 
 import pyarrow as pa
 import quivr as qv
-from adam_core.orbits import Orbits
+
+from adam_impact_study.types import ImpactorOrbits
 
 
 def main():
@@ -16,8 +17,9 @@ def main():
     parser.add_argument(
         "--num-orbits",
         type=int,
-        default=10,
-        help="Number of orbits to take from each file (default: 10)",
+        default=None,
+        required=False,
+        help="Number of orbits to take from each file (default: all)",
     )
     args = parser.parse_args()
 
@@ -30,13 +32,14 @@ def main():
     for parquet_file in parquet_files:
         # Extract year from filename
         filename = os.path.basename(parquet_file)
-        year = filename.split("_")[2][:4]
+        year = filename.split("_")[1]
+        print(f"Processing {parquet_file} ({year})")
 
         # Load orbits from parquet file
-        orbits = Orbits.from_parquet(parquet_file)
+        orbits = ImpactorOrbits.from_parquet(parquet_file)
 
         # Take specified number of orbits
-        if len(orbits) > args.num_orbits:
+        if args.num_orbits is not None and len(orbits) > args.num_orbits:
             orbits = orbits[: args.num_orbits]
 
         # Add year suffix to object IDs

@@ -1,4 +1,5 @@
 import os
+import pathlib
 from unittest.mock import patch
 
 import numpy as np
@@ -179,9 +180,11 @@ def test_write_phys_params_file(tmpdir, mock_photometric_properties):
 @patch("adam_impact_study.sorcha_utils.write_sorcha_orbits_file")
 @patch("adam_impact_study.sorcha_utils.write_phys_params_file")
 @patch("adam_impact_study.sorcha_utils.write_config_file_timeframe")
+@patch("adam_impact_study.sorcha_utils.tempfile.mkdtemp")
 @patch("subprocess.run")
 def test_run_sorcha(
     mock_subprocess,
+    mock_mkdtemp,
     mock_config,
     mock_params,
     mock_orbits_write,
@@ -192,6 +195,9 @@ def test_run_sorcha(
     single_impactor = mock_impactor_orbits.take([0])
     pointing_file = str(tmpdir.join("pointing.db"))
     working_dir = str(tmpdir.mkdir("working"))
+
+    hardcoded_tmp_dir = tmpdir.mkdir("sorcha_tmp")
+    mock_mkdtemp.return_value = hardcoded_tmp_dir
     seed = 612
 
     assist_min_dt = 1e-9
@@ -213,15 +219,15 @@ def test_run_sorcha(
 
     # Verify the file writing functions were called correctly
     mock_orbits_write.assert_called_once_with(
-        single_impactor.orbits(), f"{working_dir}/orbits.csv"
+        single_impactor.orbits(), pathlib.Path(f"{hardcoded_tmp_dir}/orbits.csv")
     )
     mock_params.assert_called_once_with(
         single_impactor.photometric_properties(),
-        f"{working_dir}/params.csv",
+        pathlib.Path(f"{hardcoded_tmp_dir}/params.csv"),
         filter_band="r",
     )
     mock_config.assert_called_once_with(
-        f"{working_dir}/config.ini",
+        pathlib.Path(f"{hardcoded_tmp_dir}/config.ini"),
         single_impactor.impact_time.add_days(-1),
         assist_epsilon,
         assist_min_dt,
@@ -232,8 +238,8 @@ def test_run_sorcha(
     # Check the sorcha command is correct
     expected_command = (
         f"SORCHA_SEED={seed} "
-        f"sorcha run -c {working_dir}/config.ini -p {working_dir}/params.csv "
-        f"--orbits {working_dir}/orbits.csv --pointing-db {pointing_file} "
-        f"-o {working_dir} --stem observations -f"
+        f"sorcha run -c {hardcoded_tmp_dir}/config.ini -p {hardcoded_tmp_dir}/params.csv "
+        f"--orbits {hardcoded_tmp_dir}/orbits.csv --pointing-db {pointing_file} "
+        f"-o {hardcoded_tmp_dir} --stem observations -f"
     )
     mock_subprocess.assert_called_once_with(expected_command, shell=True)
