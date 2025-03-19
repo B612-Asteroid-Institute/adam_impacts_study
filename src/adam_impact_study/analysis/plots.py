@@ -230,6 +230,11 @@ def plot_ip_over_time(
     )
     orbit_ids = impact_study_results.orbit_id.unique().to_pylist()
 
+    # Filter out objects with incomplete status
+    impact_study_results = impact_study_results.apply_mask(
+        pc.equal(impact_study_results.status, "complete")
+    )
+
     for orbit_id in orbit_ids:
         paths = get_study_paths(run_dir, orbit_id)
         orbit_dir = paths["orbit_base_dir"]
@@ -242,6 +247,9 @@ def plot_ip_over_time(
         ips = impact_study_results.apply_mask(
             pc.equal(impact_study_results.orbit_id, orbit_id)
         )
+        if len(ips) == 0:
+            logger.warning(f"No complete results found for orbit {orbit_id}")
+            continue
 
         # Sort by observation end time
         mjd_times = ips.observation_end.mjd().to_numpy(zero_copy_only=False)

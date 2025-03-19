@@ -93,7 +93,7 @@ def collect_all_window_results(run_dir: Union[str, pathlib.Path]) -> WindowResul
     window_results = []
 
     # Get all window result files directly
-    orbit_dirs = run_dir_path.glob("*")
+    orbit_dirs = [d for d in run_dir_path.glob("*") if d.is_dir()]
 
     if not orbit_dirs:
         logger.warning(f"No orbit directories found in {run_dir_path}")
