@@ -10,12 +10,12 @@ authors = [
 ]
 dependencies = [
     "matplotlib>=3.10.0",
-    "adam-core @ git+https://github.com/B612-Asteroid-Institute/adam_core@6091a59ab16245638e5753adf4ad18e905248223",
-    "adam-assist @ git+https://github.com/B612-Asteroid-Institute/adam-assist@e2811f5645499a7e1f7757b2891f8eefd944e076",
+    "adam-core>=0.4.0",
+    "adam-assist>=0.3.0",
     "ray[default]==2.39.0",
-    "quivr @ git+https://github.com/B612-Asteroid-Institute/quivr@2d8ae0b40bdfb75bcceff0c73d41a52d4bffb5dc",
+    "quivr>=0.8.0",
     "ipdb>=0.13.13",
-    "adam-fo @ git+https://github.com/B612-Asteroid-Institute/adam_fo@f3c851fb46ba03f5e7d056e68e685a2e45f178f9",
+    "adam-fo>=0.0.2",
     "sorcha @ git+https://github.com/B612-Asteroid-Institute/sorcha@23a3392f0145f7dbbdbb7b17687b69902716bde8",
     "naif-de440",
     "naif-leapseconds",
