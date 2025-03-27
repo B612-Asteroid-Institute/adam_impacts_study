@@ -6,6 +6,7 @@ import matplotlib.pyplot as plt
 import numpy as np
 import pyarrow as pa
 import pyarrow.compute as pc
+import quivr as qv
 from adam_core.time import Timestamp
 
 from adam_impact_study.types import (
@@ -68,7 +69,7 @@ def plot_realization_time_histogram(
     realization_time_max = pc.ceil(pc.max(summary.realization_time)).as_py()
     if realization_time_max > 100:
         realization_time_max = 100
-    
+
     # For the case where all values are 0, use a small range
     if realization_time_max == 0:
         bins = np.array([0, 0.1])  # Just two bins to show the spike at 0
@@ -231,16 +232,18 @@ def plot_incomplete_by_diameter(
 
     for i, (diameter, color) in enumerate(zip(unique_diameters, colors)):
         orbits_at_diameter = summary.select("orbit.diameter", diameter)
-        incomplete_orbits_at_diameter = incomplete_summary.select("orbit.diameter", diameter)
-        
+        incomplete_orbits_at_diameter = incomplete_summary.select(
+            "orbit.diameter", diameter
+        )
+
         # Calculate raw count and percentage
         incomplete_count = len(incomplete_orbits_at_diameter)
         total_count = len(orbits_at_diameter)
         percentage = (incomplete_count / total_count * 100) if total_count > 0 else 0
-        
+
         # Plot bar with raw count height
         ax.bar(i, height=incomplete_count, color=color)
-        
+
         # Add percentage label above bar
         ax.text(
             i,
@@ -278,16 +281,16 @@ def plot_collective_ip_over_time(
 
     # get the unique orbit_ids
     orbit_ids = completed_window_results.orbit_id.unique().to_pylist()
-    
+
     # Calculate dynamic alpha value based on the number of orbits
     # Formula: alpha = min(0.3, 10/n) where n is the number of orbits
     # This ensures alpha decreases as number of orbits increases
     n_orbits = len(orbit_ids)
     alpha = min(0.1, 100 / max(1, n_orbits))
-    
+
     # Use a single color with dynamic alpha for all plots
-    plot_color = 'steelblue'
-    
+    plot_color = "steelblue"
+
     # Plot the IP for each orbit
     for orbit_id in orbit_ids:
         orbit_ips = completed_window_results.apply_mask(
@@ -306,19 +309,25 @@ def plot_collective_ip_over_time(
         offset_times = mjd_times - earliest_observation_end
 
         # Plot the IP with shaded area using the same dynamic alpha for both line and fill
-        ax.plot(offset_times, probabilities, color=plot_color, alpha=alpha, linewidth=0.8)
+        ax.plot(
+            offset_times, probabilities, color=plot_color, alpha=alpha, linewidth=0.8
+        )
         # ax.fill_between(offset_times, 0, probabilities, color=plot_color, alpha=alpha)
 
-    
     # Improve grid for better readability with many overlapping lines
-    ax.grid(True, alpha=0.3, linestyle='--')
-    
+    ax.grid(True, alpha=0.3, linestyle="--")
+
     # Add statistics including number of orbits and alpha value used
-    ax.text(0.98, 0.02, 
-            f"Total orbits: {n_orbits}", 
-            transform=ax.transAxes, ha='right', va='bottom',
-            bbox=dict(boxstyle='round', facecolor='white', alpha=0.8))
-    
+    ax.text(
+        0.98,
+        0.02,
+        f"Total orbits: {n_orbits}",
+        transform=ax.transAxes,
+        ha="right",
+        va="bottom",
+        bbox=dict(boxstyle="round", facecolor="white", alpha=0.8),
+    )
+
     ax.set_xlabel("Days Since First Observation")
     ax.set_ylabel("Impact Probability")
     ax.set_title("Impact Probability Over Time for All Orbits")
@@ -356,16 +365,12 @@ def plot_individual_orbit_ip_over_time(
     """
 
     # Filter out objects with errors
-    window_results = window_results.apply_mask(
-        pc.is_null(window_results.error)
-    )
-
+    window_results = window_results.apply_mask(pc.is_null(window_results.error))
 
     # Filter out objects with incomplete status
     window_results = window_results.apply_mask(
         pc.equal(window_results.status, "complete")
     )
-
 
     orbit_ids = window_results.orbit_id.unique().to_pylist()
 
@@ -376,7 +381,9 @@ def plot_individual_orbit_ip_over_time(
         for i, orbit_id in enumerate(summary_orbit_ids):
             orbit_summary = summary_results.take([i])
             if orbit_summary.discovery_time is not None:
-                discovery_times[orbit_id] = orbit_summary.discovery_time.mjd()[0].as_py()
+                discovery_times[orbit_id] = orbit_summary.discovery_time.mjd()[
+                    0
+                ].as_py()
 
     for orbit_id in orbit_ids:
         logger.info(f"Orbit ID Plotting: {orbit_id}")
@@ -385,9 +392,7 @@ def plot_individual_orbit_ip_over_time(
         fig, ax1 = plt.subplots()
 
         # Get data for this object
-        ips = window_results.apply_mask(
-            pc.equal(window_results.orbit_id, orbit_id)
-        )
+        ips = window_results.apply_mask(pc.equal(window_results.orbit_id, orbit_id))
         if len(ips) == 0:
             logger.warning(f"No complete results found for orbit {orbit_id}")
             continue
@@ -430,7 +435,7 @@ def plot_individual_orbit_ip_over_time(
         y_ticks = np.arange(0, 1.1, 0.1)
         ax1.set_yticks(y_ticks)
         ax1.set_yticklabels([f"{y_tick:.1f}" for y_tick in y_ticks])
-        
+
         # Get impact time for this object
         impact_orbit = impacting_orbits.apply_mask(
             pc.equal(impacting_orbits.orbit_id, orbit_id)
@@ -496,30 +501,32 @@ def plot_individual_orbit_ip_over_time(
             if discovery_time < x_min or discovery_time > x_max:
                 # If not, expand the range slightly
                 buffer = (x_max - x_min) * 0.05  # 5% buffer
-                ax1.set_xlim(min(x_min, discovery_time - buffer), 
-                             max(x_max, discovery_time + buffer))
-            
+                ax1.set_xlim(
+                    min(x_min, discovery_time - buffer),
+                    max(x_max, discovery_time + buffer),
+                )
+
             # Draw a VERY visible vertical line
             ax1.axvline(
                 x=discovery_time,
-                color='#FF0000',  # Pure red
-                linestyle='-',    # Solid line
-                linewidth=1,      # Thick line
-                zorder=100,       # Very high z-order
-                label='Discovery' # Add to legend
+                color="#FF0000",  # Pure red
+                linestyle="-",  # Solid line
+                linewidth=1,  # Thick line
+                zorder=100,  # Very high z-order
+                label="Discovery",  # Add to legend
             )
-            
+
             # Add visible text
             y_range = ax1.get_ylim()[1] - ax1.get_ylim()[0]
             ax1.text(
                 discovery_time + ((x_max - x_min) * 0.02),  # Slight offset
-                0.5,                                        # Middle of y-axis
-                'DISCOVERY',
-                color='red',
+                0.5,  # Middle of y-axis
+                "DISCOVERY",
+                color="red",
                 fontsize=6,
-                fontweight='bold',
+                fontweight="bold",
                 rotation=90,
-                zorder=100
+                zorder=100,
             )
 
         fig.suptitle(orbit_id)
@@ -530,6 +537,96 @@ def plot_individual_orbit_ip_over_time(
         )
 
         plt.close()
+
+
+class DiscoveryByDiameterDecade(qv.Table):
+    diameter = qv.Float64Column()
+    decade = qv.LargeStringColumn()
+    percentage_discovered = qv.Float64Column()
+
+
+def plot_discoveries_by_diameter_decade(
+    summary: ImpactorResultSummary,
+) -> Tuple[plt.Figure, plt.Axes]:
+    """
+    Plot the percentage discovered broken down by diameter and impact decade.
+    """
+    # Filter to only include complete results
+    summary = summary.apply_mask(summary.complete())
+
+    # Extract impact dates and convert to decades
+    impact_years = np.array(
+        [
+            impact_time.datetime.year
+            for impact_time in summary.orbit.impact_time.to_astropy()
+        ]
+    )
+    impact_decades = (impact_years // 10) * 10  # Convert year to decade (2023 -> 2020)
+
+    unique_decades = np.sort(np.unique(impact_decades))
+    unique_diameters = summary.orbit.diameter.unique().sort().to_pylist()
+
+    discovery_by_diameter_decade = DiscoveryByDiameterDecade.empty()
+
+    # Plot each decade as a set of bars
+    for i, decade in enumerate(unique_decades):
+        # Filter by impact decade
+        orbits_at_decade = summary.apply_mask(impact_decades == decade)
+        for diameter in unique_diameters:
+            # Filter by diameter
+            orbits_at_diameter_and_decade = orbits_at_decade.select(
+                "orbit.diameter", diameter
+            )
+
+            discovery_mask = pc.invert(
+                pc.is_null(orbits_at_diameter_and_decade.discovery_time.days)
+            )
+            discovered = pc.sum(discovery_mask).as_py()
+            total = len(orbits_at_diameter_and_decade)
+
+            percentage = (discovered / total * 100) if total > 0 else 0
+
+            discovery_by_diameter_decade = qv.concatenate(
+                [
+                    discovery_by_diameter_decade,
+                    DiscoveryByDiameterDecade.from_kwargs(
+                        decade=[f"{decade}"],
+                        diameter=[diameter],
+                        percentage_discovered=[percentage],
+                    ),
+                ]
+            )
+
+    # Plot the data using a bar plot. We want the x-axis to be decade and y-axis to be percentage discovered
+    # We want to plot each diameter as a separate bar
+    width = 0.2
+    x = np.arange(len(unique_decades))
+    colors = plt.cm.viridis(np.linspace(0, 1, len(unique_diameters)))
+    fig, ax = plt.subplots(1, 1, dpi=200, figsize=(10, 6))
+    for i, diameter in enumerate(unique_diameters):
+        diameter_data = discovery_by_diameter_decade.select("diameter", diameter)
+        ax.bar(
+            x + i * width,
+            diameter_data.percentage_discovered.to_numpy(zero_copy_only=False),
+            width=width,
+            color=colors[i],
+        )
+
+    ax.set_xticks(x + width * (len(unique_diameters) - 1) / 2)
+    ax.set_xticklabels(unique_decades)
+    ax.set_xlabel("Impact Decade")
+    ax.set_ylabel("Percentage Discovered")
+    ax.set_title("Percentage of Objects Discovered by Diameter and Impact Decade")
+    ax.legend(
+        unique_diameters,
+        title="Diameter [km]",
+        frameon=False,
+        bbox_to_anchor=(1.01, 1),
+        loc="upper left",
+    )
+    ax.yaxis.grid(True, linestyle="--", alpha=0.7)
+    return fig, ax
+
 
 def make_analysis_plots(
     summary: ImpactorResultSummary,
@@ -580,6 +677,15 @@ def make_analysis_plots(
         dpi=200,
     )
     logger.info("Generated incomplete by diameter plot")
+    plt.close(fig)
+
+    fig, ax = plot_discoveries_by_diameter_decade(summary)
+    fig.savefig(
+        os.path.join(out_dir, "percentage_discovered.jpg"),
+        bbox_inches="tight",
+        dpi=200,
+    )
+    logger.info("Generated percentage discovered plot")
     plt.close(fig)
 
     fig, ax = plot_collective_ip_over_time(window_results)
