@@ -1,14 +1,19 @@
 import logging
 import os
 import pathlib
-from typing import Union
+from typing import Tuple, Union
 
 import pyarrow as pa
 import pyarrow.parquet as pq
 import quivr as qv
 from adam_core.time import Timestamp
 
-from adam_impact_study.types import WindowResult
+from adam_impact_study.types import (
+    ImpactorOrbits,
+    Observations,
+    ResultsTiming,
+    WindowResult,
+)
 from adam_impact_study.utils import get_study_paths
 
 logger = logging.getLogger(__name__)
@@ -107,3 +112,96 @@ def collect_all_window_results(run_dir: Union[str, pathlib.Path]) -> WindowResul
         window_results = qv.concatenate([window_results, window_results_orbit])
 
     return window_results
+
+
+def collect_all_observations(run_dir: Union[str, pathlib.Path]) -> Observations:
+    """Collect all observations from a run directory.
+
+    Parameters
+    ----------
+    run_dir : str
+        Base directory for the run
+
+    Returns
+    -------
+    Observations
+        Combined observations for all orbits
+    """
+    run_dir_path = pathlib.Path(run_dir).absolute()
+    # Find all files that match the pattern observations_{orbit_id}.parquet
+    # that may be in layers of subdirectories
+    observations_files = run_dir_path.glob("**/*observations_*.parquet")
+    observations = Observations.empty()
+    for observations_file in observations_files:
+        observations = qv.concatenate([observations, Observations.from_parquet(observations_file)])
+
+    return observations
+
+
+def collect_all_timings(run_dir: Union[str, pathlib.Path]) -> ResultsTiming:
+    """Collect all timings from a run directory.
+
+    Parameters
+    ----------
+    run_dir : str
+        Base directory for the run
+
+    Returns
+    -------
+    Timings
+        Combined timings for all orbits
+    """
+    run_dir_path = pathlib.Path(run_dir).absolute()
+    # Find all files that match the pattern timings_{orbit_id}.parquet
+    # that may be in layers of subdirectories
+    timings_files = run_dir_path.glob("**/*timings.parquet")
+    timings = ResultsTiming.empty()
+    for timings_file in timings_files:
+        timings = qv.concatenate([timings, ResultsTiming.from_parquet(timings_file)])
+
+    return timings
+
+
+def collect_all_impactor_orbits(run_dir: Union[str, pathlib.Path]) -> ImpactorOrbits:
+    """Collect all impactor orbits from a run directory.
+
+    Parameters
+    ----------
+    run_dir : str
+        Base directory for the run
+
+    Returns
+    -------
+    ImpactorOrbits
+        Combined impactor orbits for all orbits
+    """
+    run_dir_path = pathlib.Path(run_dir).absolute()
+    # Find all files that match the pattern impactor_orbit.parquet
+    # that may be in layers of subdirectories
+    impactor_orbits_files = run_dir_path.glob("**/*impactor_orbit.parquet")
+    impactor_orbits = ImpactorOrbits.empty()
+    for impactor_orbits_file in impactor_orbits_files:
+        impactor_orbits = qv.concatenate([impactor_orbits, ImpactorOrbits.from_parquet(impactor_orbits_file)])
+
+    return impactor_orbits
+
+
+def collect_all_results(run_dir: Union[str, pathlib.Path]) -> Tuple[ImpactorOrbits, Observations, ResultsTiming, WindowResult]:
+    """Collect all results from a run directory.
+
+    Parameters
+    ----------
+    run_dir : str
+        Base directory for the run
+
+    Returns
+    -------
+    Tuple[ImpactorOrbits, Observations, ResultsTiming, WindowResult]
+        Combined results for all orbits
+    """
+    impactor_orbits = collect_all_impactor_orbits(run_dir)
+    observations = collect_all_observations(run_dir)
+    timings = collect_all_timings(run_dir)
+    window_results = collect_all_window_results(run_dir)
+
+    return impactor_orbits, observations, timings, window_results

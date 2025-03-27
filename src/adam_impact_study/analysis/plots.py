@@ -1,6 +1,6 @@
 import logging
 import os
-from typing import Tuple
+from typing import Optional, Tuple
 
 import matplotlib.pyplot as plt
 import numpy as np
@@ -8,8 +8,12 @@ import pyarrow as pa
 import pyarrow.compute as pc
 from adam_core.time import Timestamp
 
-from adam_impact_study.types import ImpactorOrbits, ImpactorResultSummary, WindowResult
-from adam_impact_study.utils import get_study_paths
+from adam_impact_study.types import (
+    DiscoveryDates,
+    ImpactorOrbits,
+    ImpactorResultSummary,
+    WindowResult,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -17,6 +21,9 @@ logger = logging.getLogger(__name__)
 def plot_warning_time_histogram(
     summary: ImpactorResultSummary,
 ) -> Tuple[plt.Figure, plt.Axes]:
+
+    # Filter to only include complete results
+    summary = summary.apply_mask(summary.complete())
 
     fig, ax = plt.subplots(1, 1, dpi=200)
 
@@ -53,23 +60,28 @@ def plot_realization_time_histogram(
     summary: ImpactorResultSummary,
 ) -> Tuple[plt.Figure, plt.Axes]:
 
+    # Filter to only include complete results
+    summary = summary.apply_mask(summary.complete())
+
     fig, ax = plt.subplots(1, 1, dpi=200)
 
     realization_time_max = pc.ceil(pc.max(summary.realization_time)).as_py()
     if realization_time_max > 100:
         realization_time_max = 100
-    bins = np.linspace(0, realization_time_max, 100)
+    
+    # For the case where all values are 0, use a small range
+    if realization_time_max == 0:
+        bins = np.array([0, 0.1])  # Just two bins to show the spike at 0
+    else:
+        bins = np.linspace(0, realization_time_max, 100)
 
     unique_diameters = summary.orbit.diameter.unique().sort().to_pylist()
     colors = plt.cm.coolwarm(np.linspace(0, 1, len(unique_diameters)))
     for diameter, color in zip(unique_diameters, colors):
-
         orbits_at_diameter = summary.select("orbit.diameter", diameter)
-
         realization_time = orbits_at_diameter.realization_time.to_numpy(
             zero_copy_only=False
         )
-
         ax.hist(
             realization_time[~np.isnan(realization_time)],
             histtype="step",
@@ -83,15 +95,16 @@ def plot_realization_time_histogram(
     realization_time = summary.realization_time.to_numpy(zero_copy_only=False)
     n_objects_beyond_100_days = np.sum(realization_time > 100)
 
-    ax.text(
-        99,
-        0.01,
-        rf"$N_{{objects}}$(>100 d)={n_objects_beyond_100_days}",
-        ha="right",
-        rotation=90,
-    )
+    if n_objects_beyond_100_days > 0:
+        ax.text(
+            99,
+            0.01,
+            rf"$N_{{objects}}$(>100 d)={n_objects_beyond_100_days}",
+            ha="right",
+            rotation=90,
+        )
 
-    ax.set_xlim(0, realization_time_max)
+    ax.set_xlim(0, max(0.1, realization_time_max))  # Ensure x-axis shows some range
     ax.set_xlabel("Realization Time for Discoveries [days]")
     ax.set_ylabel("PDF")
     ax.legend(frameon=False, bbox_to_anchor=(1.01, 0.75))
@@ -101,6 +114,9 @@ def plot_realization_time_histogram(
 def plot_discoveries_by_diameter(
     summary: ImpactorResultSummary,
 ) -> Tuple[plt.Figure, plt.Axes]:
+
+    # Filter to only include complete results
+    summary = summary.apply_mask(summary.complete())
 
     # Calculate the discovery summary
     discovery_summary = summary.summarize_discoveries()
@@ -157,6 +173,9 @@ def plot_runtime_by_diameter(
     Tuple[plt.Figure, plt.Axes]
         The figure and axes objects for the plot.
     """
+    # Filter to only include complete results
+    summary = summary.apply_mask(summary.complete())
+
     # we want to filter out the orbits with no results_timing.orbit_id
     summary = summary.apply_mask(pc.invert(pc.is_null(summary.results_timing.orbit_id)))
 
@@ -172,14 +191,14 @@ def plot_runtime_by_diameter(
         # Calculate mean runtime in minutes
         mean_runtime = pc.divide(
             pc.mean(orbits_at_diameter.results_timing.total_window_runtime),
-            60,  # Convert seconds to minutes
+            3600,  # Convert seconds to hours
         ).as_py()
 
         ax.bar(i, height=mean_runtime, color=color)
         ax.text(
             i,
             mean_runtime + (ax.get_ylim()[1] * 0.02),  # Position label 2% above bar
-            f"{mean_runtime:.1f}m",
+            f"{mean_runtime:.1f}h",
             ha="center",
             fontsize=10,
         )
@@ -189,32 +208,144 @@ def plot_runtime_by_diameter(
     ax.set_xticks(x_ticks)
     ax.set_xticklabels(x_tick_labels)
     ax.set_xlabel("Diameter [km]")
-    ax.set_ylabel("Average Window Runtime [minutes]")
+    ax.set_ylabel("Average IP Runtime [hours]")
 
     # Add a title
-    ax.set_title("Window Runtime by Object Diameter")
+    ax.set_title("IP Runtime by Object Diameter")
 
     return fig, ax
 
 
-def plot_ip_over_time(
+def plot_incomplete_by_diameter(
+    summary: ImpactorResultSummary,
+) -> Tuple[plt.Figure, plt.Axes]:
+    """
+    Plot the number of incomplete results by diameter, with percentage labels.
+    """
+    fig, ax = plt.subplots(1, 1, dpi=200)
+
+    incomplete_summary = summary.apply_mask(summary.incomplete())
+
+    unique_diameters = summary.orbit.diameter.unique().sort().to_pylist()
+    colors = plt.cm.coolwarm(np.linspace(0, 1, len(unique_diameters)))
+
+    for i, (diameter, color) in enumerate(zip(unique_diameters, colors)):
+        orbits_at_diameter = summary.select("orbit.diameter", diameter)
+        incomplete_orbits_at_diameter = incomplete_summary.select("orbit.diameter", diameter)
+        
+        # Calculate raw count and percentage
+        incomplete_count = len(incomplete_orbits_at_diameter)
+        total_count = len(orbits_at_diameter)
+        percentage = (incomplete_count / total_count * 100) if total_count > 0 else 0
+        
+        # Plot bar with raw count height
+        ax.bar(i, height=incomplete_count, color=color)
+        
+        # Add percentage label above bar
+        ax.text(
+            i,
+            incomplete_count + 0.5,  # Adjust the 0.5 offset as needed
+            f"{incomplete_count}\n({percentage:.1f}%)",
+            ha="center",
+            va="bottom",
+            fontsize=10,
+        )
+
+    x_ticks = np.arange(0, len(unique_diameters), 1)
+    x_tick_labels = [f"{diameter:.3f}" for diameter in unique_diameters]
+    ax.set_xticks(x_ticks)
+    ax.set_xticklabels(x_tick_labels)
+    ax.set_xlabel("Diameter [km]")
+    ax.set_ylabel("Number of Incomplete Results")
+    ax.set_title("Number of Incomplete Results by Object Diameter")
+
+    return fig, ax
+
+
+def plot_collective_ip_over_time(
+    window_results: WindowResult,
+) -> None:
+    """
+    Plot the impact probability (IP) over time for all objects in the provided orbits.
+    """
+    # We want to align it so the first window results is at the same location
+    # on the x-axis
+    fig, ax = plt.subplots(1, 1, dpi=200, figsize=(10, 6))
+
+    completed_window_results = window_results.apply_mask(
+        pc.equal(window_results.status, "complete")
+    )
+
+    # get the unique orbit_ids
+    orbit_ids = completed_window_results.orbit_id.unique().to_pylist()
+    
+    # Calculate dynamic alpha value based on the number of orbits
+    # Formula: alpha = min(0.3, 10/n) where n is the number of orbits
+    # This ensures alpha decreases as number of orbits increases
+    n_orbits = len(orbit_ids)
+    alpha = min(0.1, 100 / max(1, n_orbits))
+    
+    # Use a single color with dynamic alpha for all plots
+    plot_color = 'steelblue'
+    
+    # Plot the IP for each orbit
+    for orbit_id in orbit_ids:
+        orbit_ips = completed_window_results.apply_mask(
+            pc.equal(completed_window_results.orbit_id, orbit_id)
+        )
+
+        # Sort by observation end time
+        mjd_times = orbit_ips.observation_end.mjd().to_numpy(zero_copy_only=False)
+        probabilities = orbit_ips.impact_probability.to_numpy(zero_copy_only=False)
+        sort_indices = mjd_times.argsort()
+        mjd_times = mjd_times[sort_indices]
+        probabilities = probabilities[sort_indices]
+
+        # Adjust all times to be relative to the orbit's earliest observation_end
+        earliest_observation_end = orbit_ips.observation_end.min().mjd()
+        offset_times = mjd_times - earliest_observation_end
+
+        # Plot the IP with shaded area using the same dynamic alpha for both line and fill
+        ax.plot(offset_times, probabilities, color=plot_color, alpha=alpha, linewidth=0.8)
+        # ax.fill_between(offset_times, 0, probabilities, color=plot_color, alpha=alpha)
+
+    
+    # Improve grid for better readability with many overlapping lines
+    ax.grid(True, alpha=0.3, linestyle='--')
+    
+    # Add statistics including number of orbits and alpha value used
+    ax.text(0.98, 0.02, 
+            f"Total orbits: {n_orbits}", 
+            transform=ax.transAxes, ha='right', va='bottom',
+            bbox=dict(boxstyle='round', facecolor='white', alpha=0.8))
+    
+    ax.set_xlabel("Days Since First Observation")
+    ax.set_ylabel("Impact Probability")
+    ax.set_title("Impact Probability Over Time for All Orbits")
+
+    return fig, ax
+
+
+def plot_individual_orbit_ip_over_time(
     impacting_orbits: ImpactorOrbits,
-    impact_study_results: WindowResult,
-    run_dir: str,
-    out_dir: str | None = None,
-    survey_start: Timestamp | None = None,
+    window_results: WindowResult,
+    out_dir: str,
+    summary_results: Optional[ImpactorResultSummary] = None,
+    survey_start: Optional[Timestamp] = None,
 ) -> None:
     """
     Plot the impact probability (IP) over time for each object in the provided orbits.
 
     Parameters
     ----------
-    impact_study_results : `~quiver.Table`
-        Table containing the impact study results with columns 'object_id', 'day', and 'impact_probability
-    run_dir : str
-        Directory for this study run
-    impacting_orbits : `~adam_core.orbits.Orbits`
+    impacting_orbits : `~adam_impact_study.types.ImpactorOrbits`
         Table containing the impacting orbits. The impact time is the coordinates.time + 30 days
+    window_results : `~adam_impact_study.types.WindowResult`
+        Table containing the window results.
+    out_dir : str
+        Directory for this study run
+    summary_results : `~adam_impact_study.types.ImpactorResultSummary`, optional
+        Table containing summary results including discovery times
     survey_start : `~adam_core.time.Timestamp`, optional
         The start time of the survey. If provided, will add an x-axis showing days since survey start.
 
@@ -225,27 +356,37 @@ def plot_ip_over_time(
     """
 
     # Filter out objects with errors
-    impact_study_results = impact_study_results.apply_mask(
-        pc.is_null(impact_study_results.error)
+    window_results = window_results.apply_mask(
+        pc.is_null(window_results.error)
     )
-    orbit_ids = impact_study_results.orbit_id.unique().to_pylist()
+
 
     # Filter out objects with incomplete status
-    impact_study_results = impact_study_results.apply_mask(
-        pc.equal(impact_study_results.status, "complete")
+    window_results = window_results.apply_mask(
+        pc.equal(window_results.status, "complete")
     )
 
+
+    orbit_ids = window_results.orbit_id.unique().to_pylist()
+
+    # Store discovery times for quick lookup
+    discovery_times = {}
+    if summary_results is not None:
+        summary_orbit_ids = summary_results.orbit.orbit_id.to_pylist()
+        for i, orbit_id in enumerate(summary_orbit_ids):
+            orbit_summary = summary_results.take([i])
+            if orbit_summary.discovery_time is not None:
+                discovery_times[orbit_id] = orbit_summary.discovery_time.mjd()[0].as_py()
+
     for orbit_id in orbit_ids:
-        paths = get_study_paths(run_dir, orbit_id)
-        orbit_dir = paths["orbit_base_dir"]
         logger.info(f"Orbit ID Plotting: {orbit_id}")
 
         # Create figure with multiple x-axes
         fig, ax1 = plt.subplots()
 
         # Get data for this object
-        ips = impact_study_results.apply_mask(
-            pc.equal(impact_study_results.orbit_id, orbit_id)
+        ips = window_results.apply_mask(
+            pc.equal(window_results.orbit_id, orbit_id)
         )
         if len(ips) == 0:
             logger.warning(f"No complete results found for orbit {orbit_id}")
@@ -289,6 +430,7 @@ def plot_ip_over_time(
         y_ticks = np.arange(0, 1.1, 0.1)
         ax1.set_yticks(y_ticks)
         ax1.set_yticklabels([f"{y_tick:.1f}" for y_tick in y_ticks])
+        
         # Get impact time for this object
         impact_orbit = impacting_orbits.apply_mask(
             pc.equal(impacting_orbits.orbit_id, orbit_id)
@@ -344,50 +486,54 @@ def plot_ip_over_time(
             )
             ax3.set_xlabel("Days Since Survey Start")
 
+        # Now add discovery time marker IF AVAILABLE - MOVED TO END
+        if orbit_id in discovery_times:
+            discovery_time = discovery_times[orbit_id]
+            if discovery_time is None:
+                continue
+            # Check if discovery time is within the plot range
+            x_min, x_max = ax1.get_xlim()
+            if discovery_time < x_min or discovery_time > x_max:
+                # If not, expand the range slightly
+                buffer = (x_max - x_min) * 0.05  # 5% buffer
+                ax1.set_xlim(min(x_min, discovery_time - buffer), 
+                             max(x_max, discovery_time + buffer))
+            
+            # Draw a VERY visible vertical line
+            ax1.axvline(
+                x=discovery_time,
+                color='#FF0000',  # Pure red
+                linestyle='-',    # Solid line
+                linewidth=1,      # Thick line
+                zorder=100,       # Very high z-order
+                label='Discovery' # Add to legend
+            )
+            
+            # Add visible text
+            y_range = ax1.get_ylim()[1] - ax1.get_ylim()[0]
+            ax1.text(
+                discovery_time + ((x_max - x_min) * 0.02),  # Slight offset
+                0.5,                                        # Middle of y-axis
+                'DISCOVERY',
+                color='red',
+                fontsize=6,
+                fontweight='bold',
+                rotation=90,
+                zorder=100
+            )
+
         fig.suptitle(orbit_id)
-        if out_dir is not None:
-            fig.savefig(
-                os.path.join(out_dir, f"IP_{orbit_id}.png"),
-            )
-        else:
-            fig.savefig(
-                os.path.join(orbit_dir, f"IP_{orbit_id}.png"),
-            )
-        plt.close()
-
-
-def plot_all_ip_over_time(
-    impacting_orbits: ImpactorOrbits,
-    window_results: WindowResult,
-    run_dir: str,
-    out_dir: str | None = None,
-) -> None:
-    """Plot impact probability over time for all orbits in a run.
-
-    Parameters
-    ----------
-    impacting_orbits : ImpactorOrbits
-        The impactor orbits to plot
-    window_results : WindowResult
-        The window results to plot
-    run_dir : str
-        Directory containing the run results
-    out_dir : str | None, optional
-        Directory to save plots to. If None, plots will be saved in run_dir/plots/ip_over_time
-    """
-    try:
-        plot_ip_over_time(
-            impacting_orbits,
-            window_results,
-            run_dir,
-            out_dir=out_dir,
+        plt.tight_layout()
+        fig.savefig(
+            os.path.join(out_dir, f"IP_{orbit_id}.png"),
+            bbox_inches="tight",
         )
-    except Exception as e:
-        logger.error(f"Failed to plot results: {e}")
 
+        plt.close()
 
 def make_analysis_plots(
     summary: ImpactorResultSummary,
+    window_results: WindowResult,
     out_dir: str,
 ) -> None:
 
@@ -427,4 +573,20 @@ def make_analysis_plots(
     logger.info("Generated runtime by diameter plot")
     plt.close(fig)
 
-    return
+    fig, ax = plot_incomplete_by_diameter(summary)
+    fig.savefig(
+        os.path.join(out_dir, "incomplete_by_diameter.jpg"),
+        bbox_inches="tight",
+        dpi=200,
+    )
+    logger.info("Generated incomplete by diameter plot")
+    plt.close(fig)
+
+    fig, ax = plot_collective_ip_over_time(window_results)
+    fig.savefig(
+        os.path.join(out_dir, "collective_ip_over_time.jpg"),
+        bbox_inches="tight",
+        dpi=200,
+    )
+    logger.info("Generated collective IP over time plot")
+    plt.close(fig)

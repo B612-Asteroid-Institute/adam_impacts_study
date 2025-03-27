@@ -108,6 +108,14 @@ class WindowResult(qv.Table):
     ip_runtime = qv.Float64Column(nullable=True)
     window_runtime = qv.Float64Column(nullable=True)
 
+    def complete(self) -> pa.BooleanArray:
+        return pc.equal(self.status, "complete")
+
+    def incomplete(self) -> pa.BooleanArray:
+        return pc.equal(self.status, "incomplete")
+
+    def failed(self) -> pa.BooleanArray:
+        return pc.equal(self.status, "failed")
 
 class ResultsTiming(qv.Table):
     orbit_id = qv.LargeStringColumn()
@@ -208,6 +216,14 @@ class ImpactorResultSummary(qv.Table):
             total=discoveries_by_diameter_class["discovered_count"],
         )
 
+
+class DiscoveryDates(qv.Table):
+    orbit_id = qv.LargeStringColumn()
+    discovery_date = Timestamp.as_column(nullable=True)
+
+class WarningTimes(qv.Table):
+    orbit_id = qv.LargeStringColumn()
+    warning_time = qv.Float64Column(nullable=True)
 
 class DiscoverySummary(qv.Table):
     diameter = qv.Float64Column()

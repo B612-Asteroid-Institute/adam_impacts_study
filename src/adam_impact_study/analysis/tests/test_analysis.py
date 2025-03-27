@@ -11,7 +11,7 @@ from adam_impact_study.analysis import (
     compute_realization_time,
     compute_warning_time,
 )
-from adam_impact_study.analysis.plots import plot_ip_over_time
+from adam_impact_study.analysis.plots import plot_individual_orbit_ip_over_time
 from adam_impact_study.types import ImpactorOrbits, Observations, WindowResult
 
 
@@ -92,25 +92,28 @@ def impacting_orbits():
 
 def test_plot_ip_over_time(impact_study_results, impacting_orbits, tmpdir):
     tmpdir_path = tmpdir.mkdir("plots")
-    os.makedirs(tmpdir_path, exist_ok=True)
 
     # Test without survey_start
-    plot_ip_over_time(
+    plot_individual_orbit_ip_over_time(
         impacting_orbits, impact_study_results, tmpdir_path, survey_start=None
     )
     orbit_ids = impact_study_results.orbit_id.unique()
     for obj_id in orbit_ids:
-        assert os.path.exists(os.path.join(tmpdir_path, f"{obj_id}/IP_{obj_id}.png"))
+        plot_path = tmpdir_path / f"IP_{obj_id}.png"
+        assert plot_path.exists()
+
+    other_tmpdir_path = tmpdir.mkdir("other_plots")
 
     # Test with survey_start
     survey_start = Timestamp.from_mjd(
         [59790.0], scale="utc"
     )  # 10 days before first observation
-    plot_ip_over_time(
-        impacting_orbits, impact_study_results, tmpdir_path, survey_start=survey_start
+    plot_individual_orbit_ip_over_time(
+        impacting_orbits, impact_study_results, other_tmpdir_path, survey_start=survey_start
     )
     for obj_id in orbit_ids:
-        assert os.path.exists(os.path.join(tmpdir_path, f"{obj_id}/IP_{obj_id}.png"))
+        plot_path = other_tmpdir_path / f"IP_{obj_id}.png"
+        assert plot_path.exists()
 
 
 def test_compute_discovery_dates():
@@ -172,7 +175,7 @@ def test_compute_warning_time():
             vz=[0, 0, 0],
             time=Timestamp.from_mjd([60000, 60000, 60000]),
         ),
-        impact_time=Timestamp.from_mjd([60100, 60200, 60300]),  # Different impact times
+        impact_time=Timestamp.from_mjd([60100, 60200, 60350]),  # Different impact times
         dynamical_class=["APO", "APO", "APO"],
         ast_class=["C", "S", "C"],
         diameter=[1.0, 1.0, 1.0],
@@ -186,32 +189,41 @@ def test_compute_warning_time():
         GS=[0.15, 0.15, 0.15],
     )
 
+    discovery_dates = DiscoveryDates.from_kwargs(
+        orbit_id=["test1", "test2", "test3"],
+        discovery_date=Timestamp.from_mjd([60050, 60250, 60300]),
+    )
+
     # Create test results
     results = WindowResult.from_kwargs(
-        orbit_id=["test1", "test1", "test2", "test3"],
+        orbit_id=["test1", "test1", "test2", "test2", "test3", "test3"],
         condition_id=[
             "Default - Earth",
             "Default - Earth",
             "Default - Earth",
             "Default - Earth",
+            "Default - Earth",
+            "Default - Earth",
         ],
-        status=["complete", "complete", "complete", "complete"],
-        observation_start=Timestamp.from_mjd([60000, 60010, 60000, 60000]),
-        observation_end=Timestamp.from_mjd([60050, 60060, 60150, 60250]),
-        window=["60000_60050", "60000_60060", "60000_60150", "60000_60250"],
-        observation_count=[10, 15, 5, 20],
-        observations_rejected=[0, 0, 0, 0],
-        observation_nights=[1, 1, 1, 1],
+        status=["complete", "complete", "complete", "complete", "complete", "complete"],
+        observation_start=Timestamp.from_mjd([60000, 60010, 60000, 60000, 60000, 60000]),
+        observation_end=Timestamp.from_mjd([60050, 60060, 60150, 60250, 60250, 60300]),
+        window=["60000_60050", "60000_60060", "60000_60150", "60000_60250", "60000_60250", "60000_60300"],
+        observation_count=[10, 15, 5, 20, 10, 10],
+        observations_rejected=[0, 0, 0, 0, 0, 0],
+        observation_nights=[1, 2, 1, 2, 1, 2],
         impact_probability=[
-            0.2,
+            0.00001,
             0.3,
             0.00001,
+            0.00002,
             0.5,
-        ],  # obj1 has two entries, obj2 below threshold
+            0.5,
+        ],
     )
 
     # Compute warning times
-    warning_times = compute_warning_time(impactor_orbits, results, threshold=1e-4)
+    warning_times = compute_warning_time(impactor_orbits, results, discovery_dates, threshold=1e-4)
 
     assert len(warning_times) == 3
 
@@ -221,20 +233,24 @@ def test_compute_warning_time():
     assert pc.any(pc.equal(warning_times.orbit_id, "test3")).as_py()
 
     # Check warning time
+    # obj1 doesn't meet threshold until 60060
     warning_time_obj1 = warning_times.select("orbit_id", "test1")
-    assert warning_time_obj1.warning_time[0].as_py() == 50.0  # 60100 - 60050
+    assert warning_time_obj1.warning_time[0].as_py() == 40.0  # 60100 - 60060
 
+    # obj2 doesn't meet threshold at all
     warning_time_obj2 = warning_times.select("orbit_id", "test2")
     assert pc.all(pc.is_null(warning_time_obj2.warning_time)).as_py()
 
+    # obj3 meets threshold at 60250 but isn't technically discovered until 60300
     warning_time_obj3 = warning_times.select("orbit_id", "test3")
-    assert warning_time_obj3.warning_time[0].as_py() == 50.0  # 60300 - 60250
+    assert warning_time_obj3.warning_time[0].as_py() == 50.0  # 60350 - 60300 (discovery date)
 
     # Make sure warning time still works if inputs are not sorted
-    scrambled_results = results.take([1, 0, 2, 3])
-    scrambled_impactor_orbits = impactor_orbits.take([1, 0, 2])
+    scrambled_results = results.take([1, 0, 4, 2, 5, 3])
+    scrambled_impactor_orbits = impactor_orbits.take([1, 2, 0])
+    scrambled_discovery_dates = discovery_dates.take([2, 1, 0])
     warning_times = compute_warning_time(
-        scrambled_impactor_orbits, scrambled_results, threshold=0.25
+        scrambled_impactor_orbits, scrambled_results, scrambled_discovery_dates, threshold=0.25
     )
     assert len(warning_times) == 3
     assert warning_times.orbit_id.to_pylist() == ["test1", "test2", "test3"]
@@ -268,9 +284,13 @@ def test_compute_warning_time_edge_cases():
         y_r=[0.0, 0.0, 0.0],
         GS=[0.15, 0.15, 0.15],
     )
+    discovery_dates = DiscoveryDates.from_kwargs(
+        orbit_id=["test1", "test2", "test3"],
+        discovery_date=Timestamp.from_mjd([60050, 60250, 60350]),
+    )
     empty_results = WindowResult.empty()
 
-    empty_warning_times = compute_warning_time(impactor_orbits, empty_results)
+    empty_warning_times = compute_warning_time(impactor_orbits, empty_results, discovery_dates)
     assert len(empty_warning_times) == 3
     assert pc.all(pc.is_null(empty_warning_times.column("warning_time"))).as_py()
 
@@ -314,7 +334,7 @@ def test_compute_warning_time_edge_cases():
         GS=[0.15],
     )
 
-    low_prob_warning_times = compute_warning_time(low_prob_orbits, low_prob_results)
+    low_prob_warning_times = compute_warning_time(low_prob_orbits, low_prob_results, discovery_dates)
     assert len(low_prob_warning_times) == 1
 
 

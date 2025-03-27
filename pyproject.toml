@@ -35,7 +35,7 @@ build-backend = "pdm.backend"
 [project.optional-dependencies]
 dev = [
     "black",
-    "ipython",
+    "ipython>=9.0.2",
     "isort",
     "mypy",
     "pdm",
@@ -48,6 +48,7 @@ dev = [
     "seaborn>=0.13.2",
     "memray>=1.15.0",
     "ipykernel>=6.29.5",
+    "ipywidgets>=8.1.5",
 ]
 
 [tool.pdm.scripts]
