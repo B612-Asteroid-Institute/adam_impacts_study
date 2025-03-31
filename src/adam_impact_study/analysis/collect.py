@@ -133,7 +133,9 @@ def collect_all_observations(run_dir: Union[str, pathlib.Path]) -> Observations:
     observations_files = run_dir_path.glob("**/*observations_*.parquet")
     observations = Observations.empty()
     for observations_file in observations_files:
-        observations = qv.concatenate([observations, Observations.from_parquet(observations_file)])
+        observations = qv.concatenate(
+            [observations, Observations.from_parquet(observations_file)]
+        )
 
     return observations
 
@@ -181,12 +183,16 @@ def collect_all_impactor_orbits(run_dir: Union[str, pathlib.Path]) -> ImpactorOr
     impactor_orbits_files = run_dir_path.glob("**/*impactor_orbit.parquet")
     impactor_orbits = ImpactorOrbits.empty()
     for impactor_orbits_file in impactor_orbits_files:
-        impactor_orbits = qv.concatenate([impactor_orbits, ImpactorOrbits.from_parquet(impactor_orbits_file)])
+        impactor_orbits = qv.concatenate(
+            [impactor_orbits, ImpactorOrbits.from_parquet(impactor_orbits_file)]
+        )
 
     return impactor_orbits
 
 
-def collect_all_results(run_dir: Union[str, pathlib.Path]) -> Tuple[ImpactorOrbits, Observations, ResultsTiming, WindowResult]:
+def collect_all_results(
+    run_dir: Union[str, pathlib.Path],
+) -> Tuple[ImpactorOrbits, Observations, ResultsTiming, WindowResult]:
     """Collect all results from a run directory.
 
     Parameters
