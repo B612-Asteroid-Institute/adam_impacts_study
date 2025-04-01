@@ -6,7 +6,6 @@ from typing import Union
 import pyarrow as pa
 import pyarrow.compute as pc
 import quivr as qv
-
 from adam_core.time import Timestamp
 
 from adam_impact_study.analysis.collect import collect_all_results
