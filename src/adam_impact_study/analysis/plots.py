@@ -580,8 +580,9 @@ def plot_discoveries_by_diameter_decade(
     # Filter to only include complete results
     summary = summary.apply_mask(summary.complete())
 
-    impact_decades, unique_decades, unique_diameters = summary.get_diameter_decade_data()
-
+    impact_decades, unique_decades, unique_diameters = (
+        summary.get_diameter_decade_data()
+    )
 
     discovery_by_diameter_decade = DiscoveryByDiameterDecade.empty()
 
@@ -689,7 +690,9 @@ def plot_realizations_by_diameter_decade(
 
             # Count objects with non-null realization time (meaning they were realized)
             realization_mask = pc.invert(
-                pc.is_null(orbits_at_diameter_and_decade.ip_threshold_0_dot_01_percent)
+                pc.is_null(
+                    orbits_at_diameter_and_decade.ip_threshold_0_dot_01_percent.mjd()
+                )
             )
             realized = pc.sum(realization_mask).as_py()
             total = len(orbits_at_diameter_and_decade)
@@ -765,13 +768,14 @@ def plot_max_impact_probability_by_diameter_decade(
     Tuple[plt.Figure, plt.Axes]
         The figure and axes objects for the plot.
     """
+
+    # Filter to only include complete results (needed for the rest of the function)
+    summary = summary.apply_mask(summary.complete())
+
     # Get common data
     impact_decades, unique_decades, unique_diameters = (
         summary.get_diameter_decade_data()
     )
-
-    # Filter to only include complete results (needed for the rest of the function)
-    summary = summary.apply_mask(summary.complete())
 
     max_ip_by_diameter_decade = MaxImpactProbabilityByDiameterDecade.empty()
 
@@ -872,13 +876,14 @@ def plot_iawn_threshold_by_diameter_decade(
     Tuple[plt.Figure, plt.Axes]
         The figure and axes objects for the plot.
     """
+
+    # Filter to only include complete results (needed for the rest of the function)
+    summary = summary.apply_mask(summary.complete())
+
     # Get common data
     impact_decades, unique_decades, unique_diameters = (
         summary.get_diameter_decade_data()
     )
-
-    # Filter to only include complete results (needed for the rest of the function)
-    summary = summary.apply_mask(summary.complete())
 
     iawn_by_diameter_decade = IAWNThresholdByDiameterDecade.empty()
 
@@ -893,7 +898,9 @@ def plot_iawn_threshold_by_diameter_decade(
             )
 
             # Count objects with null IAWN_time (meaning they never reached the threshold)
-            iawn_null_mask = pc.is_null(orbits_at_diameter_and_decade.ip_threshold_1_percent)
+            iawn_null_mask = pc.is_null(
+                orbits_at_diameter_and_decade.ip_threshold_1_percent.mjd()
+            )
             not_reaching_threshold = pc.sum(iawn_null_mask).as_py()
             total = len(orbits_at_diameter_and_decade)
 
@@ -944,7 +951,6 @@ def plot_iawn_threshold_by_diameter_decade(
     ax.yaxis.grid(True, linestyle="--", alpha=0.7)
 
     return fig, ax
-
 
 
 def make_analysis_plots(
