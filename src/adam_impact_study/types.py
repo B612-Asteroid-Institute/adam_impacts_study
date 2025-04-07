@@ -117,6 +117,7 @@ class WindowResult(qv.Table):
     def failed(self) -> pa.BooleanArray:
         return pc.equal(self.status, "failed")
 
+
 class ResultsTiming(qv.Table):
     orbit_id = qv.LargeStringColumn()
     sorcha_runtime = qv.Float64Column(nullable=True)
@@ -231,48 +232,73 @@ class ImpactorResultSummary(qv.Table):
         return pc.subtract(self.last_observation.mjd(), self.first_observation.mjd())
 
     def days_discovery_to_0_dot_01_percent(self) -> pa.FloatArray:
-        return pc.subtract(self.ip_threshold_0_dot_01_percent.mjd(), self.discovery_time.mjd())
+        return pc.subtract(
+            self.ip_threshold_0_dot_01_percent.mjd(), self.discovery_time.mjd()
+        )
 
     def days_discovery_to_1_percent(self) -> pa.FloatArray:
         return pc.subtract(self.ip_threshold_1_percent.mjd(), self.discovery_time.mjd())
 
     def days_discovery_to_10_percent(self) -> pa.FloatArray:
-        return pc.subtract(self.ip_threshold_10_percent.mjd(), self.discovery_time.mjd())
+        return pc.subtract(
+            self.ip_threshold_10_percent.mjd(), self.discovery_time.mjd()
+        )
 
     def days_discovery_to_50_percent(self) -> pa.FloatArray:
-        return pc.subtract(self.ip_threshold_50_percent.mjd(), self.discovery_time.mjd())
+        return pc.subtract(
+            self.ip_threshold_50_percent.mjd(), self.discovery_time.mjd()
+        )
 
     def days_discovery_to_90_percent(self) -> pa.FloatArray:
-        return pc.subtract(self.ip_threshold_90_percent.mjd(), self.discovery_time.mjd())
+        return pc.subtract(
+            self.ip_threshold_90_percent.mjd(), self.discovery_time.mjd()
+        )
 
     def days_discovery_to_100_percent(self) -> pa.FloatArray:
-        return pc.subtract(self.ip_threshold_100_percent.mjd(), self.discovery_time.mjd())
+        return pc.subtract(
+            self.ip_threshold_100_percent.mjd(), self.discovery_time.mjd()
+        )
 
     def days_0_dot_01_percent_to_impact(self) -> pa.FloatArray:
-        return pc.subtract(self.orbit.impact_time.mjd(), self.ip_threshold_0_dot_01_percent.mjd())
+        return pc.subtract(
+            self.orbit.impact_time.mjd(), self.ip_threshold_0_dot_01_percent.mjd()
+        )
 
     def days_1_percent_to_impact(self) -> pa.FloatArray:
-        return pc.subtract(self.orbit.impact_time.mjd(), self.ip_threshold_1_percent.mjd())
+        return pc.subtract(
+            self.orbit.impact_time.mjd(), self.ip_threshold_1_percent.mjd()
+        )
 
     def days_10_percent_to_impact(self) -> pa.FloatArray:
-        return pc.subtract(self.orbit.impact_time.mjd(), self.ip_threshold_10_percent.mjd())
+        return pc.subtract(
+            self.orbit.impact_time.mjd(), self.ip_threshold_10_percent.mjd()
+        )
 
     def days_50_percent_to_impact(self) -> pa.FloatArray:
-        return pc.subtract(self.orbit.impact_time.mjd(), self.ip_threshold_50_percent.mjd())
+        return pc.subtract(
+            self.orbit.impact_time.mjd(), self.ip_threshold_50_percent.mjd()
+        )
 
     def days_90_percent_to_impact(self) -> pa.FloatArray:
-        return pc.subtract(self.orbit.impact_time.mjd(), self.ip_threshold_90_percent.mjd())
+        return pc.subtract(
+            self.orbit.impact_time.mjd(), self.ip_threshold_90_percent.mjd()
+        )
 
     def days_100_percent_to_impact(self) -> pa.FloatArray:
-        return pc.subtract(self.orbit.impact_time.mjd(), self.ip_threshold_100_percent.mjd())
+        return pc.subtract(
+            self.orbit.impact_time.mjd(), self.ip_threshold_100_percent.mjd()
+        )
+
 
 class DiscoveryDates(qv.Table):
     orbit_id = qv.LargeStringColumn()
     discovery_date = Timestamp.as_column(nullable=True)
 
+
 class WarningTimes(qv.Table):
     orbit_id = qv.LargeStringColumn()
     warning_time = qv.Float64Column(nullable=True)
+
 
 class DiscoverySummary(qv.Table):
     diameter = qv.Float64Column()

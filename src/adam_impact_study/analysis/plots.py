@@ -28,7 +28,17 @@ def plot_warning_time_histogram(
 
     fig, ax = plt.subplots(1, 1, dpi=200)
 
-    warning_time_max = pc.ceil(pc.max(summary.warning_time)).as_py() / 365.25
+    warning_time_max = (
+        pc.ceil(
+            pc.max(
+                pc.subtract(
+                    summary.orbit.impact_time.mjd(),
+                    summary.ip_threshold_1_percent.mjd(),
+                )
+            )
+        ).as_py()
+        / 365.25
+    )
     bins = np.arange(0, warning_time_max, 1)
 
     unique_diameters = summary.orbit.diameter.unique().sort().to_pylist()
@@ -37,7 +47,10 @@ def plot_warning_time_histogram(
 
         orbits_at_diameter = summary.select("orbit.diameter", diameter)
 
-        warning_time = orbits_at_diameter.warning_time.to_numpy(zero_copy_only=False)
+        warning_time = pc.subtract(
+            orbits_at_diameter.orbit.impact_time.mjd(),
+            orbits_at_diameter.ip_threshold_1_percent.mjd(),
+        ).to_numpy(zero_copy_only=False)
 
         ax.hist(
             np.where(np.isnan(warning_time), 0, warning_time) / 365.25,
@@ -66,7 +79,17 @@ def plot_realization_time_histogram(
 
     fig, ax = plt.subplots(1, 1, dpi=200)
 
-    realization_time_max = pc.ceil(pc.max(summary.realization_time)).as_py()
+    realization_time_max = (
+        pc.ceil(
+            pc.max(
+                pc.subtract(
+                    summary.ip_threshold_0_dot_01_percent.mjd(),
+                    summary.discovery_time.mjd(),
+                )
+            )
+        ).as_py()
+        / 365.25
+    )
     if realization_time_max > 100:
         realization_time_max = 100
 
@@ -80,11 +103,12 @@ def plot_realization_time_histogram(
     colors = plt.cm.coolwarm(np.linspace(0, 1, len(unique_diameters)))
     for diameter, color in zip(unique_diameters, colors):
         orbits_at_diameter = summary.select("orbit.diameter", diameter)
-        realization_time = orbits_at_diameter.realization_time.to_numpy(
-            zero_copy_only=False
-        )
+        diameter_realization_time = pc.subtract(
+            orbits_at_diameter.ip_threshold_0_dot_01_percent.mjd(),
+            orbits_at_diameter.discovery_time.mjd(),
+        ).to_numpy(zero_copy_only=False)
         ax.hist(
-            realization_time[~np.isnan(realization_time)],
+            diameter_realization_time[~np.isnan(diameter_realization_time)],
             histtype="step",
             label=f"{diameter:.3f} km",
             color=color,
@@ -93,7 +117,9 @@ def plot_realization_time_histogram(
         )
 
     # Identify number of objects beyond 100 days
-    realization_time = summary.realization_time.to_numpy(zero_copy_only=False)
+    realization_time = pc.subtract(
+        summary.ip_threshold_0_dot_01_percent.mjd(), summary.discovery_time.mjd()
+    ).to_numpy(zero_copy_only=False)
     n_objects_beyond_100_days = np.sum(realization_time > 100)
 
     if n_objects_beyond_100_days > 0:
