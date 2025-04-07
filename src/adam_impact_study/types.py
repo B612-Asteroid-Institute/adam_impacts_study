@@ -143,17 +143,28 @@ class ImpactorResultSummary(qv.Table):
     singletons = qv.UInt64Column()
     # Number of tracklets from observations recovered
     tracklets = qv.UInt64Column()
+    # Date of first observation
+    first_observation = Timestamp.as_column(nullable=True)
+    # Date of last observation
+    last_observation = Timestamp.as_column(nullable=True)
     # Time when observations met minimum artificial discovery criteria
     # Currently set to 3 unique nights of tracklets
     discovery_time = Timestamp.as_column(nullable=True)
-    # Duration in days since the first non-zero impact probability
-    # until true impact date
-    warning_time = qv.Float64Column(nullable=True)
-    # Time between discovery and non-zero impact probability
-    # (note, this is partially a function of our monte-carlo sampling)
-    realization_time = qv.Float64Column(nullable=True)
+    # Date object first reaches 0.01% impact probability
+    ip_threshold_0_dot_01_percent = Timestamp.as_column(nullable=True)
+    # Date object first reaches 1% impact probability
+    ip_threshold_1_percent = Timestamp.as_column(nullable=True)
+    # Date object first reaches 10% impact probability
+    ip_threshold_10_percent = Timestamp.as_column(nullable=True)
+    # Date object first reaches 50% impact probability
+    ip_threshold_50_percent = Timestamp.as_column(nullable=True)
+    # Date object first reaches 90% impact probability
+    ip_threshold_90_percent = Timestamp.as_column(nullable=True)
+    # Date object first reaches 99% impact probability
+    ip_threshold_100_percent = Timestamp.as_column(nullable=True)
     # How close all the windows got to discovering the definite impact nature
     maximum_impact_probability = qv.Float64Column(nullable=True)
+    # Error message from the impact study
     error = qv.LargeStringColumn(nullable=True)
     # Runtime of the impact study
     results_timing = ResultsTiming.as_column(nullable=True)
@@ -216,6 +227,44 @@ class ImpactorResultSummary(qv.Table):
             total=discoveries_by_diameter_class["discovered_count"],
         )
 
+    def arc_length(self) -> pa.FloatArray:
+        return pc.subtract(self.last_observation.mjd(), self.first_observation.mjd())
+
+    def days_discovery_to_0_dot_01_percent(self) -> pa.FloatArray:
+        return pc.subtract(self.ip_threshold_0_dot_01_percent.mjd(), self.discovery_time.mjd())
+
+    def days_discovery_to_1_percent(self) -> pa.FloatArray:
+        return pc.subtract(self.ip_threshold_1_percent.mjd(), self.discovery_time.mjd())
+
+    def days_discovery_to_10_percent(self) -> pa.FloatArray:
+        return pc.subtract(self.ip_threshold_10_percent.mjd(), self.discovery_time.mjd())
+
+    def days_discovery_to_50_percent(self) -> pa.FloatArray:
+        return pc.subtract(self.ip_threshold_50_percent.mjd(), self.discovery_time.mjd())
+
+    def days_discovery_to_90_percent(self) -> pa.FloatArray:
+        return pc.subtract(self.ip_threshold_90_percent.mjd(), self.discovery_time.mjd())
+
+    def days_discovery_to_100_percent(self) -> pa.FloatArray:
+        return pc.subtract(self.ip_threshold_100_percent.mjd(), self.discovery_time.mjd())
+
+    def days_0_dot_01_percent_to_impact(self) -> pa.FloatArray:
+        return pc.subtract(self.orbit.impact_time.mjd(), self.ip_threshold_0_dot_01_percent.mjd())
+
+    def days_1_percent_to_impact(self) -> pa.FloatArray:
+        return pc.subtract(self.orbit.impact_time.mjd(), self.ip_threshold_1_percent.mjd())
+
+    def days_10_percent_to_impact(self) -> pa.FloatArray:
+        return pc.subtract(self.orbit.impact_time.mjd(), self.ip_threshold_10_percent.mjd())
+
+    def days_50_percent_to_impact(self) -> pa.FloatArray:
+        return pc.subtract(self.orbit.impact_time.mjd(), self.ip_threshold_50_percent.mjd())
+
+    def days_90_percent_to_impact(self) -> pa.FloatArray:
+        return pc.subtract(self.orbit.impact_time.mjd(), self.ip_threshold_90_percent.mjd())
+
+    def days_100_percent_to_impact(self) -> pa.FloatArray:
+        return pc.subtract(self.orbit.impact_time.mjd(), self.ip_threshold_100_percent.mjd())
 
 class DiscoveryDates(qv.Table):
     orbit_id = qv.LargeStringColumn()

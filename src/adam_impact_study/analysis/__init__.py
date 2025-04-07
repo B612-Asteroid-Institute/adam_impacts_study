@@ -4,4 +4,5 @@ from .main import (
     compute_realization_time,
     compute_warning_time,
     summarize_impact_study_results,
+    compute_ip_threshold_date,
 )

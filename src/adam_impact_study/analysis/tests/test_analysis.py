@@ -6,14 +6,13 @@ from adam_core.coordinates import CartesianCoordinates, Origin, SphericalCoordin
 from adam_core.time import Timestamp
 
 from adam_impact_study.analysis import (
-    DiscoveryDates,
     compute_discovery_dates,
     compute_realization_time,
     compute_warning_time,
+    compute_ip_threshold_date,
 )
 from adam_impact_study.analysis.plots import plot_individual_orbit_ip_over_time
-from adam_impact_study.types import ImpactorOrbits, Observations, WindowResult
-
+from adam_impact_study.types import ImpactorOrbits, Observations, WindowResult, DiscoveryDates
 
 @pytest.fixture
 def impact_study_results():
@@ -337,6 +336,57 @@ def test_compute_warning_time_edge_cases():
     low_prob_warning_times = compute_warning_time(low_prob_orbits, low_prob_results, discovery_dates)
     assert len(low_prob_warning_times) == 1
 
+def test_compute_ip_threshold_date():
+    impactor_orbits = ImpactorOrbits.from_kwargs(
+        orbit_id=["test1", "test2", "test3"],
+        object_id=["obj1", "obj2", "obj3"],
+        coordinates=CartesianCoordinates.from_kwargs(
+            x=[1, 1, 1],
+            y=[1, 1, 1],
+            z=[1, 1, 1],
+            vx=[0, 0, 0],
+            vy=[0, 0, 0],
+            vz=[0, 0, 0],
+            time=Timestamp.from_mjd([60000, 60000, 60000]),
+        ),
+        impact_time=Timestamp.from_mjd([60500, 60300, 60350]),
+        dynamical_class=["APO", "APO", "APO"],
+        ast_class=["C", "S", "C"],
+        diameter=[1.0, 1.0, 1.0],
+        albedo=[0.1, 0.1, 0.1],
+        H_r=[20.0, 20.0, 20.0],
+        u_r=[0.0, 0.0, 0.0],
+        g_r=[0.0, 0.0, 0.0],
+        i_r=[0.0, 0.0, 0.0],
+        z_r=[0.0, 0.0, 0.0],
+        y_r=[0.0, 0.0, 0.0],
+        GS=[0.15, 0.15, 0.15],
+    )
+
+    # Create test results
+    results = WindowResult.from_kwargs(
+        orbit_id=["test1", "test1", "test1", "test2", "test1", "test1"],
+        condition_id=["Default - Earth", "Default - Earth", "Default - Earth", "Default - Earth", "Default - Earth", "Default - Earth"],
+        status=["complete", "complete", "complete", "complete", "complete", "complete"],
+        observation_start=Timestamp.from_mjd([60000, 60000, 60000, 60000, 60000, 60000]),
+        observation_end=Timestamp.from_mjd([60050, 60060, 60070, 60080, 60090, 60100]),
+        window=["60000_60050", "60000_60060", "60000_60070", "60000_60080", "60000_60090", "60000_60100"],
+        observation_count=[10, 15, 20, 25, 30, 35],
+        observations_rejected=[0, 0, 0, 0, 0, 0],
+        observation_nights=[1, 1, 1, 1, 1, 1],
+        impact_probability=[0.0001, 0.01, 0.3, 0.99, 0.3, 0.3],
+    )
+
+    # use take to randomly sort the results so we know our sorting and drop duplicates is working
+
+    ip_threshold_date_1_percent = compute_ip_threshold_date(impactor_orbits, results, 0.01)
+    assert ip_threshold_date_1_percent.sort_by("orbit_id").date.mjd().to_pylist() == [60060.0, 60080.0, None]
+
+    ip_threshold_date_30_percent = compute_ip_threshold_date(impactor_orbits, results, 0.3)
+    assert ip_threshold_date_30_percent.sort_by("orbit_id").date.mjd().to_pylist() == [60070.0, 60080.0, None]
+
+    ip_threshold_date_90_percent = compute_ip_threshold_date(impactor_orbits, results, 0.9)
+    assert ip_threshold_date_90_percent.sort_by("orbit_id").date.mjd().to_pylist() == [None, 60080.0, None]
 
 def test_compute_realization_time():
     # Create test impactor orbits

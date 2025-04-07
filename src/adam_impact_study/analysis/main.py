@@ -194,6 +194,50 @@ def compute_warning_time(
     return warning_times
 
 
+class IPThresholdDate(qv.Table):
+    orbit_id = qv.LargeStringColumn()
+    ip_threshold = qv.Float64Column()
+    date = Timestamp.as_column(nullable=True)
+
+def compute_ip_threshold_date(
+    impactor_orbits: ImpactorOrbits,
+    results: WindowResult,
+    threshold: float, 
+) -> IPThresholdDate:
+    """
+    Compute the date when the impact probability first reaches a given threshold.
+    """
+
+    results_sorted = results.sort_by(
+        ["orbit_id", "observation_end.days", "observation_end.nanos"]
+    )
+
+    # Filter results to cases where impact probability is above threshold
+    filtered_results = results_sorted.apply_mask(
+        pc.greater_equal(pc.fill_null(results_sorted.impact_probability, 0), threshold)
+    )
+
+    filtered_results_table = filtered_results.drop_duplicates(subset=["orbit_id"], keep="first")
+
+    ip_threshold_dates = IPThresholdDate.from_kwargs(
+        orbit_id=filtered_results_table.orbit_id,
+        ip_threshold=pa.repeat(threshold, len(filtered_results_table)),
+        date=filtered_results_table.observation_end,
+    )
+
+    null_orbit_ids = set(impactor_orbits.orbit_id.to_pylist()) - set(filtered_results_table.orbit_id.to_pylist())
+
+    null_threshold_dates = IPThresholdDate.from_kwargs(
+        orbit_id=list(null_orbit_ids),
+        ip_threshold=pa.repeat(threshold, len(null_orbit_ids)),
+        date=pa.repeat(None, len(null_orbit_ids)),
+    )
+
+    ip_threshold_dates = qv.concatenate([ip_threshold_dates, null_threshold_dates])
+
+    return ip_threshold_dates
+
+
 
 class RealizationTimes(qv.Table):
     orbit_id = qv.LargeStringColumn()
@@ -291,6 +335,8 @@ def compute_realization_time(
     ).sort_by([("orbit_id", "ascending")])
 
 
+
+
 class ObservationCadence(qv.Table):
     orbit_id = qv.LargeStringColumn()
     tracklets = qv.UInt64Column()
@@ -380,17 +426,34 @@ def summarize_impact_study_object_results(
     orbit_window_results = window_results.select("orbit_id", orbit_id)
     orbit_discovery_dates = compute_discovery_dates(orbit_observations)
     completed_window_results = orbit_window_results.apply_mask(orbit_window_results.complete())
-    orbit_warning_times = compute_warning_time(impactor_orbit, completed_window_results, orbit_discovery_dates)
-    orbit_realization_times = compute_realization_time(
-        impactor_orbit, completed_window_results, orbit_discovery_dates
-    )
     orbit_observation_cadence = compute_observation_cadence(orbit_observations)
 
     all_orbit_windows_completed = pc.all(
         pc.equal(orbit_window_results.status, "complete")
     ).as_py()
 
-    # If there are no observations, return an incomplete result
+    first_observation = orbit_observations.coordinates.time.min()
+    last_observation = orbit_observations.coordinates.time.max()
+
+    ip_threshold_0_dot_01_percent = compute_ip_threshold_date(
+        impactor_orbit, completed_window_results, 1e-4
+    )
+    ip_threshold_1_percent = compute_ip_threshold_date(
+        impactor_orbit, completed_window_results, 1e-2
+    )
+    ip_threshold_10_percent = compute_ip_threshold_date(
+        impactor_orbit, completed_window_results, 0.1
+    )
+    ip_threshold_50_percent = compute_ip_threshold_date(
+        impactor_orbit, completed_window_results, 0.5
+    )
+    ip_threshold_90_percent = compute_ip_threshold_date(
+        impactor_orbit, completed_window_results, 0.9
+    )
+    ip_threshold_100_percent = compute_ip_threshold_date(
+        impactor_orbit, completed_window_results, 1.0
+    )
+
     if len(orbit_observations) == 0:
         return ImpactorResultSummary.from_kwargs(
             orbit=impactor_orbit,
@@ -400,9 +463,15 @@ def summarize_impact_study_object_results(
             observations=[0],
             singletons=[0],
             tracklets=[0],
+            first_observation=Timestamp.nulls(1, scale="utc"),
+            last_observation=Timestamp.nulls(1, scale="utc"),
             discovery_time=Timestamp.nulls(1, scale="utc"),
-            warning_time=[None],
-            realization_time=[None],
+            ip_threshold_0_dot_01_percent=Timestamp.nulls(1, scale="utc"),
+            ip_threshold_1_percent=Timestamp.nulls(1, scale="utc"),
+            ip_threshold_10_percent=Timestamp.nulls(1, scale="utc"),
+            ip_threshold_50_percent=Timestamp.nulls(1, scale="utc"),
+            ip_threshold_90_percent=Timestamp.nulls(1, scale="utc"),
+            ip_threshold_100_percent=Timestamp.nulls(1, scale="utc"),
             maximum_impact_probability=[0],
             results_timing=orbit_results_timing,
             error=["Orbit has no observations"],
@@ -419,9 +488,16 @@ def summarize_impact_study_object_results(
             observations=[len(orbit_observations)],
             singletons=[pc.sum(orbit_observation_cadence.singletons)],
             tracklets=[pc.sum(orbit_observation_cadence.tracklets)],
+            first_observation=first_observation,
+            last_observation=last_observation,
             discovery_time=orbit_discovery_dates.discovery_date,
-            warning_time=orbit_warning_times.warning_time,
-            realization_time=orbit_realization_times.realization_time,
+            ip_threshold_0_dot_01_percent=ip_threshold_0_dot_01_percent.date,
+            ip_threshold_1_percent=ip_threshold_1_percent.date,
+            ip_threshold_10_percent=ip_threshold_10_percent.date,
+            ip_threshold_50_percent=ip_threshold_50_percent.date,
+            ip_threshold_90_percent=ip_threshold_90_percent.date,
+            ip_threshold_100_percent=ip_threshold_100_percent.date,
+            maximum_impact_probability=[pc.max(orbit_window_results.impact_probability)],
             results_timing=orbit_results_timing,
             status=["complete" if all_orbit_windows_completed else "incomplete"],
         )
@@ -435,10 +511,16 @@ def summarize_impact_study_object_results(
             observations=[len(orbit_observations)],
             singletons=[pc.sum(orbit_observation_cadence.singletons)],
             tracklets=[pc.sum(orbit_observation_cadence.tracklets)],
+            first_observation=first_observation,
+            last_observation=last_observation,
+            discovery_time=orbit_discovery_dates.discovery_date,
+            ip_threshold_0_dot_01_percent=ip_threshold_0_dot_01_percent.date,
+            ip_threshold_1_percent=ip_threshold_1_percent.date,
+            ip_threshold_10_percent=ip_threshold_10_percent.date,
+            ip_threshold_50_percent=ip_threshold_50_percent.date,
+            ip_threshold_90_percent=ip_threshold_90_percent.date,
+            ip_threshold_100_percent=ip_threshold_100_percent.date,
             maximum_impact_probability=[0],
-            warning_time=[None],
-            realization_time=[None],
-            discovery_time=Timestamp.nulls(1, scale="utc"),
             results_timing=orbit_results_timing,
             error=["Orbit has no windows"],
             status=["incomplete"],
@@ -455,9 +537,15 @@ def summarize_impact_study_object_results(
             observations=[len(orbit_observations)],
             singletons=[pc.sum(orbit_observation_cadence.singletons)],
             tracklets=[pc.sum(orbit_observation_cadence.tracklets)],
+            first_observation=first_observation,
+            last_observation=last_observation,
             discovery_time=orbit_discovery_dates.discovery_date,
-            warning_time=orbit_warning_times.warning_time,
-            realization_time=orbit_realization_times.realization_time,
+            ip_threshold_0_dot_01_percent=ip_threshold_0_dot_01_percent.date,
+            ip_threshold_1_percent=ip_threshold_1_percent.date,
+            ip_threshold_10_percent=ip_threshold_10_percent.date,
+            ip_threshold_50_percent=ip_threshold_50_percent.date,
+            ip_threshold_90_percent=ip_threshold_90_percent.date,
+            ip_threshold_100_percent=ip_threshold_100_percent.date,
             maximum_impact_probability=[pc.max(orbit_window_results.impact_probability)],
             results_timing=orbit_results_timing,
             error=["Orbit has incomplete windows"],
@@ -480,9 +568,15 @@ def summarize_impact_study_object_results(
         observations=[len(orbit_observations)],
         singletons=[pc.sum(orbit_observation_cadence.singletons)],
         tracklets=[pc.sum(orbit_observation_cadence.tracklets)],
+        first_observation=first_observation,
+        last_observation=last_observation,
         discovery_time=orbit_discovery_dates.discovery_date,
-        warning_time=orbit_warning_times.warning_time,
-        realization_time=orbit_realization_times.realization_time,
+        ip_threshold_0_dot_01_percent=ip_threshold_0_dot_01_percent.date,
+        ip_threshold_1_percent=ip_threshold_1_percent.date,
+        ip_threshold_10_percent=ip_threshold_10_percent.date,
+        ip_threshold_50_percent=ip_threshold_50_percent.date,
+        ip_threshold_90_percent=ip_threshold_90_percent.date,
+        ip_threshold_100_percent=ip_threshold_100_percent.date,
         maximum_impact_probability=[
             pc.max(orbit_window_results.impact_probability)
         ],
