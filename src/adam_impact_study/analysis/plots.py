@@ -820,6 +820,103 @@ def plot_max_impact_probability_by_diameter_decade(
     return fig, ax
 
 
+class IAWNThresholdByDiameterDecade(qv.Table):
+    diameter = qv.Float64Column()
+    decade = qv.LargeStringColumn()
+    percentage_not_reaching_threshold = qv.Float64Column()
+
+
+def plot_iawn_threshold_by_diameter_decade(
+    summary: ImpactorResultSummary,
+) -> Tuple[plt.Figure, plt.Axes]:
+    """
+    Plot the percentage of objects that do not reach the IAWN threshold (1% impact probability)
+    broken down by diameter and impact decade.
+
+    Parameters
+    ----------
+    summary : ImpactorResultSummary
+        The summary of impact study results.
+
+    Returns
+    -------
+    Tuple[plt.Figure, plt.Axes]
+        The figure and axes objects for the plot.
+    """
+    # Get common data
+    impact_decades, unique_decades, unique_diameters = (
+        summary.get_diameter_decade_data()
+    )
+
+    # Filter to only include complete results (needed for the rest of the function)
+    summary = summary.apply_mask(summary.complete())
+
+    iawn_by_diameter_decade = IAWNThresholdByDiameterDecade.empty()
+
+    # Process each decade
+    for decade in unique_decades:
+        # Filter by impact decade
+        orbits_at_decade = summary.apply_mask(impact_decades == decade)
+        for diameter in unique_diameters:
+            # Filter by diameter
+            orbits_at_diameter_and_decade = orbits_at_decade.select(
+                "orbit.diameter", diameter
+            )
+
+            # Count objects with null IAWN_time (meaning they never reached the threshold)
+            iawn_null_mask = pc.is_null(orbits_at_diameter_and_decade.IAWN_time)
+            not_reaching_threshold = pc.sum(iawn_null_mask).as_py()
+            total = len(orbits_at_diameter_and_decade)
+
+            percentage = (not_reaching_threshold / total * 100) if total > 0 else 0
+
+            iawn_by_diameter_decade = qv.concatenate(
+                [
+                    iawn_by_diameter_decade,
+                    IAWNThresholdByDiameterDecade.from_kwargs(
+                        decade=[f"{decade}"],
+                        diameter=[diameter],
+                        percentage_not_reaching_threshold=[percentage],
+                    ),
+                ]
+            )
+
+    # Create the plot
+    width = 0.2
+    x = np.arange(len(unique_decades))
+    colors = plt.cm.viridis(np.linspace(0, 1, len(unique_diameters)))
+    fig, ax = plt.subplots(1, 1, dpi=200, figsize=(10, 6))
+
+    for i, diameter in enumerate(unique_diameters):
+        diameter_data = iawn_by_diameter_decade.select("diameter", diameter)
+        ax.bar(
+            x + i * width,
+            diameter_data.percentage_not_reaching_threshold.to_numpy(
+                zero_copy_only=False
+            ),
+            width=width,
+            color=colors[i],
+        )
+
+    ax.set_xticks(x + width * (len(unique_diameters) - 1) / 2)
+    ax.set_xticklabels(unique_decades)
+    ax.set_xlabel("Impact Decade")
+    ax.set_ylabel("Percentage Not Reaching IAWN Threshold")
+    ax.set_title(
+        "Percentage of Objects Not Reaching IAWN Threshold (1%) by Diameter and Impact Decade"
+    )
+    ax.legend(
+        unique_diameters,
+        title="Diameter [km]",
+        frameon=False,
+        bbox_to_anchor=(1.01, 1),
+        loc="upper left",
+    )
+    ax.yaxis.grid(True, linestyle="--", alpha=0.7)
+
+    return fig, ax
+
+
 def make_analysis_plots(
     summary: ImpactorResultSummary,
     window_results: WindowResult,
@@ -887,6 +984,15 @@ def make_analysis_plots(
         dpi=200,
     )
     logger.info("Generated percentage realized plot")
+    plt.close(fig)
+
+    fig, ax = plot_iawn_threshold_by_diameter_decade(summary)
+    fig.savefig(
+        os.path.join(out_dir, "iawn_threshold_not_reached.jpg"),
+        bbox_inches="tight",
+        dpi=200,
+    )
+    logger.info("Generated IAWN threshold analysis plot")
     plt.close(fig)
 
     fig, ax = plot_collective_ip_over_time(window_results)

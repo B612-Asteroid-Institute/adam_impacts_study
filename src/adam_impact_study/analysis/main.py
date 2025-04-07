@@ -1,11 +1,13 @@
 import argparse
 import logging
 import pathlib
-from typing import Union
+from typing import Optional, Union
 
 import pyarrow as pa
 import pyarrow.compute as pc
 import quivr as qv
+import ray
+from adam_core.ray_cluster import initialize_use_ray
 from adam_core.time import Timestamp
 
 from adam_impact_study.analysis.collect import collect_all_results
@@ -406,6 +408,7 @@ def summarize_impact_study_object_results(
     results_timing: ResultsTiming,
     window_results: WindowResult,
     orbit_id: str,
+    max_processes: Optional[int] = None,
 ) -> ImpactorResultSummary:
     """
     Summarize the impact study results for a single object.
@@ -424,7 +427,10 @@ def summarize_impact_study_object_results(
         impactor_orbit, completed_window_results, orbit_discovery_dates
     )
     orbit_realization_times = compute_realization_time(
-        impactor_orbit, completed_window_results, orbit_discovery_dates
+        impactor_orbit, completed_window_results, orbit_discovery_dates, threshold=1e-4
+    )
+    orbit_IAWN_times = compute_realization_time(
+        impactor_orbit, completed_window_results, orbit_discovery_dates, threshold=0.01
     )
     orbit_observation_cadence = compute_observation_cadence(orbit_observations)
 
@@ -447,6 +453,7 @@ def summarize_impact_study_object_results(
                 discovery_time=Timestamp.nulls(1, scale="utc"),
                 warning_time=[None],
                 realization_time=[None],
+                IAWN_time=[None],
                 maximum_impact_probability=[0],
                 results_timing=orbit_results_timing,
                 error=["Orbit has no observations"],
@@ -465,6 +472,7 @@ def summarize_impact_study_object_results(
                 discovery_time=Timestamp.nulls(1, scale="utc"),
                 warning_time=[None],
                 realization_time=[None],
+                IAWN_time=[None],
                 maximum_impact_probability=[0],
                 results_timing=ResultsTiming.from_kwargs(
                     orbit_id=[orbit_id],
@@ -486,6 +494,7 @@ def summarize_impact_study_object_results(
             discovery_time=orbit_discovery_dates.discovery_date,
             warning_time=orbit_warning_times.warning_time,
             realization_time=orbit_realization_times.realization_time,
+            IAWN_time=orbit_IAWN_times.realization_time,
             results_timing=orbit_results_timing,
             status=["complete" if all_orbit_windows_completed else "incomplete"],
         )
@@ -502,6 +511,7 @@ def summarize_impact_study_object_results(
             maximum_impact_probability=[0],
             warning_time=[None],
             realization_time=[None],
+            IAWN_time=[None],
             discovery_time=Timestamp.nulls(1, scale="utc"),
             results_timing=orbit_results_timing,
             error=["Orbit has no windows"],
@@ -520,6 +530,7 @@ def summarize_impact_study_object_results(
             discovery_time=orbit_discovery_dates.discovery_date,
             warning_time=orbit_warning_times.warning_time,
             realization_time=orbit_realization_times.realization_time,
+            IAWN_time=orbit_IAWN_times.realization_time,
             maximum_impact_probability=[
                 pc.max(orbit_window_results.impact_probability)
             ],
@@ -545,10 +556,17 @@ def summarize_impact_study_object_results(
         discovery_time=orbit_discovery_dates.discovery_date,
         warning_time=orbit_warning_times.warning_time,
         realization_time=orbit_realization_times.realization_time,
+        IAWN_time=orbit_IAWN_times.realization_time,
         maximum_impact_probability=[pc.max(orbit_window_results.impact_probability)],
         results_timing=orbit_results_timing,
         status=["complete"],
     )
+
+
+# Create remote version
+summarize_impact_study_object_results_remote = ray.remote(
+    summarize_impact_study_object_results
+)
 
 
 def summarize_impact_study_results(
@@ -557,10 +575,15 @@ def summarize_impact_study_results(
     results_timing: ResultsTiming,
     window_results: WindowResult,
     out_dir: Union[str, pathlib.Path],
+    max_processes: Optional[int] = 1,
 ) -> ImpactorResultSummary:
     """
     Summarize the impact study results
     """
+
+    # Initialize ray cluster
+    use_ray = initialize_use_ray(num_cpus=max_processes)
+
     unique_orbit_ids = pc.unique(impactor_orbits.orbit_id).to_pylist()
 
     # Skip problematic orbit IDs
@@ -571,6 +594,7 @@ def summarize_impact_study_results(
         "I00350_b009_v000000_2065-2075",
     ]
 
+    futures = []
     results = ImpactorResultSummary.empty()
     for orbit_id in unique_orbit_ids:
         # Skip problematic orbit IDs
@@ -578,18 +602,29 @@ def summarize_impact_study_results(
             logger.info(f"Skipping problematic orbit ID: {orbit_id}")
             continue
 
-        results = qv.concatenate(
-            [
-                results,
-                summarize_impact_study_object_results(
+        if use_ray:
+            futures.append(
+                summarize_impact_study_object_results_remote.remote(
                     impactor_orbits,
                     observations,
                     results_timing,
                     window_results,
                     orbit_id,
-                ),
-            ]
-        )
+                )
+            )
+        else:
+            results = qv.concatenate(
+                [
+                    results,
+                    summarize_impact_study_object_results(
+                        impactor_orbits,
+                        observations,
+                        results_timing,
+                        window_results,
+                        orbit_id,
+                    ),
+                ]
+            )
 
     out_dir_path = pathlib.Path(out_dir).absolute()
     out_dir_path.mkdir(parents=True, exist_ok=True)

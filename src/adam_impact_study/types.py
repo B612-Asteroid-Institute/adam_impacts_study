@@ -154,6 +154,9 @@ class ImpactorResultSummary(qv.Table):
     # Time between discovery and non-zero impact probability
     # (note, this is partially a function of our monte-carlo sampling)
     realization_time = qv.Float64Column(nullable=True)
+    # Time between discovery and the impact probability reaching the
+    # IAWN threshold impact probability of 1%
+    IAWN_time = qv.Float64Column(nullable=True)
     # How close all the windows got to discovering the definite impact nature
     maximum_impact_probability = qv.Float64Column(nullable=True)
     error = qv.LargeStringColumn(nullable=True)
