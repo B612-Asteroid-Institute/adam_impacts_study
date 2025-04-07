@@ -266,7 +266,7 @@ def compute_ip_threshold_date(
     null_threshold_dates = IPThresholdDate.from_kwargs(
         orbit_id=list(null_orbit_ids),
         ip_threshold=pa.repeat(threshold, len(null_orbit_ids)),
-        date=pa.repeat(None, len(null_orbit_ids)),
+        date=Timestamp.nulls(len(null_orbit_ids), scale="utc"),
     )
 
     ip_threshold_dates = qv.concatenate([ip_threshold_dates, null_threshold_dates])
@@ -630,31 +630,75 @@ def summarize_impact_study_object_results(
     )
 
 
+# Create remote version
+summarize_impact_study_object_results_remote = ray.remote(
+    summarize_impact_study_object_results
+)
+
+
 def summarize_impact_study_results(
     impactor_orbits: ImpactorOrbits,
     observations: Observations,
     results_timing: ResultsTiming,
     window_results: WindowResult,
     out_dir: Union[str, pathlib.Path],
+    max_processes: Optional[int] = 1,
 ) -> ImpactorResultSummary:
     """
     Summarize the impact study results
     """
+
+    # Initialize ray cluster
+    use_ray = initialize_use_ray(num_cpus=max_processes)
+
     unique_orbit_ids = pc.unique(impactor_orbits.orbit_id).to_pylist()
+
+    futures = []
     results = ImpactorResultSummary.empty()
+
+    # Place our objects in the object store if we are using ray 
+    if use_ray:
+        impactor_orbits_ref = ray.put(impactor_orbits)
+        observations_ref = ray.put(observations)
+        results_timing_ref = ray.put(results_timing)
+        window_results_ref = ray.put(window_results)
+
+
     for orbit_id in unique_orbit_ids:
-        results = qv.concatenate(
-            [
-                results,
-                summarize_impact_study_object_results(
-                    impactor_orbits,
-                    observations,
-                    results_timing,
-                    window_results,
+        if use_ray:
+            futures.append(
+                summarize_impact_study_object_results_remote.remote(
+                    impactor_orbits_ref,
+                    observations_ref,
+                    results_timing_ref,
+                    window_results_ref,
                     orbit_id,
-                ),
-            ]
-        )
+                )
+            )
+
+            if len(futures) >= max_processes * 1.5:
+                finished, futures = ray.wait(futures, num_returns=1)
+                result = ray.get(finished[0])
+                results = qv.concatenate([results, result])
+
+        else:
+            results = qv.concatenate(
+                [
+                    results,
+                    summarize_impact_study_object_results(
+                        impactor_orbits,
+                        observations,
+                        results_timing,
+                        window_results,
+                        orbit_id,
+                    ),
+                ]
+            )
+
+    while len(futures) > 0:
+        finished, futures = ray.wait(futures, num_returns=1)
+        result = ray.get(finished[0])
+        results = qv.concatenate([results, result])
 
     out_dir_path = pathlib.Path(out_dir).absolute()
     out_dir_path.mkdir(parents=True, exist_ok=True)
