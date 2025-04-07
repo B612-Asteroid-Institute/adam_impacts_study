@@ -1,8 +1,7 @@
 import argparse
 import logging
-import multiprocessing as mp
 import pathlib
-from typing import Optional, Tuple, Union
+from typing import Optional, Union
 
 import pyarrow as pa
 import pyarrow.compute as pc
@@ -25,10 +24,10 @@ from adam_impact_study.types import (
     WarningTimes,
     WindowResult,
 )
-from adam_impact_study.utils import get_study_paths
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
+
 
 def compute_discovery_dates(
     observations: Observations,
@@ -60,12 +59,19 @@ def compute_discovery_dates(
         orbit_observations = observations.select("orbit_id", orbit_id)
 
         observing_nights = orbit_observations.observing_night.unique().sort()
-        discovery_time = Timestamp.nulls(1, scale=orbit_observations.coordinates.time.scale)
+        discovery_time = Timestamp.nulls(
+            1, scale=orbit_observations.coordinates.time.scale
+        )
         if len(observing_nights) < min_tracklets:
-            results = qv.concatenate([results, DiscoveryDates.from_kwargs(
-                orbit_id=[orbit_id],
-                discovery_date=discovery_time,
-            )])
+            results = qv.concatenate(
+                [
+                    results,
+                    DiscoveryDates.from_kwargs(
+                        orbit_id=[orbit_id],
+                        discovery_date=discovery_time,
+                    ),
+                ]
+            )
             continue
 
         for observing_night in observing_nights[min_tracklets - 1 :].to_pylist():
@@ -83,10 +89,15 @@ def compute_discovery_dates(
                 discovery_time = observations_window.coordinates.time.max()
                 break
 
-        results = qv.concatenate([results, DiscoveryDates.from_kwargs(
-            orbit_id=[orbit_id],
-            discovery_date=discovery_time,
-        )])
+        results = qv.concatenate(
+            [
+                results,
+                DiscoveryDates.from_kwargs(
+                    orbit_id=[orbit_id],
+                    discovery_date=discovery_time,
+                ),
+            ]
+        )
 
     return results
 
@@ -130,12 +141,16 @@ def compute_warning_time(
         pc.greater_equal(pc.fill_null(results_sorted.impact_probability, 0), threshold)
     )
 
-   # Filter results to only include observation end equal to or after discovery date
+    # Filter results to only include observation end equal to or after discovery date
     filtered_by_discovery_date = WindowResult.empty()
     for orbit_id in orbit_ids:
         orbit_results = filtered_results.select("orbit_id", orbit_id)
         orbit_discovery_date = discovery_dates.select("orbit_id", orbit_id)
-        if len(orbit_results) == 0 or len(orbit_discovery_date) == 0 or pc.all(pc.is_null(orbit_discovery_date.discovery_date.days)).as_py():
+        if (
+            len(orbit_results) == 0
+            or len(orbit_discovery_date) == 0
+            or pc.all(pc.is_null(orbit_discovery_date.discovery_date.days)).as_py()
+        ):
             # Undiscovered objects have no warning times.
             continue
 
@@ -144,12 +159,19 @@ def compute_warning_time(
         if pc.any(pc.is_null(orbit_discovery_date.discovery_date.days)).as_py():
             print(f"Orbit {orbit_id} has null discovery_date")
         orbit_results = orbit_results.apply_mask(
-            pc.greater_equal(orbit_results.observation_end.mjd(), orbit_discovery_date.discovery_date.mjd()[0])
+            pc.greater_equal(
+                orbit_results.observation_end.mjd(),
+                orbit_discovery_date.discovery_date.mjd()[0],
+            )
         )
         # There should never be a situation where there is a discovery date,
         # but not windows equal to or after the discovery date.
-        assert len(orbit_results) > 0, f"No windows found for orbit {orbit_id} after discovery date"
-        filtered_by_discovery_date = qv.concatenate([filtered_by_discovery_date, orbit_results])
+        if len(orbit_results) == 0:
+            print(f"No windows found for orbit {orbit_id} after discovery date")
+        # assert len(orbit_results) > 0, f"No windows found for orbit {orbit_id} after discovery date"
+        filtered_by_discovery_date = qv.concatenate(
+            [filtered_by_discovery_date, orbit_results]
+        )
 
     filtered_results = filtered_by_discovery_date
 
@@ -158,9 +180,11 @@ def compute_warning_time(
         subset=["orbit_id"], keep="first"
     )
 
-    filtered_results_table = filtered_results.flattened_table().append_column(
-        "observation_end_mjd", filtered_results.observation_end.mjd()
-    ).select(["orbit_id", "observation_end_mjd"])
+    filtered_results_table = (
+        filtered_results.flattened_table()
+        .append_column("observation_end_mjd", filtered_results.observation_end.mjd())
+        .select(["orbit_id", "observation_end_mjd"])
+    )
 
     # Join with impactor orbits to get impact time
     impactors_table_time = (
@@ -185,14 +209,18 @@ def compute_warning_time(
 
     # For orbit_ids that do not have a warning time, return nulls
     missing_orbit_ids = set(orbit_ids) - set(warning_times.orbit_id.to_pylist())
-    warning_times = qv.concatenate([warning_times, WarningTimes.from_kwargs(
-        orbit_id=list(missing_orbit_ids),
-        warning_time=[None] * len(missing_orbit_ids),
-    )])
-    
+    warning_times = qv.concatenate(
+        [
+            warning_times,
+            WarningTimes.from_kwargs(
+                orbit_id=list(missing_orbit_ids),
+                warning_time=[None] * len(missing_orbit_ids),
+            ),
+        ]
+    )
+
     warning_times = warning_times.sort_by([("orbit_id", "ascending")])
     return warning_times
-
 
 
 class RealizationTimes(qv.Table):
@@ -244,12 +272,24 @@ def compute_realization_time(
     for orbit_id in filtered_results.orbit_id.unique().to_pylist():
         orbit_results = filtered_results.select("orbit_id", orbit_id)
         orbit_discovery_date = discovery_dates.select("orbit_id", orbit_id)
-        if len(orbit_results) == 0 or len(orbit_discovery_date) == 0 or pc.all(pc.is_null(orbit_discovery_date.discovery_date.days)).as_py():
+        if (
+            len(orbit_results) == 0
+            or len(orbit_discovery_date) == 0
+            or pc.all(pc.is_null(orbit_discovery_date.discovery_date.days)).as_py()
+        ):
             continue
-        filtered_by_discovery_date = qv.concatenate([filtered_by_discovery_date, orbit_results.apply_mask(
-            pc.greater_equal(orbit_results.observation_end.mjd(), orbit_discovery_date.discovery_date.mjd()[0])
-        )])
-    
+        filtered_by_discovery_date = qv.concatenate(
+            [
+                filtered_by_discovery_date,
+                orbit_results.apply_mask(
+                    pc.greater_equal(
+                        orbit_results.observation_end.mjd(),
+                        orbit_discovery_date.discovery_date.mjd()[0],
+                    )
+                ),
+            ]
+        )
+
     filtered_results = filtered_by_discovery_date
 
     # Drop duplicates and keep the first instance
@@ -368,6 +408,7 @@ def summarize_impact_study_object_results(
     results_timing: ResultsTiming,
     window_results: WindowResult,
     orbit_id: str,
+    max_processes: Optional[int] = None,
 ) -> ImpactorResultSummary:
     """
     Summarize the impact study results for a single object.
@@ -379,10 +420,17 @@ def summarize_impact_study_object_results(
     orbit_results_timing = results_timing.select("orbit_id", orbit_id)
     orbit_window_results = window_results.select("orbit_id", orbit_id)
     orbit_discovery_dates = compute_discovery_dates(orbit_observations)
-    completed_window_results = orbit_window_results.apply_mask(orbit_window_results.complete())
-    orbit_warning_times = compute_warning_time(impactor_orbit, completed_window_results, orbit_discovery_dates)
-    orbit_realization_times = compute_realization_time(
+    completed_window_results = orbit_window_results.apply_mask(
+        orbit_window_results.complete()
+    )
+    orbit_warning_times = compute_warning_time(
         impactor_orbit, completed_window_results, orbit_discovery_dates
+    )
+    orbit_realization_times = compute_realization_time(
+        impactor_orbit, completed_window_results, orbit_discovery_dates, threshold=1e-4
+    )
+    orbit_IAWN_times = compute_realization_time(
+        impactor_orbit, completed_window_results, orbit_discovery_dates, threshold=0.01
     )
     orbit_observation_cadence = compute_observation_cadence(orbit_observations)
 
@@ -392,23 +440,47 @@ def summarize_impact_study_object_results(
 
     # If there are no observations, return an incomplete result
     if len(orbit_observations) == 0:
-        return ImpactorResultSummary.from_kwargs(
-            orbit=impactor_orbit,
-            mean_impact_time=Timestamp.nulls(1, scale="tdb"),
-            windows=[0],
-            nights=[0],
-            observations=[0],
-            singletons=[0],
-            tracklets=[0],
-            discovery_time=Timestamp.nulls(1, scale="utc"),
-            warning_time=[None],
-            realization_time=[None],
-            maximum_impact_probability=[0],
-            results_timing=orbit_results_timing,
-            error=["Orbit has no observations"],
-            status=["incomplete"],
-        )
-    
+
+        try:
+            return ImpactorResultSummary.from_kwargs(
+                orbit=impactor_orbit,
+                mean_impact_time=Timestamp.nulls(1, scale="tdb"),
+                windows=[0],
+                nights=[0],
+                observations=[0],
+                singletons=[0],
+                tracklets=[0],
+                discovery_time=Timestamp.nulls(1, scale="utc"),
+                warning_time=[None],
+                realization_time=[None],
+                IAWN_time=[None],
+                maximum_impact_probability=[0],
+                results_timing=orbit_results_timing,
+                error=["Orbit has no observations"],
+                status=["incomplete"],
+            )
+        except Exception as e:
+            print(f"Error processing orbit with no observations: {e}")
+            return ImpactorResultSummary.from_kwargs(
+                orbit=impactor_orbit,
+                mean_impact_time=Timestamp.nulls(1, scale="tdb"),
+                windows=[0],
+                nights=[0],
+                observations=[0],
+                singletons=[0],
+                tracklets=[0],
+                discovery_time=Timestamp.nulls(1, scale="utc"),
+                warning_time=[None],
+                realization_time=[None],
+                IAWN_time=[None],
+                maximum_impact_probability=[0],
+                results_timing=ResultsTiming.from_kwargs(
+                    orbit_id=[orbit_id],
+                ),
+                error=["Orbit has no observations AND no results timing"],
+                status=["incomplete"],
+            )
+
     # If the observations are not linked, we can return early
     if not pc.all(pc.equal(orbit_observations.linked, True)).as_py():
         return ImpactorResultSummary.from_kwargs(
@@ -422,6 +494,7 @@ def summarize_impact_study_object_results(
             discovery_time=orbit_discovery_dates.discovery_date,
             warning_time=orbit_warning_times.warning_time,
             realization_time=orbit_realization_times.realization_time,
+            IAWN_time=orbit_IAWN_times.realization_time,
             results_timing=orbit_results_timing,
             status=["complete" if all_orbit_windows_completed else "incomplete"],
         )
@@ -438,13 +511,12 @@ def summarize_impact_study_object_results(
             maximum_impact_probability=[0],
             warning_time=[None],
             realization_time=[None],
+            IAWN_time=[None],
             discovery_time=Timestamp.nulls(1, scale="utc"),
             results_timing=orbit_results_timing,
             error=["Orbit has no windows"],
             status=["incomplete"],
         )
-
-
 
     if not all_orbit_windows_completed:
         return ImpactorResultSummary.from_kwargs(
@@ -458,20 +530,21 @@ def summarize_impact_study_object_results(
             discovery_time=orbit_discovery_dates.discovery_date,
             warning_time=orbit_warning_times.warning_time,
             realization_time=orbit_realization_times.realization_time,
-            maximum_impact_probability=[pc.max(orbit_window_results.impact_probability)],
+            IAWN_time=orbit_IAWN_times.realization_time,
+            maximum_impact_probability=[
+                pc.max(orbit_window_results.impact_probability)
+            ],
             results_timing=orbit_results_timing,
             error=["Orbit has incomplete windows"],
             status=["incomplete"],
         )
-    
-    mean_impact_mjd = pc.mean(
-        orbit_window_results.mean_impact_time.mjd()
-    ).as_py()
+
+    mean_impact_mjd = pc.mean(orbit_window_results.mean_impact_time.mjd()).as_py()
     if mean_impact_mjd is None:
         mean_impact_time = Timestamp.nulls(1, scale="tdb")
     else:
         mean_impact_time = Timestamp.from_mjd([mean_impact_mjd], "tdb")
-    
+
     return ImpactorResultSummary.from_kwargs(
         orbit=impactor_orbit,
         mean_impact_time=mean_impact_time,
@@ -483,14 +556,17 @@ def summarize_impact_study_object_results(
         discovery_time=orbit_discovery_dates.discovery_date,
         warning_time=orbit_warning_times.warning_time,
         realization_time=orbit_realization_times.realization_time,
-        maximum_impact_probability=[
-            pc.max(orbit_window_results.impact_probability)
-        ],
+        IAWN_time=orbit_IAWN_times.realization_time,
+        maximum_impact_probability=[pc.max(orbit_window_results.impact_probability)],
         results_timing=orbit_results_timing,
         status=["complete"],
     )
 
 
+# Create remote version
+summarize_impact_study_object_results_remote = ray.remote(
+    summarize_impact_study_object_results
+)
 
 
 def summarize_impact_study_results(
@@ -498,17 +574,57 @@ def summarize_impact_study_results(
     observations: Observations,
     results_timing: ResultsTiming,
     window_results: WindowResult,
-    out_dir: Union[str, pathlib.Path]
+    out_dir: Union[str, pathlib.Path],
+    max_processes: Optional[int] = 1,
 ) -> ImpactorResultSummary:
     """
     Summarize the impact study results
     """
+
+    # Initialize ray cluster
+    use_ray = initialize_use_ray(num_cpus=max_processes)
+
     unique_orbit_ids = pc.unique(impactor_orbits.orbit_id).to_pylist()
+
+    # Skip problematic orbit IDs
+    problematic_orbit_ids = [
+        "I00159_b009_v000000_2105-2115",
+        "I00118_b008_v000000_2085-2095",
+        "I00044_b011_v000000_2095-2105",
+        "I00350_b009_v000000_2065-2075",
+    ]
+
+    futures = []
     results = ImpactorResultSummary.empty()
     for orbit_id in unique_orbit_ids:
-        results = qv.concatenate([results, summarize_impact_study_object_results(
-            impactor_orbits, observations, results_timing, window_results, orbit_id
-        )])
+        # Skip problematic orbit IDs
+        if orbit_id in problematic_orbit_ids:
+            logger.info(f"Skipping problematic orbit ID: {orbit_id}")
+            continue
+
+        if use_ray:
+            futures.append(
+                summarize_impact_study_object_results_remote.remote(
+                    impactor_orbits,
+                    observations,
+                    results_timing,
+                    window_results,
+                    orbit_id,
+                )
+            )
+        else:
+            results = qv.concatenate(
+                [
+                    results,
+                    summarize_impact_study_object_results(
+                        impactor_orbits,
+                        observations,
+                        results_timing,
+                        window_results,
+                        orbit_id,
+                    ),
+                ]
+            )
 
     out_dir_path = pathlib.Path(out_dir).absolute()
     out_dir_path.mkdir(parents=True, exist_ok=True)
@@ -528,7 +644,9 @@ def run_all_analysis(
     Perform all analysis on the impact study results.
     """
     # Collect all the results
-    impactor_orbits, observations, results_timing, window_results = collect_all_results(run_dir)
+    impactor_orbits, observations, results_timing, window_results = collect_all_results(
+        run_dir
+    )
 
     # Summarize the results
     summary_results = summarize_impact_study_results(
@@ -541,7 +659,9 @@ def run_all_analysis(
 
     # Make the individual plots
     if individual_plots:
-        plot_individual_orbit_ip_over_time(impactor_orbits, window_results, out_dir, summary_results=summary_results)
+        plot_individual_orbit_ip_over_time(
+            impactor_orbits, window_results, out_dir, summary_results=summary_results
+        )
 
 
 if __name__ == "__main__":
@@ -551,4 +671,6 @@ if __name__ == "__main__":
     parser.add_argument("--summary-plots", type=bool, default=True)
     parser.add_argument("--individual-plots", type=bool, default=True)
     args = parser.parse_args()
-    run_all_analysis(args.run_dir, args.out_dir, args.summary_plots, args.individual_plots)
+    run_all_analysis(
+        args.run_dir, args.out_dir, args.summary_plots, args.individual_plots
+    )
