@@ -406,9 +406,11 @@ def test_compute_ip_threshold_date():
         ],
         status=["complete", "complete", "complete", "complete", "complete", "complete"],
         observation_start=Timestamp.from_mjd(
-            [60000, 60000, 60000, 60000, 60000, 60000]
+            [60000, 60000, 60000, 60000, 60000, 60000], scale="utc"
         ),
-        observation_end=Timestamp.from_mjd([60050, 60060, 60070, 60080, 60090, 60100]),
+        observation_end=Timestamp.from_mjd(
+            [60050, 60060, 60070, 60080, 60090, 60100], scale="utc"
+        ),
         window=[
             "60000_60050",
             "60000_60060",
