@@ -1,7 +1,9 @@
 import json
 from dataclasses import asdict, dataclass
-from typing import Optional
+from typing import Optional, Tuple
 
+import numpy as np
+import numpy.typing as npt
 import pyarrow as pa
 import pyarrow.compute as pc
 import quivr as qv
@@ -288,6 +290,36 @@ class ImpactorResultSummary(qv.Table):
         return pc.subtract(
             self.orbit.impact_time.mjd(), self.ip_threshold_100_percent.mjd()
         )
+
+    def get_diameter_decade_data(self) -> Tuple[npt.NDArray[np.int64], npt.NDArray[np.int64], list]:
+        """
+        Extract impact decades and common data needed for diameter-decade analysis.
+        Returns
+        -------
+        Tuple[np.ndarray, np.ndarray, list]
+            A tuple containing:
+            - impact_decades: Array of impact decades for each orbit
+            - unique_decades: Sorted array of unique decades
+            - unique_diameters: Sorted list of unique diameters
+        """
+        # Filter to only include complete results
+        # summary = self.apply_mask(self.complete())
+
+        # Extract impact dates and convert to decades
+        impact_years = np.array(
+            [
+                impact_time.datetime.year
+                for impact_time in self.orbit.impact_time.to_astropy()
+            ]
+        )
+        impact_decades = (
+            impact_years // 10
+        ) * 10  # Convert year to decade (2023 -> 2020)
+
+        unique_decades = np.sort(np.unique(impact_decades))
+        unique_diameters = self.orbit.diameter.unique().sort().to_pylist()
+
+        return impact_decades, unique_decades, unique_diameters
 
 
 class DiscoveryDates(qv.Table):
