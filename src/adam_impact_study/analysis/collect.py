@@ -220,8 +220,8 @@ def collect_all_window_results_new(
     return window_results
 
 
-def create_missing_window_results(
-    observations: Observations, window_results: WindowResult
+def create_missing_window_results_worker(
+    observations: Observations, window_results: WindowResult, orbit_ids: List[str]
 ) -> WindowResult:
     """Create missing window results for observations that do not have correspondingwindow results.
 
@@ -231,23 +231,23 @@ def create_missing_window_results(
         Observations to create missing window results for
     window_results : WindowResult
         Window results to create missing window results for
+    orbit_ids : List[str]
+        Orbit IDs to create missing window results for
 
     Returns
     -------
     WindowResult
         Window results with missing window results created
     """
-    logger.info("Creating missing window results")
     missing_window_results = WindowResult.empty()
-    unique_orbit_ids = pc.unique(observations.orbit_id).sort()
-    for orbit_id in unique_orbit_ids:
+    for orbit_id in orbit_ids:
         orbit_observations = observations.select("orbit_id", orbit_id)
         unique_nights = pc.unique(orbit_observations.observing_night).sort()
         for night in unique_nights[2:]:
             mask = pc.less_equal(orbit_observations.observing_night, night)
             observations_window = orbit_observations.apply_mask(mask)
             if len(observations_window) < 6:
-                logger.warning(
+                logger.debug(
                     f"Not enough observations for a least-squares fit for night {night}"
                 )
                 continue
@@ -269,13 +269,13 @@ def create_missing_window_results(
                     missing_window_results,
                     WindowResult.from_kwargs(
                         orbit_id=[orbit_id],
-                        object_id=[observations_window.object_id[0].as_py()],
+                        object_id=[orbit_id],
                         condition_id=[None],
                         status=["incomplete"],
                         window=[window],
                         observation_start=observations_window.coordinates.time.min(),
                         observation_end=observations_window.coordinates.time.max(),
-                        observations_count=[len(observations_window)],
+                        observation_count=[len(observations_window)],
                         observations_rejected=[None],
                         observation_nights=[
                             len(pc.unique(observations_window.observing_night))
@@ -289,12 +289,79 @@ def create_missing_window_results(
                         od_runtime=[None],
                         ip_runtime=[None],
                         window_runtime=[None],
-                        total_runtime=[None],
                     ),
                 ]
             )
 
+    return missing_window_results
+
+
+create_missing_window_results_worker_remote = ray.remote(
+    create_missing_window_results_worker
+)
+
+
+def create_missing_window_results(
+    observations: Observations, window_results: WindowResult, max_processes: int = 1, chunk_size: int = 100
+) -> WindowResult:
+    """Create missing window results for observations that do not have correspondingwindow results.
+
+    Parameters
+    ----------
+    observations : Observations
+        Observations to create missing window results for
+    window_results : WindowResult
+        Window results to create missing window results for
+
+    Returns
+    -------
+    WindowResult
+        Window results with missing window results created
+    """
+    logger.info("Creating missing window results")
+    missing_window_results = WindowResult.empty()
+    unique_orbit_ids = pc.unique(observations.orbit_id).sort()
+
+    if max_processes == 1:
+        missing_window_results = create_missing_window_results_worker(
+            observations, window_results, unique_orbit_ids
+        )
+        logger.info(f"Created {len(missing_window_results)} missing window results")
+        return qv.concatenate([window_results, missing_window_results])
+
+    initialize_use_ray(num_cpus=max_processes)
+    futures = []
+    observations_ref = ray.put(observations)
+    window_results_ref = ray.put(window_results)
+    orbit_id_chunks = list(_iterate_chunks(unique_orbit_ids, chunk_size))
+    completed_chunks = 0
+    total_chunks = len(orbit_id_chunks)
+    logger.info(f"Creating missing window results for {total_chunks} chunks")
+    for orbit_id_chunk in orbit_id_chunks:
+        futures.append(
+            create_missing_window_results_worker_remote.remote(
+                observations_ref, window_results_ref, orbit_id_chunk
+            )
+        )
+
+        if len(futures) > max_processes * 1.5:
+            finished, futures = ray.wait(futures, num_returns=1)
+            missing_window_results = qv.concatenate(
+                [missing_window_results, ray.get(finished[0])], validate=False
+            )
+            completed_chunks += 1
+            logger.info(f"Completed {completed_chunks}/{total_chunks} chunks")
+
+    while len(futures) > 0:
+        finished, futures = ray.wait(futures, num_returns=1)
+        missing_window_results = qv.concatenate(
+            [missing_window_results, ray.get(finished[0])], validate=False
+        )
+        completed_chunks += 1
+        logger.info(f"Completed {completed_chunks}/{total_chunks} chunks")
+
     logger.info(f"Created {len(missing_window_results)} missing window results")
+
     return qv.concatenate([window_results, missing_window_results])
 
 
@@ -400,6 +467,8 @@ def collect_all_results(
     impactor_orbits = collect_all_impactor_orbits(run_dir, max_processes=max_processes)
     observations = collect_all_observations(run_dir, max_processes=max_processes)
     timings = collect_all_timings(run_dir, max_processes=max_processes)
-    window_results = collect_all_window_results_new(run_dir, max_processes=max_processes)
+    window_results = collect_all_window_results_new(
+        run_dir, max_processes=max_processes
+    )
     window_results = create_missing_window_results(observations, window_results)
     return impactor_orbits, observations, timings, window_results
