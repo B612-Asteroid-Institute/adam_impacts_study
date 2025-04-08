@@ -4,3 +4,5 @@ find_orb/
 debug.txt
 results*
 *__pycache__*
+march_analysis/
+march_run/

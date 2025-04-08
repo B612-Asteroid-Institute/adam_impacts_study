@@ -1,7 +1,9 @@
 import json
 from dataclasses import asdict, dataclass
-from typing import Optional
+from typing import Optional, Tuple
 
+import numpy as np
+import numpy.typing as npt
 import pyarrow as pa
 import pyarrow.compute as pc
 import quivr as qv
@@ -46,7 +48,7 @@ class ImpactorOrbits(qv.Table):
     impact_time = Timestamp.as_column()
     dynamical_class = qv.LargeStringColumn()
     ast_class = qv.LargeStringColumn()
-    diameter = qv.Float64Column()
+    diameter = qv.Float64Column()  # km
     albedo = qv.Float64Column()
     H_r = qv.Float64Column()
     u_r = qv.Float64Column()
@@ -117,6 +119,7 @@ class WindowResult(qv.Table):
     def failed(self) -> pa.BooleanArray:
         return pc.equal(self.status, "failed")
 
+
 class ResultsTiming(qv.Table):
     orbit_id = qv.LargeStringColumn()
     sorcha_runtime = qv.Float64Column(nullable=True)
@@ -143,17 +146,30 @@ class ImpactorResultSummary(qv.Table):
     singletons = qv.UInt64Column()
     # Number of tracklets from observations recovered
     tracklets = qv.UInt64Column()
+    # Date of first observation
+    first_observation = Timestamp.as_column(nullable=True)
+    # Date of last observation
+    last_observation = Timestamp.as_column(nullable=True)
     # Time when observations met minimum artificial discovery criteria
     # Currently set to 3 unique nights of tracklets
     discovery_time = Timestamp.as_column(nullable=True)
-    # Duration in days since the first non-zero impact probability
-    # until true impact date
-    warning_time = qv.Float64Column(nullable=True)
-    # Time between discovery and non-zero impact probability
-    # (note, this is partially a function of our monte-carlo sampling)
-    realization_time = qv.Float64Column(nullable=True)
+    # Impact probability at discovery time
+    ip_at_discovery_time = qv.Float64Column(nullable=True)
+    # Date object first reaches 0.01% impact probability
+    ip_threshold_0_dot_01_percent = Timestamp.as_column(nullable=True)
+    # Date object first reaches 1% impact probability
+    ip_threshold_1_percent = Timestamp.as_column(nullable=True)
+    # Date object first reaches 10% impact probability
+    ip_threshold_10_percent = Timestamp.as_column(nullable=True)
+    # Date object first reaches 50% impact probability
+    ip_threshold_50_percent = Timestamp.as_column(nullable=True)
+    # Date object first reaches 90% impact probability
+    ip_threshold_90_percent = Timestamp.as_column(nullable=True)
+    # Date object first reaches 99% impact probability
+    ip_threshold_100_percent = Timestamp.as_column(nullable=True)
     # How close all the windows got to discovering the definite impact nature
     maximum_impact_probability = qv.Float64Column(nullable=True)
+    # Error message from the impact study
     error = qv.LargeStringColumn(nullable=True)
     # Runtime of the impact study
     results_timing = ResultsTiming.as_column(nullable=True)
@@ -216,14 +232,109 @@ class ImpactorResultSummary(qv.Table):
             total=discoveries_by_diameter_class["discovered_count"],
         )
 
+    def arc_length(self) -> pa.FloatArray:
+        return pc.subtract(self.last_observation.mjd(), self.first_observation.mjd())
+
+    def days_discovery_to_0_dot_01_percent(self) -> pa.FloatArray:
+        return pc.subtract(
+            self.ip_threshold_0_dot_01_percent.mjd(), self.discovery_time.mjd()
+        )
+
+    def days_discovery_to_1_percent(self) -> pa.FloatArray:
+        return pc.subtract(self.ip_threshold_1_percent.mjd(), self.discovery_time.mjd())
+
+    def days_discovery_to_10_percent(self) -> pa.FloatArray:
+        return pc.subtract(
+            self.ip_threshold_10_percent.mjd(), self.discovery_time.mjd()
+        )
+
+    def days_discovery_to_50_percent(self) -> pa.FloatArray:
+        return pc.subtract(
+            self.ip_threshold_50_percent.mjd(), self.discovery_time.mjd()
+        )
+
+    def days_discovery_to_90_percent(self) -> pa.FloatArray:
+        return pc.subtract(
+            self.ip_threshold_90_percent.mjd(), self.discovery_time.mjd()
+        )
+
+    def days_discovery_to_100_percent(self) -> pa.FloatArray:
+        return pc.subtract(
+            self.ip_threshold_100_percent.mjd(), self.discovery_time.mjd()
+        )
+
+    def days_0_dot_01_percent_to_impact(self) -> pa.FloatArray:
+        return pc.subtract(
+            self.orbit.impact_time.mjd(), self.ip_threshold_0_dot_01_percent.mjd()
+        )
+
+    def days_1_percent_to_impact(self) -> pa.FloatArray:
+        return pc.subtract(
+            self.orbit.impact_time.mjd(), self.ip_threshold_1_percent.mjd()
+        )
+
+    def days_10_percent_to_impact(self) -> pa.FloatArray:
+        return pc.subtract(
+            self.orbit.impact_time.mjd(), self.ip_threshold_10_percent.mjd()
+        )
+
+    def days_50_percent_to_impact(self) -> pa.FloatArray:
+        return pc.subtract(
+            self.orbit.impact_time.mjd(), self.ip_threshold_50_percent.mjd()
+        )
+
+    def days_90_percent_to_impact(self) -> pa.FloatArray:
+        return pc.subtract(
+            self.orbit.impact_time.mjd(), self.ip_threshold_90_percent.mjd()
+        )
+
+    def days_100_percent_to_impact(self) -> pa.FloatArray:
+        return pc.subtract(
+            self.orbit.impact_time.mjd(), self.ip_threshold_100_percent.mjd()
+        )
+
+    def get_diameter_decade_data(
+        self,
+    ) -> Tuple[npt.NDArray[np.int64], npt.NDArray[np.int64], list]:
+        """
+        Extract impact decades and common data needed for diameter-decade analysis.
+        Returns
+        -------
+        Tuple[np.ndarray, np.ndarray, list]
+            A tuple containing:
+            - impact_decades: Array of impact decades for each orbit
+            - unique_decades: Sorted array of unique decades
+            - unique_diameters: Sorted list of unique diameters
+        """
+        # Filter to only include complete results
+        # summary = self.apply_mask(self.complete())
+
+        # Extract impact dates and convert to decades
+        impact_years = np.array(
+            [
+                impact_time.datetime.year
+                for impact_time in self.orbit.impact_time.to_astropy()
+            ]
+        )
+        impact_decades = (
+            impact_years // 10
+        ) * 10  # Convert year to decade (2023 -> 2020)
+
+        unique_decades = np.sort(np.unique(impact_decades))
+        unique_diameters = self.orbit.diameter.unique().sort().to_pylist()
+
+        return impact_decades, unique_decades, unique_diameters
+
 
 class DiscoveryDates(qv.Table):
     orbit_id = qv.LargeStringColumn()
     discovery_date = Timestamp.as_column(nullable=True)
 
+
 class WarningTimes(qv.Table):
     orbit_id = qv.LargeStringColumn()
     warning_time = qv.Float64Column(nullable=True)
+
 
 class DiscoverySummary(qv.Table):
     diameter = qv.Float64Column()
