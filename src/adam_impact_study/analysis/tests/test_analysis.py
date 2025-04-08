@@ -1,5 +1,3 @@
-import os
-
 import pyarrow.compute as pc
 import pytest
 from adam_core.coordinates import CartesianCoordinates, Origin, SphericalCoordinates

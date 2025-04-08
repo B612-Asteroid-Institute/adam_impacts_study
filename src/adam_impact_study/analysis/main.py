@@ -1,8 +1,7 @@
 import argparse
 import logging
-import multiprocessing as mp
 import pathlib
-from typing import Optional, Tuple, Union
+from typing import Optional, Union
 
 import pyarrow as pa
 import pyarrow.compute as pc
@@ -25,7 +24,6 @@ from adam_impact_study.types import (
     WarningTimes,
     WindowResult,
 )
-from adam_impact_study.utils import get_study_paths
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)

@@ -9,12 +9,7 @@ import pyarrow.compute as pc
 import quivr as qv
 from adam_core.time import Timestamp
 
-from adam_impact_study.types import (
-    DiscoveryDates,
-    ImpactorOrbits,
-    ImpactorResultSummary,
-    WindowResult,
-)
+from adam_impact_study.types import ImpactorOrbits, ImpactorResultSummary, WindowResult
 
 logger = logging.getLogger(__name__)
 
@@ -577,7 +572,6 @@ def plot_individual_orbit_ip_over_time(
             )
 
             # Add visible text
-            y_range = ax1.get_ylim()[1] - ax1.get_ylim()[0]
             ax1.text(
                 discovery_time + ((x_max - x_min) * 0.02),  # Slight offset
                 0.5,  # Middle of y-axis
