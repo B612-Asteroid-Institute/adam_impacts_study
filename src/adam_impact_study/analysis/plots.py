@@ -27,13 +27,11 @@ def plot_warning_time_histogram(
     summary = summary.apply_mask(summary.complete())
 
     fig, ax = plt.subplots(1, 1, dpi=200)
-    warning_time_max = (
-        pc.ceil(
-            pc.max(
-                pc.subtract(
-                    summary.orbit.impact_time.mjd(),
-                    summary.ip_threshold_1_percent.mjd(),
-                )
+    warning_time_max = pc.ceil(
+        pc.max(
+            pc.subtract(
+                summary.orbit.impact_time.mjd(),
+                summary.ip_threshold_1_percent.mjd(),
             )
         )
     )
@@ -195,7 +193,6 @@ def plot_arclength_by_diameter(
 
     unique_diameters = summary.orbit.diameter.unique().sort().to_pylist()
     colors = plt.cm.coolwarm(np.linspace(0, 1, len(unique_diameters)))
-    
 
     # Get the max arc length
     max_arc_length = pc.max(summary.arc_length()).as_py()
@@ -213,14 +210,12 @@ def plot_arclength_by_diameter(
             alpha=0.7,
             label=f"{diameter:.3f} km",
         )
-    
+
     ax.set_xlabel("Arc Length [days]")
     ax.set_ylabel("Count")
     ax.legend(frameon=False, bbox_to_anchor=(1.01, 0.75))
 
     return fig, ax
-    
-
 
 
 def plot_runtime_by_diameter(
@@ -922,7 +917,9 @@ def plot_arc_length_by_diameter_decade(
             orbits_at_diameter_and_decade = orbits_at_decade.select(
                 "orbit.diameter", diameter
             )
-            arc_length = orbits_at_diameter_and_decade.arc_length().to_numpy(zero_copy_only=False)
+            arc_length = orbits_at_diameter_and_decade.arc_length().to_numpy(
+                zero_copy_only=False
+            )
             mean_arc_length = np.mean(arc_length) if arc_length.size > 0 else 0
             arc_length_by_diameter_decade = qv.concatenate(
                 [

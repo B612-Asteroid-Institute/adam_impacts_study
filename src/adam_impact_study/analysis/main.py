@@ -455,7 +455,7 @@ def compute_observation_cadence(
 
 def _select_ip_at_discovery_time(
     orbit_id: str,
-    all_window_results: WindowResult, # Note! Pass in all windows
+    all_window_results: WindowResult,  # Note! Pass in all windows
     discovery_dates: DiscoveryDates,
 ) -> float:
     """
@@ -466,13 +466,17 @@ def _select_ip_at_discovery_time(
     if len(orbit_results) == 0 or len(orbit_discovery_date) == 0:
         return None
 
-    assert len(orbit_discovery_date) == 1, f"{orbit_id} had {len(orbit_discovery_date)} discovery dates, expected 1"
-    
+    assert (
+        len(orbit_discovery_date) == 1
+    ), f"{orbit_id} had {len(orbit_discovery_date)} discovery dates, expected 1"
+
     if pc.all(pc.is_null(orbit_discovery_date.discovery_date.days)).as_py():
         return None
 
     discovery_window = orbit_results.apply_mask(
-        orbit_results.observation_end.equals(orbit_discovery_date.discovery_date, precision="ms")
+        orbit_results.observation_end.equals(
+            orbit_discovery_date.discovery_date, precision="ms"
+        )
     )
 
     return discovery_window.impact_probability[0].as_py()
@@ -489,7 +493,9 @@ def summarize_impact_study_object_results(
     Summarize the impact study results for a single object.
     """
     impactor_orbit = impactor_orbits.select("orbit_id", orbit_id)
-    assert len(impactor_orbit) == 1, f"{orbit_id} had {len(impactor_orbit)} impactor orbits, expected 1"
+    assert (
+        len(impactor_orbit) == 1
+    ), f"{orbit_id} had {len(impactor_orbit)} impactor orbits, expected 1"
 
     orbit_observations = observations.select("orbit_id", orbit_id)
     orbit_results_timing = results_timing.select("orbit_id", orbit_id)
@@ -503,7 +509,6 @@ def summarize_impact_study_object_results(
     all_orbit_windows_completed = pc.all(
         pc.equal(orbit_window_results.status, "complete")
     ).as_py()
-
 
     first_observation = orbit_observations.coordinates.time.min()
     last_observation = orbit_observations.coordinates.time.max()
@@ -691,13 +696,12 @@ def summarize_impact_study_results(
     futures = []
     results = ImpactorResultSummary.empty()
 
-    # Place our objects in the object store if we are using ray 
+    # Place our objects in the object store if we are using ray
     if use_ray:
         impactor_orbits_ref = ray.put(impactor_orbits)
         observations_ref = ray.put(observations)
         results_timing_ref = ray.put(results_timing)
         window_results_ref = ray.put(window_results)
-
 
     for orbit_id in unique_orbit_ids:
         if use_ray:

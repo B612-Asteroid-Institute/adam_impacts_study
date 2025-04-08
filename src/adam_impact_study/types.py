@@ -48,7 +48,7 @@ class ImpactorOrbits(qv.Table):
     impact_time = Timestamp.as_column()
     dynamical_class = qv.LargeStringColumn()
     ast_class = qv.LargeStringColumn()
-    diameter = qv.Float64Column() # km
+    diameter = qv.Float64Column()  # km
     albedo = qv.Float64Column()
     H_r = qv.Float64Column()
     u_r = qv.Float64Column()
@@ -293,7 +293,9 @@ class ImpactorResultSummary(qv.Table):
             self.orbit.impact_time.mjd(), self.ip_threshold_100_percent.mjd()
         )
 
-    def get_diameter_decade_data(self) -> Tuple[npt.NDArray[np.int64], npt.NDArray[np.int64], list]:
+    def get_diameter_decade_data(
+        self,
+    ) -> Tuple[npt.NDArray[np.int64], npt.NDArray[np.int64], list]:
         """
         Extract impact decades and common data needed for diameter-decade analysis.
         Returns

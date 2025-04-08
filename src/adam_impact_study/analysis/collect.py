@@ -302,7 +302,10 @@ create_missing_window_results_worker_remote = ray.remote(
 
 
 def create_missing_window_results(
-    observations: Observations, window_results: WindowResult, max_processes: int = 1, chunk_size: int = 100
+    observations: Observations,
+    window_results: WindowResult,
+    max_processes: int = 1,
+    chunk_size: int = 100,
 ) -> WindowResult:
     """Create missing window results for observations that do not have correspondingwindow results.
 
@@ -470,5 +473,7 @@ def collect_all_results(
     window_results = collect_all_window_results_new(
         run_dir, max_processes=max_processes
     )
-    window_results = create_missing_window_results(observations, window_results, max_processes=max_processes)
+    window_results = create_missing_window_results(
+        observations, window_results, max_processes=max_processes
+    )
     return impactor_orbits, observations, timings, window_results
