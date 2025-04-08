@@ -153,6 +153,8 @@ class ImpactorResultSummary(qv.Table):
     # Time when observations met minimum artificial discovery criteria
     # Currently set to 3 unique nights of tracklets
     discovery_time = Timestamp.as_column(nullable=True)
+    # Impact probability at discovery time
+    ip_at_discovery_time = qv.Float64Column(nullable=True)
     # Date object first reaches 0.01% impact probability
     ip_threshold_0_dot_01_percent = Timestamp.as_column(nullable=True)
     # Date object first reaches 1% impact probability

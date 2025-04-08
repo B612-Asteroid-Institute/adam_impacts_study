@@ -198,7 +198,7 @@ def plot_arclength_by_diameter(
     
 
     # Get the max arc length
-    max_arc_length = pc.max(summary.orbit.arc_length()).as_py()
+    max_arc_length = pc.max(summary.arc_length()).as_py()
     bins = np.linspace(0, max_arc_length, 100)
 
     for i, (diameter, color) in enumerate(zip(unique_diameters, colors)):

@@ -453,6 +453,31 @@ def compute_observation_cadence(
     )
 
 
+def _select_ip_at_discovery_time(
+    orbit_id: str,
+    all_window_results: WindowResult, # Note! Pass in all windows
+    discovery_dates: DiscoveryDates,
+) -> float:
+    """
+    Select the impact probability at discovery time for a given orbit.
+    """
+    orbit_results = all_window_results.select("orbit_id", orbit_id)
+    orbit_discovery_date = discovery_dates.select("orbit_id", orbit_id)
+    if len(orbit_results) == 0 or len(orbit_discovery_date) == 0:
+        return None
+
+    assert len(orbit_discovery_date) == 1, f"{orbit_id} had {len(orbit_discovery_date)} discovery dates, expected 1"
+    
+    if pc.all(pc.is_null(orbit_discovery_date.discovery_date.days)).as_py():
+        return None
+
+    discovery_window = orbit_results.apply_mask(
+        orbit_results.observation_end.equals(orbit_discovery_date.discovery_date, precision="ms")
+    )
+
+    return discovery_window.impact_probability[0].as_py()
+
+
 def summarize_impact_study_object_results(
     impactor_orbits: ImpactorOrbits,
     observations: Observations,
@@ -469,9 +494,6 @@ def summarize_impact_study_object_results(
     orbit_observations = observations.select("orbit_id", orbit_id)
     orbit_results_timing = results_timing.select("orbit_id", orbit_id)
     orbit_window_results = window_results.select("orbit_id", orbit_id)
-    print(orbit_id)
-    print(f"Orbit window results: {orbit_window_results}")
-    print(f"Unique window statuses: {pc.unique(orbit_window_results.status).to_pylist()}")
     orbit_discovery_dates = compute_discovery_dates(orbit_observations)
     completed_window_results = orbit_window_results.apply_mask(
         orbit_window_results.complete()
@@ -505,6 +527,10 @@ def summarize_impact_study_object_results(
         impactor_orbit, completed_window_results, 1.0
     )
 
+    ip_at_discovery_time = _select_ip_at_discovery_time(
+        orbit_id, orbit_window_results, orbit_discovery_dates
+    )
+
     if len(orbit_observations) == 0:
         return ImpactorResultSummary.from_kwargs(
             orbit=impactor_orbit,
@@ -517,6 +543,7 @@ def summarize_impact_study_object_results(
             first_observation=Timestamp.nulls(1, scale="utc"),
             last_observation=Timestamp.nulls(1, scale="utc"),
             discovery_time=Timestamp.nulls(1, scale="utc"),
+            ip_at_discovery_time=[ip_at_discovery_time],
             ip_threshold_0_dot_01_percent=Timestamp.nulls(1, scale="utc"),
             ip_threshold_1_percent=Timestamp.nulls(1, scale="utc"),
             ip_threshold_10_percent=Timestamp.nulls(1, scale="utc"),
@@ -542,6 +569,7 @@ def summarize_impact_study_object_results(
             first_observation=first_observation,
             last_observation=last_observation,
             discovery_time=orbit_discovery_dates.discovery_date,
+            ip_at_discovery_time=[ip_at_discovery_time],
             ip_threshold_0_dot_01_percent=ip_threshold_0_dot_01_percent.date,
             ip_threshold_1_percent=ip_threshold_1_percent.date,
             ip_threshold_10_percent=ip_threshold_10_percent.date,
@@ -567,6 +595,7 @@ def summarize_impact_study_object_results(
             first_observation=first_observation,
             last_observation=last_observation,
             discovery_time=orbit_discovery_dates.discovery_date,
+            ip_at_discovery_time=[ip_at_discovery_time],
             ip_threshold_0_dot_01_percent=ip_threshold_0_dot_01_percent.date,
             ip_threshold_1_percent=ip_threshold_1_percent.date,
             ip_threshold_10_percent=ip_threshold_10_percent.date,
@@ -591,6 +620,7 @@ def summarize_impact_study_object_results(
             first_observation=first_observation,
             last_observation=last_observation,
             discovery_time=orbit_discovery_dates.discovery_date,
+            ip_at_discovery_time=[ip_at_discovery_time],
             ip_threshold_0_dot_01_percent=ip_threshold_0_dot_01_percent.date,
             ip_threshold_1_percent=ip_threshold_1_percent.date,
             ip_threshold_10_percent=ip_threshold_10_percent.date,
@@ -622,6 +652,7 @@ def summarize_impact_study_object_results(
         first_observation=first_observation,
         last_observation=last_observation,
         discovery_time=orbit_discovery_dates.discovery_date,
+        ip_at_discovery_time=[ip_at_discovery_time],
         ip_threshold_0_dot_01_percent=ip_threshold_0_dot_01_percent.date,
         ip_threshold_1_percent=ip_threshold_1_percent.date,
         ip_threshold_10_percent=ip_threshold_10_percent.date,
@@ -725,6 +756,12 @@ def run_all_analysis(
     impactor_orbits, observations, results_timing, window_results = collect_all_results(
         run_dir
     )
+
+    # Persist collected results to output directory
+    impactor_orbits.to_parquet(out_dir / "impactor_orbits.parquet")
+    observations.to_parquet(out_dir / "observations.parquet")
+    results_timing.to_parquet(out_dir / "results_timing.parquet")
+    window_results.to_parquet(out_dir / "window_results.parquet")
 
     # Summarize the results
     summary_results = summarize_impact_study_results(

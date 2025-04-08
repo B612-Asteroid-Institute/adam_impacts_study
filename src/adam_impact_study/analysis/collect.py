@@ -470,5 +470,5 @@ def collect_all_results(
     window_results = collect_all_window_results_new(
         run_dir, max_processes=max_processes
     )
-    window_results = create_missing_window_results(observations, window_results)
+    window_results = create_missing_window_results(observations, window_results, max_processes=max_processes)
     return impactor_orbits, observations, timings, window_results
