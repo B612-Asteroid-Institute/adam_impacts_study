@@ -26,19 +26,7 @@ def plot_warning_time_histogram(
     # Filter to only include complete results
     summary = summary.apply_mask(summary.complete())
 
-    print(len(summary))
-
     fig, ax = plt.subplots(1, 1, dpi=200)
-    warning_times = pc.subtract(
-        summary.orbit.impact_time.mjd(),
-        summary.ip_threshold_1_percent.mjd(),
-    )
-    print(pc.unique(warning_times).to_pylist())
-    print(pc.sum(pc.is_null(warning_times)).as_py())
-    max_warning_time = pc.max(warning_times).as_py()
-    print(max_warning_time)
-    ceil_max_warning_time = pc.ceil(max_warning_time)
-    print(ceil_max_warning_time)
     warning_time_max = (
         pc.ceil(
             pc.max(
@@ -49,7 +37,6 @@ def plot_warning_time_histogram(
             )
         )
     )
-    print(warning_time_max)
     warning_time_max = warning_time_max.as_py() / 365.25
     bins = np.arange(0, warning_time_max, 1)
 
