@@ -7,6 +7,7 @@ import numpy as np
 import pyarrow as pa
 import pyarrow.compute as pc
 import quivr as qv
+import scipy.ndimage
 from adam_core.time import Timestamp
 
 from adam_impact_study.types import ImpactorOrbits, ImpactorResultSummary, WindowResult
@@ -1056,6 +1057,299 @@ def plot_iawn_threshold_by_diameter_decade(
     ax.yaxis.grid(True, linestyle="--", alpha=0.7)
 
     return fig, ax
+
+
+def plot_elements(
+    summary: ImpactorResultSummary,
+    window_results: WindowResult,
+) -> Tuple[plt.Figure, plt.Axes]:
+    """
+    Plot the elements of the orbits by diameter and impact decade using density plots.
+    """
+    # summary = summary.apply_mask(summary.complete())
+
+    kep_coordinates = summary.orbit.coordinates.to_keplerian()
+
+    # Convert pyarrow arrays to numpy arrays for plotting
+    a_au = kep_coordinates.a.to_numpy(zero_copy_only=False)
+    i_deg = kep_coordinates.i.to_numpy(zero_copy_only=False)
+    e = kep_coordinates.e.to_numpy(zero_copy_only=False)
+
+    # make two hexbin plots, a vs i and a vs e
+    fig, axes = plt.subplots(1, 2, dpi=200, figsize=(12, 5))  # Adjusted figsize
+
+    # Plot a vs i
+    hb1 = axes[0].hexbin(a_au, i_deg, gridsize=50, cmap="viridis", mincnt=1)
+    axes[0].set_xlabel("Semimajor Axis (a) [AU]")
+    axes[0].set_ylabel("Inclination (i) [deg]")
+    axes[0].set_title("Density Plot: a vs i")
+    fig.colorbar(hb1, ax=axes[0], label="Count in bin")
+
+    # Plot a vs e
+    hb2 = axes[1].hexbin(a_au, e, gridsize=50, cmap="viridis", mincnt=1)
+    axes[1].set_xlabel("Semimajor Axis (a) [AU]")
+    axes[1].set_ylabel("Eccentricity (e)")
+    axes[1].set_title("Density Plot: a vs e")
+    fig.colorbar(hb2, ax=axes[1], label="Count in bin")
+
+    # add a title to the entire figure
+    fig.suptitle("Density Plot of Elements")
+
+    plt.tight_layout()  # Adjust layout to prevent overlap
+    return fig, axes
+
+
+def plot_1_percent_ip_threshold_percentage_vs_elements(
+    summary: ImpactorResultSummary,
+    diameter: float = 1,
+    contour_levels: int = 4,
+    contour_color: str = "black",
+    contour_alpha: float = 0.7,
+    hist_bins: int = 40,
+    contour_fontsize: int = 7,
+    min_contour_level: float = 5.0,
+    contour_smooth_factor: int = 3,
+) -> Tuple[plt.Figure, plt.Axes]:
+    """
+    Plot the percentage of orbits reaching the 1% IP threshold
+    as a function of orbital elements using a hexbin plot, with overlaid,
+    visually smoothed contours representing the total population density
+    (excluding levels below min_contour_level). Contour lines are labeled
+    with rounded integer values.
+
+    Parameters
+    ----------
+    summary : ImpactorResultSummary
+        The summary of impact study results.
+    diameter : float, optional
+        The diameter [km] to filter the results by, by default 1.
+    contour_levels : int, optional
+        Approximate number of contour levels to draw for the total density. Default is 4.
+    contour_color : str, optional
+        Color of the density contour lines. Default is black.
+    contour_alpha : float, optional
+        Transparency of the density contour lines.
+    hist_bins : int, optional
+        Number of bins to use for the 2D histogram underlying the contours.
+    contour_fontsize : int, optional
+        Font size for the contour labels. Default is 7.
+    min_contour_level : float, optional
+        The minimum density value for a contour line to be drawn. Default is 5.0.
+    contour_smooth_factor : int, optional
+        Factor by which to upscale the histogram grid for smoother contours (e.g., 3).
+        Higher values mean smoother but potentially slower plotting. Default is 3.
+
+    Returns
+    -------
+    Tuple[plt.Figure, plt.Axes]
+        The figure and axes objects for the plot.
+    """
+    # summary = summary.apply_mask(summary.complete()) # Optional: uncomment if only complete needed
+
+    # filter to only include the given diameter
+    summary = summary.apply_mask(pc.equal(summary.orbit.diameter, diameter))
+
+    if len(summary) == 0:
+        logger.warning(f"No data found for diameter {diameter} km.")
+        # Return empty figure/axes or raise error
+        fig, axes = plt.subplots(1, 2, dpi=200, figsize=(18, 7))
+        fig.suptitle(f"No data for Diameter: {diameter} km")
+        return fig, axes
+
+    # Get Keplerian coordinates for the entire filtered population
+    kep_coordinates = summary.orbit.coordinates.to_keplerian()
+    a_au = kep_coordinates.a.to_numpy(zero_copy_only=False)
+    i_deg = kep_coordinates.i.to_numpy(zero_copy_only=False)
+    e = kep_coordinates.e.to_numpy(zero_copy_only=False)
+
+    # Create a mask indicating which orbits reached the 1% IP threshold (non-null time)
+    # Convert boolean mask to float (1.0 for True, 0.0 for False) for averaging
+    reached_1_percent_ip_mask = (
+        pc.invert(pc.is_null(summary.ip_threshold_1_percent.mjd()))
+        .to_numpy(zero_copy_only=False)
+        .astype(float)
+    )
+
+    # Create the plots
+    fig, axes = plt.subplots(1, 2, dpi=200, figsize=(18, 7))
+
+    # --- Plot a vs i ---
+    hb1 = axes[0].hexbin(
+        a_au,
+        i_deg,
+        C=reached_1_percent_ip_mask,
+        reduce_C_function=np.mean,
+        gridsize=hist_bins,
+        cmap="plasma",
+        mincnt=2,
+        vmin=0,
+        vmax=1,
+    )
+    axes[0].set_xlabel("Semimajor Axis (a) [AU]")
+    axes[0].set_ylabel("Inclination (i) [deg]")
+    axes[0].set_title("a vs i")
+    cb1 = fig.colorbar(hb1, ax=axes[0])
+    cb1.set_label("Fraction Reaching 1% IP Threshold")
+
+    # Calculate and plot density contours for a vs i
+    H_ai, xedges_ai, yedges_ai = np.histogram2d(
+        a_au,
+        i_deg,
+        bins=hist_bins,
+        range=[[np.min(a_au), np.max(a_au)], [np.min(i_deg), np.max(i_deg)]],
+    )
+    xcenters_ai = (xedges_ai[:-1] + xedges_ai[1:]) / 2
+    ycenters_ai = (yedges_ai[:-1] + yedges_ai[1:]) / 2
+    X_ai, Y_ai = np.meshgrid(xcenters_ai, ycenters_ai)
+
+    # --- Determine contour levels excluding zero and below threshold ---
+    max_val_ai = H_ai.max()
+    levels_ai = None  # Initialize levels_ai
+    if max_val_ai >= min_contour_level:  # Only proceed if max is above threshold
+        # Find min positive value that is also >= min_contour_level
+        positive_above_thresh_ai = H_ai[H_ai >= min_contour_level]
+        if len(positive_above_thresh_ai) > 0:
+            min_level_ai = positive_above_thresh_ai.min()
+
+            if max_val_ai <= min_level_ai:
+                # Only one level possible above threshold
+                levels_ai = np.round(np.array([max_val_ai])).astype(int)
+            else:
+                # Calculate levels between the effective min and max
+                levels_ai = np.linspace(min_level_ai, max_val_ai, contour_levels)
+                # Round levels to nearest integer
+                levels_ai = np.round(levels_ai).astype(int)
+                # Ensure levels are unique and sorted after rounding
+                levels_ai = np.unique(levels_ai)
+                # Filter again to ensure they are still >= min_contour_level after rounding
+                levels_ai = levels_ai[
+                    levels_ai >= np.ceil(min_contour_level)
+                ]  # Use ceil for comparison
+
+            # Ensure we have at least one level after filtering/rounding
+            if len(levels_ai) == 0:
+                levels_ai = None
+
+    if levels_ai is not None and len(levels_ai) > 0:
+        # --- Smooth the histogram data for visual appearance ---
+        H_ai_smooth = scipy.ndimage.zoom(H_ai.T, contour_smooth_factor, order=3)
+        # Create finer grid coordinates corresponding to the smoothed data
+        xcenters_ai_smooth = np.linspace(
+            xcenters_ai.min(), xcenters_ai.max(), H_ai_smooth.shape[1]
+        )
+        ycenters_ai_smooth = np.linspace(
+            ycenters_ai.min(), ycenters_ai.max(), H_ai_smooth.shape[0]
+        )
+        X_ai_smooth, Y_ai_smooth = np.meshgrid(xcenters_ai_smooth, ycenters_ai_smooth)
+
+        # Store the contour set plotted on the smoothed grid
+        CS_ai = axes[0].contour(
+            X_ai_smooth,  # Use smoothed grid
+            Y_ai_smooth,  # Use smoothed grid
+            H_ai_smooth,  # Use smoothed data
+            levels=levels_ai,  # Use original calculated levels
+            colors=contour_color,
+            alpha=contour_alpha,
+            linewidths=0.8,
+        )
+        # Add labels to the contours, using the original calculated levels
+        axes[0].clabel(
+            CS_ai, levels=levels_ai, inline=True, fontsize=contour_fontsize, fmt="%1.0f"
+        )
+    # --- End contour calculation ---
+
+    # --- Plot a vs e ---
+    hb2 = axes[1].hexbin(
+        a_au,
+        e,
+        C=reached_1_percent_ip_mask,
+        reduce_C_function=np.mean,
+        gridsize=hist_bins,
+        cmap="plasma",
+        mincnt=2,
+        vmin=0,
+        vmax=1,
+    )
+    axes[1].set_xlabel("Semimajor Axis (a) [AU]")
+    axes[1].set_ylabel("Eccentricity (e)")
+    axes[1].set_title("a vs e")
+    cb2 = fig.colorbar(hb2, ax=axes[1])
+    cb2.set_label("Fraction Reaching 1% IP Threshold")
+
+    # Calculate and plot density contours for a vs e
+    H_ae, xedges_ae, yedges_ae = np.histogram2d(
+        a_au,
+        e,
+        bins=hist_bins,
+        range=[[np.min(a_au), np.max(a_au)], [np.min(e), np.max(e)]],
+    )
+    xcenters_ae = (xedges_ae[:-1] + xedges_ae[1:]) / 2
+    ycenters_ae = (yedges_ae[:-1] + yedges_ae[1:]) / 2
+    X_ae, Y_ae = np.meshgrid(xcenters_ae, ycenters_ae)
+
+    # --- Determine contour levels excluding zero and below threshold ---
+    max_val_ae = H_ae.max()
+    levels_ae = None  # Initialize levels_ae
+    if max_val_ae >= min_contour_level:  # Only proceed if max is above threshold
+        # Find min positive value that is also >= min_contour_level
+        positive_above_thresh_ae = H_ae[H_ae >= min_contour_level]
+        if len(positive_above_thresh_ae) > 0:
+            min_level_ae = positive_above_thresh_ae.min()
+
+            if max_val_ae <= min_level_ae:
+                # Only one level possible above threshold
+                levels_ae = np.round(np.array([max_val_ae])).astype(int)
+            else:
+                # Calculate levels between the effective min and max
+                levels_ae = np.linspace(min_level_ae, max_val_ae, contour_levels)
+                # Round levels to nearest integer
+                levels_ae = np.round(levels_ae).astype(int)
+                # Ensure levels are unique and sorted after rounding
+                levels_ae = np.unique(levels_ae)
+                # Filter again to ensure they are still >= min_contour_level after rounding
+                levels_ae = levels_ae[
+                    levels_ae >= np.ceil(min_contour_level)
+                ]  # Use ceil for comparison
+
+            # Ensure we have at least one level after filtering/rounding
+            if len(levels_ae) == 0:
+                levels_ae = None
+
+    if levels_ae is not None and len(levels_ae) > 0:
+        # --- Smooth the histogram data for visual appearance ---
+        H_ae_smooth = scipy.ndimage.zoom(H_ae.T, contour_smooth_factor, order=3)
+        # Create finer grid coordinates corresponding to the smoothed data
+        xcenters_ae_smooth = np.linspace(
+            xcenters_ae.min(), xcenters_ae.max(), H_ae_smooth.shape[1]
+        )
+        ycenters_ae_smooth = np.linspace(
+            ycenters_ae.min(), ycenters_ae.max(), H_ae_smooth.shape[0]
+        )
+        X_ae_smooth, Y_ae_smooth = np.meshgrid(xcenters_ae_smooth, ycenters_ae_smooth)
+
+        # Store the contour set plotted on the smoothed grid
+        CS_ae = axes[1].contour(
+            X_ae_smooth,  # Use smoothed grid
+            Y_ae_smooth,  # Use smoothed grid
+            H_ae_smooth,  # Use smoothed data
+            levels=levels_ae,  # Use original calculated levels
+            colors=contour_color,
+            alpha=contour_alpha,
+            linewidths=0.8,
+        )
+        # Add labels to the contours, using the original calculated levels
+        axes[1].clabel(
+            CS_ae, levels=levels_ae, inline=True, fontsize=contour_fontsize, fmt="%1.0f"
+        )
+    # --- End contour calculation ---
+
+    # Add overall title
+    fig.suptitle(
+        f"Fraction Reaching 1% IP Threshold (Color) & Total Density (Contours) by Orbital Elements (Diameter: {diameter} km)"
+    )
+
+    plt.tight_layout(rect=[0, 0.03, 1, 0.95])
+    return fig, axes
 
 
 def make_analysis_plots(
