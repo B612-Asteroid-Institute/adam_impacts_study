@@ -26,8 +26,19 @@ def plot_warning_time_histogram(
     # Filter to only include complete results
     summary = summary.apply_mask(summary.complete())
 
-    fig, ax = plt.subplots(1, 1, dpi=200)
+    print(len(summary))
 
+    fig, ax = plt.subplots(1, 1, dpi=200)
+    warning_times = pc.subtract(
+        summary.orbit.impact_time.mjd(),
+        summary.ip_threshold_1_percent.mjd(),
+    )
+    print(pc.unique(warning_times).to_pylist())
+    print(pc.sum(pc.is_null(warning_times)).as_py())
+    max_warning_time = pc.max(warning_times).as_py()
+    print(max_warning_time)
+    ceil_max_warning_time = pc.ceil(max_warning_time)
+    print(ceil_max_warning_time)
     warning_time_max = (
         pc.ceil(
             pc.max(
@@ -36,9 +47,10 @@ def plot_warning_time_histogram(
                     summary.ip_threshold_1_percent.mjd(),
                 )
             )
-        ).as_py()
-        / 365.25
+        )
     )
+    print(warning_time_max)
+    warning_time_max = warning_time_max.as_py() / 365.25
     bins = np.arange(0, warning_time_max, 1)
 
     unique_diameters = summary.orbit.diameter.unique().sort().to_pylist()
@@ -182,6 +194,46 @@ def plot_discoveries_by_diameter(
     ax.set_ylabel("Discovered [%]")
 
     return fig, ax
+
+
+def plot_arclength_by_diameter(
+    summary: ImpactorResultSummary,
+) -> Tuple[plt.Figure, plt.Axes]:
+    """
+    Plot the arc length of the orbits by diameter.
+    """
+    summary = summary.apply_mask(summary.complete())
+
+    fig, ax = plt.subplots(1, 1, dpi=200)
+
+    unique_diameters = summary.orbit.diameter.unique().sort().to_pylist()
+    colors = plt.cm.coolwarm(np.linspace(0, 1, len(unique_diameters)))
+    
+
+    # Get the max arc length
+    max_arc_length = pc.max(summary.orbit.arc_length()).as_py()
+    bins = np.linspace(0, max_arc_length, 100)
+
+    for i, (diameter, color) in enumerate(zip(unique_diameters, colors)):
+        orbits_at_diameter = summary.select("orbit.diameter", diameter)
+        arc_length = orbits_at_diameter.arc_length().to_numpy(zero_copy_only=False)
+        # Default nan to 0
+        arc_length[np.isnan(arc_length)] = 0
+        ax.hist(
+            arc_length,
+            bins=bins,
+            color=color,
+            alpha=0.7,
+            label=f"{diameter:.3f} km",
+        )
+    
+    ax.set_xlabel("Arc Length [days]")
+    ax.set_ylabel("Count")
+    ax.legend(frameon=False, bbox_to_anchor=(1.01, 0.75))
+
+    return fig, ax
+    
+
 
 
 def plot_runtime_by_diameter(
@@ -689,9 +741,13 @@ def plot_realizations_by_diameter_decade(
             )
 
             # Count objects with non-null realization time (meaning they were realized)
+            # and also have a non-null discovery time
             realization_mask = pc.invert(
-                pc.is_null(
-                    orbits_at_diameter_and_decade.ip_threshold_0_dot_01_percent.mjd()
+                pc.or_(
+                    pc.is_null(
+                        orbits_at_diameter_and_decade.ip_threshold_0_dot_01_percent.mjd()
+                    ),
+                    pc.is_null(orbits_at_diameter_and_decade.discovery_time.mjd()),
                 )
             )
             realized = pc.sum(realization_mask).as_py()
@@ -841,6 +897,77 @@ def plot_max_impact_probability_by_diameter_decade(
     ax.set_xlabel("Impact Decade")
     ax.set_ylabel("Mean Maximum Impact Probability")
     ax.set_title("Mean Maximum Impact Probability by Diameter and Impact Decade")
+    ax.legend(
+        unique_diameters,
+        title="Diameter [km]",
+        frameon=False,
+        bbox_to_anchor=(1.01, 1),
+        loc="upper left",
+    )
+    ax.yaxis.grid(True, linestyle="--", alpha=0.7)
+
+    return fig, ax
+
+
+class ArcLengthByDiameterDecade(qv.Table):
+    diameter = qv.Float64Column()
+    decade = qv.LargeStringColumn()
+    mean_arc_length = qv.Float64Column()
+
+
+def plot_arc_length_by_diameter_decade(
+    summary: ImpactorResultSummary,
+) -> Tuple[plt.Figure, plt.Axes]:
+    """
+    Plot the mean arc length of the orbits by diameter and impact decade.
+    """
+    summary = summary.apply_mask(summary.complete())
+
+    impact_decades, unique_decades, unique_diameters = (
+        summary.get_diameter_decade_data()
+    )
+
+    arc_length_by_diameter_decade = ArcLengthByDiameterDecade.empty()
+
+    for decade in unique_decades:
+        orbits_at_decade = summary.apply_mask(impact_decades == decade)
+        for diameter in unique_diameters:
+            orbits_at_diameter_and_decade = orbits_at_decade.select(
+                "orbit.diameter", diameter
+            )
+            arc_length = orbits_at_diameter_and_decade.arc_length().to_numpy(zero_copy_only=False)
+            mean_arc_length = np.mean(arc_length) if arc_length.size > 0 else 0
+            arc_length_by_diameter_decade = qv.concatenate(
+                [
+                    arc_length_by_diameter_decade,
+                    ArcLengthByDiameterDecade.from_kwargs(
+                        decade=[f"{decade}"],
+                        diameter=[diameter],
+                        mean_arc_length=[mean_arc_length],
+                    ),
+                ]
+            )
+
+    # Create the plot
+    width = 0.2
+    x = np.arange(len(unique_decades))
+    colors = plt.cm.viridis(np.linspace(0, 1, len(unique_diameters)))
+    fig, ax = plt.subplots(1, 1, dpi=200, figsize=(10, 6))
+
+    for i, diameter in enumerate(unique_diameters):
+        diameter_data = arc_length_by_diameter_decade.select("diameter", diameter)
+        ax.bar(
+            x + i * width,
+            diameter_data.mean_arc_length.to_numpy(zero_copy_only=False),
+            width=width,
+            color=colors[i],
+        )
+
+    ax.set_xticks(x + width * (len(unique_diameters) - 1) / 2)
+    ax.set_xticklabels(unique_decades)
+    ax.set_xlabel("Impact Decade")
+    ax.set_ylabel("Mean Arc Length [days]")
+    ax.set_title("Mean Arc Length by Diameter and Impact Decade")
     ax.legend(
         unique_diameters,
         title="Diameter [km]",
@@ -1004,9 +1131,18 @@ def make_analysis_plots(
     logger.info("Generated incomplete by diameter plot")
     plt.close(fig)
 
+    fig, ax = plot_arclength_by_diameter(summary)
+    fig.savefig(
+        os.path.join(out_dir, "arclength_by_diameter.jpg"),
+        bbox_inches="tight",
+        dpi=200,
+    )
+    logger.info("Generated arclength by diameter plot")
+    plt.close(fig)
+
     fig, ax = plot_discoveries_by_diameter_decade(summary)
     fig.savefig(
-        os.path.join(out_dir, "percentage_discovered.jpg"),
+        os.path.join(out_dir, "discovered_by_diameter_decade.jpg"),
         bbox_inches="tight",
         dpi=200,
     )
@@ -1015,7 +1151,7 @@ def make_analysis_plots(
 
     fig, ax = plot_realizations_by_diameter_decade(summary)
     fig.savefig(
-        os.path.join(out_dir, "percentage_realized.jpg"),
+        os.path.join(out_dir, "realized_by_diameter_decade.jpg"),
         bbox_inches="tight",
         dpi=200,
     )
@@ -1024,7 +1160,7 @@ def make_analysis_plots(
 
     fig, ax = plot_max_impact_probability_by_diameter_decade(summary, window_results)
     fig.savefig(
-        os.path.join(out_dir, "max_impact_probability.jpg"),
+        os.path.join(out_dir, "max_impact_probability_by_diameter_decade.jpg"),
         bbox_inches="tight",
         dpi=200,
     )
@@ -1033,11 +1169,20 @@ def make_analysis_plots(
 
     fig, ax = plot_iawn_threshold_by_diameter_decade(summary)
     fig.savefig(
-        os.path.join(out_dir, "iawn_threshold.jpg"),
+        os.path.join(out_dir, "iawn_threshold_by_diameter_decade.jpg"),
         bbox_inches="tight",
         dpi=200,
     )
     logger.info("Generated iawn threshold plot")
+    plt.close(fig)
+
+    fig, ax = plot_arc_length_by_diameter_decade(summary)
+    fig.savefig(
+        os.path.join(out_dir, "arc_length_by_diameter_decade.jpg"),
+        bbox_inches="tight",
+        dpi=200,
+    )
+    logger.info("Generated arc length by diameter decade plot")
     plt.close(fig)
 
     fig, ax = plot_collective_ip_over_time(window_results)

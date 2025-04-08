@@ -4,6 +4,7 @@ import pathlib
 from typing import Tuple, Union
 
 import pyarrow as pa
+import pyarrow.compute as pc
 import pyarrow.parquet as pq
 import quivr as qv
 from adam_core.time import Timestamp
@@ -114,6 +115,91 @@ def collect_all_window_results(run_dir: Union[str, pathlib.Path]) -> WindowResul
     return window_results
 
 
+def collect_all_window_results_new(run_dir: Union[str, pathlib.Path]) -> WindowResult:
+    """Collect all window results from a run directory.
+
+    Parameters
+    ----------
+    run_dir : str
+        Base directory for the run
+
+    Returns
+    -------
+    WindowResult
+        Combined window results for all orbits
+    """
+    run_dir_path = pathlib.Path(run_dir).absolute()
+    window_results = WindowResult.empty()
+    window_files = run_dir_path.glob("**/*window_result.parquet")
+    for window_file in window_files:
+        window_result = WindowResult.from_parquet(window_file)
+        window_results = qv.concatenate([window_results, window_result])
+
+    return window_results
+
+
+def create_missing_window_results(observations: Observations, window_results: WindowResult) -> WindowResult:
+    """Create missing window results for observations that do not have correspondingwindow results.
+
+    Parameters
+    ----------
+    observations : Observations
+        Observations to create missing window results for
+    window_results : WindowResult
+        Window results to create missing window results for
+
+    Returns
+    -------
+    WindowResult
+        Window results with missing window results created
+    """
+    missing_window_results = WindowResult.empty()
+    unique_orbit_ids = pc.unique(observations.orbit_id).sort()
+    for orbit_id in unique_orbit_ids:
+        orbit_observations = observations.select("orbit_id", orbit_id)
+        unique_nights = pc.unique(orbit_observations.observing_night).sort()
+        for night in unique_nights[2:]:
+            mask = pc.less_equal(orbit_observations.observing_night, night)
+            observations_window = orbit_observations.apply_mask(mask)
+            if len(observations_window) < 6:
+                logger.warning(f"Not enough observations for a least-squares fit for night {night}")
+                continue
+        
+            start_night = pc.min(observations_window.observing_night)
+            end_night = pc.max(observations_window.observing_night)
+            window = f"{start_night.as_py()}_{end_night.as_py()}"
+        
+            # Check if the window already exists
+            existing = window_results.select("window", window).select("orbit_id", orbit_id)
+            if len(existing) > 0:
+                continue
+
+            # Populate the missing window result
+            missing_window_results = qv.concatenate([missing_window_results, WindowResult.from_kwargs(
+                orbit_id=[orbit_id],
+                object_id=[observations_window.object_id[0].as_py()],
+                condition_id=[None],
+                status=["incomplete"],
+                window=[window],
+                observation_start=observations_window.coordinates.time.min(),
+                observation_end=observations_window.coordinates.time.max(),
+                observations_count=[len(observations_window)],
+                observations_rejected=[None],
+                observation_nights=[len(pc.unique(observations_window.observing_night))],
+                impact_probability=[None],
+                mean_impact_time=Timestamp.nulls(1, scale="tdb"),
+                minimum_impact_time=Timestamp.nulls(1, scale="tdb"),
+                maximum_impact_time=Timestamp.nulls(1, scale="tdb"),
+                stddev_impact_time=[None],
+                error=[None],
+                od_runtime=[None],
+                ip_runtime=[None],
+                window_runtime=[None],
+                total_runtime=[None],
+            )])
+
+    return qv.concatenate([window_results, missing_window_results])
+
 def collect_all_observations(run_dir: Union[str, pathlib.Path]) -> Observations:
     """Collect all observations from a run directory.
 
@@ -190,6 +276,7 @@ def collect_all_impactor_orbits(run_dir: Union[str, pathlib.Path]) -> ImpactorOr
     return impactor_orbits
 
 
+
 def collect_all_results(
     run_dir: Union[str, pathlib.Path],
 ) -> Tuple[ImpactorOrbits, Observations, ResultsTiming, WindowResult]:
@@ -208,6 +295,6 @@ def collect_all_results(
     impactor_orbits = collect_all_impactor_orbits(run_dir)
     observations = collect_all_observations(run_dir)
     timings = collect_all_timings(run_dir)
-    window_results = collect_all_window_results(run_dir)
-
+    window_results = collect_all_window_results_new(run_dir)
+    window_results = create_missing_window_results(observations, window_results)
     return impactor_orbits, observations, timings, window_results

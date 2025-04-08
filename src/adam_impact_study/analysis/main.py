@@ -464,11 +464,14 @@ def summarize_impact_study_object_results(
     Summarize the impact study results for a single object.
     """
     impactor_orbit = impactor_orbits.select("orbit_id", orbit_id)
-    assert len(impactor_orbit) == 1, "Impactor orbit must be unique"
+    assert len(impactor_orbit) == 1, f"{orbit_id} had {len(impactor_orbit)} impactor orbits, expected 1"
 
     orbit_observations = observations.select("orbit_id", orbit_id)
     orbit_results_timing = results_timing.select("orbit_id", orbit_id)
     orbit_window_results = window_results.select("orbit_id", orbit_id)
+    print(orbit_id)
+    print(f"Orbit window results: {orbit_window_results}")
+    print(f"Unique window statuses: {pc.unique(orbit_window_results.status).to_pylist()}")
     orbit_discovery_dates = compute_discovery_dates(orbit_observations)
     completed_window_results = orbit_window_results.apply_mask(
         orbit_window_results.complete()
@@ -478,6 +481,7 @@ def summarize_impact_study_object_results(
     all_orbit_windows_completed = pc.all(
         pc.equal(orbit_window_results.status, "complete")
     ).as_py()
+
 
     first_observation = orbit_observations.coordinates.time.min()
     last_observation = orbit_observations.coordinates.time.max()
@@ -521,8 +525,8 @@ def summarize_impact_study_object_results(
             ip_threshold_100_percent=Timestamp.nulls(1, scale="utc"),
             maximum_impact_probability=[0],
             results_timing=orbit_results_timing,
-            error=["Orbit has no observations"],
-            status=["incomplete"],
+            error=[None],
+            status=["complete"],
         )
 
     # If the observations are not linked, we can return early

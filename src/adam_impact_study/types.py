@@ -48,7 +48,7 @@ class ImpactorOrbits(qv.Table):
     impact_time = Timestamp.as_column()
     dynamical_class = qv.LargeStringColumn()
     ast_class = qv.LargeStringColumn()
-    diameter = qv.Float64Column()
+    diameter = qv.Float64Column() # km
     albedo = qv.Float64Column()
     H_r = qv.Float64Column()
     u_r = qv.Float64Column()
