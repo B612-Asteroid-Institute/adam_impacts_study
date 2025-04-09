@@ -605,10 +605,11 @@ def plot_individual_orbit_ip_over_time(
 class DiscoveryByDiameterDecade(qv.Table):
     diameter = qv.Float64Column()
     decade = qv.LargeStringColumn()
-    percentage_not_discovered = qv.Float64Column()
+    num_discovered = qv.Int64Column()
+    num_observed_not_discovered = qv.Int64Column()
+    num_unobserved = qv.Int64Column()
 
-
-def plot_not_discovered_by_diameter_decade(
+def plot_discovered_by_diameter_decade(
     summary: ImpactorResultSummary,
 ) -> Tuple[plt.Figure, plt.Axes]:
     """
@@ -633,11 +634,14 @@ def plot_not_discovered_by_diameter_decade(
                 "orbit.diameter", diameter
             )
 
-            not_discovered_mask = pc.is_null(orbits_at_diameter_and_decade.discovery_time.days)
-            not_discovered = pc.sum(not_discovered_mask).as_py()
-            total = len(orbits_at_diameter_and_decade)
+            discovered_mask = orbits_at_diameter_and_decade.discovered()
+            num_discovered = pc.sum(discovered_mask).as_py()
+            observed_not_discovered_mask = orbits_at_diameter_and_decade.observed_but_not_discovered()
+            num_observed_not_discovered = pc.sum(observed_not_discovered_mask).as_py()
+            unobserved_mask = pc.equal(orbits_at_diameter_and_decade.observations, 0)
+            num_unobserved = pc.sum(unobserved_mask).as_py()
 
-            percentage = (not_discovered / total * 100) if total > 0 else 0
+            assert num_discovered + num_observed_not_discovered + num_unobserved == len(orbits_at_diameter_and_decade)
 
             discovery_by_diameter_decade = qv.concatenate(
                 [
@@ -645,7 +649,9 @@ def plot_not_discovered_by_diameter_decade(
                     DiscoveryByDiameterDecade.from_kwargs(
                         decade=[f"{decade}"],
                         diameter=[diameter],
-                        percentage_not_discovered=[percentage],
+                        num_discovered=[num_discovered],
+                        num_observed_not_discovered=[num_observed_not_discovered],
+                        num_unobserved=[num_unobserved],
                     ),
                 ]
             )
@@ -671,14 +677,40 @@ def plot_not_discovered_by_diameter_decade(
         # Calculate x position for this diameter's bars within each group
         offset = (i - num_diameters/2 + 0.5) * (bar_width * 1.1)  # Add 10% spacing between bars
         bar_positions = x + offset
+
+        num_discovered = diameter_data.num_discovered.to_numpy(zero_copy_only=False)
+        num_observed_not_discovered = diameter_data.num_observed_not_discovered.to_numpy(zero_copy_only=False)
+        num_unobserved = diameter_data.num_unobserved.to_numpy(zero_copy_only=False)
         
-        ax.bar(
-            bar_positions,
-            diameter_data.percentage_not_discovered.to_numpy(zero_copy_only=False),
-            width=bar_width,
-            color=colors[i],
-            label=f"{diameter:.3f} km",
-        )
+        # Calculate percentages
+        total = (num_discovered + 
+                num_observed_not_discovered + 
+                num_unobserved)
+        
+        pct_discovered = (num_discovered / total * 100)
+        pct_observed_not_discovered = (num_observed_not_discovered / total * 100)
+        pct_unobserved = (num_unobserved / total * 100)
+        
+        # Plot stacked bars
+        ax.bar(bar_positions, pct_discovered, 
+               width=bar_width,
+               color=colors[i],
+               label=f"{diameter:.3f} km" if i == 0 else "_nolegend_")
+               
+        ax.bar(bar_positions, pct_observed_not_discovered,
+               bottom=pct_discovered,
+               width=bar_width, 
+               color=colors[i],
+               alpha=0.5,
+               hatch='///',
+               label='Observed but not discovered' if i == 0 else "_nolegend_")
+               
+        ax.bar(bar_positions, pct_unobserved,
+               bottom=pct_discovered + pct_observed_not_discovered,
+               width=bar_width,
+               color='none',
+               edgecolor=colors[i],
+               label='Unobserved' if i == 0 else "_nolegend_")
 
     # Position x-ticks at the center of each decade group
     ax.set_xticks(x)
@@ -857,6 +889,7 @@ def plot_max_impact_probability_by_diameter_decade(
 
     # Filter to only include complete results (needed for the rest of the function)
     summary = summary.apply_mask(summary.complete())
+    summary = summary.apply_mask(summary.discovered())
 
     # Get common data
     impact_decades, unique_decades, unique_diameters = (
@@ -2006,13 +2039,13 @@ def make_analysis_plots(
     logger.info("Generated arclength by diameter plot")
     plt.close(fig)
 
-    fig, ax = plot_not_discovered_by_diameter_decade(summary)
+    fig, ax = plot_discovered_by_diameter_decade(summary)
     fig.savefig(
-        os.path.join(out_dir, "not_discovered_by_diameter_decade.jpg"),
+        os.path.join(out_dir, "discovered_by_diameter_decade.jpg"),
         bbox_inches="tight",
         dpi=200,
     )
-    logger.info("Generated percentage discovered plot")
+    logger.info("Generated discovered by diameter decade plot")
     plt.close(fig)
 
     fig, ax = plot_not_realized_by_diameter_decade(summary)
