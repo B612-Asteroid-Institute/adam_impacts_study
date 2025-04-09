@@ -10,10 +10,18 @@ import quivr as qv
 import scipy.ndimage
 from adam_core.time import Timestamp
 
-from adam_impact_study.types import ImpactorOrbits, ImpactorResultSummary, WindowResult
+from adam_impact_study.types import (
+    ImpactorOrbits,
+    ImpactorResultSummary,
+    Observations,
+    WindowResult,
+)
 
 logger = logging.getLogger(__name__)
 
+BAR_GROUP_WIDTH = 0.9
+BAR_WIDTH_SCALE = 0.9
+BAR_GROUP_SPACING = 0.2
 
 def plot_warning_time_histogram(
     summary: ImpactorResultSummary,
@@ -597,14 +605,14 @@ def plot_individual_orbit_ip_over_time(
 class DiscoveryByDiameterDecade(qv.Table):
     diameter = qv.Float64Column()
     decade = qv.LargeStringColumn()
-    percentage_discovered = qv.Float64Column()
+    percentage_not_discovered = qv.Float64Column()
 
 
-def plot_discoveries_by_diameter_decade(
+def plot_not_discovered_by_diameter_decade(
     summary: ImpactorResultSummary,
 ) -> Tuple[plt.Figure, plt.Axes]:
     """
-    Plot the percentage discovered broken down by diameter and impact decade.
+    Plot the percentage not discovered broken down by diameter and impact decade.
     """
     # Filter to only include complete results
     summary = summary.apply_mask(summary.complete())
@@ -625,13 +633,11 @@ def plot_discoveries_by_diameter_decade(
                 "orbit.diameter", diameter
             )
 
-            discovery_mask = pc.invert(
-                pc.is_null(orbits_at_diameter_and_decade.discovery_time.days)
-            )
-            discovered = pc.sum(discovery_mask).as_py()
+            not_discovered_mask = pc.is_null(orbits_at_diameter_and_decade.discovery_time.days)
+            not_discovered = pc.sum(not_discovered_mask).as_py()
             total = len(orbits_at_diameter_and_decade)
 
-            percentage = (discovered / total * 100) if total > 0 else 0
+            percentage = (not_discovered / total * 100) if total > 0 else 0
 
             discovery_by_diameter_decade = qv.concatenate(
                 [
@@ -639,54 +645,80 @@ def plot_discoveries_by_diameter_decade(
                     DiscoveryByDiameterDecade.from_kwargs(
                         decade=[f"{decade}"],
                         diameter=[diameter],
-                        percentage_discovered=[percentage],
+                        percentage_not_discovered=[percentage],
                     ),
                 ]
             )
 
-    # Plot the data using a bar plot. We want the x-axis to be decade and y-axis to be percentage discovered
-    # We want to plot each diameter as a separate bar
-    width = 0.2
-    x = np.arange(len(unique_decades))
+    # Create the plot with improved spacing
+    fig, ax = plt.subplots(1, 1, dpi=200, figsize=(12, 6))  # Wider figure for better spacing
+    
+    # Calculate bar width and spacing based on number of diameters
+    num_diameters = len(unique_diameters)
+    group_width = BAR_GROUP_WIDTH  # Width allocated for each decade group (out of 1.0)
+    bar_width = group_width / num_diameters * BAR_WIDTH_SCALE  # Slightly narrower bars for spacing between them
+    
+    # Create evenly spaced x positions for decade groups
+    x = np.arange(len(unique_decades)) * (1 + BAR_GROUP_SPACING)  # Add 20% extra space between decade groups
+    
+    # Define a colormap
     colors = plt.cm.viridis(np.linspace(0, 1, len(unique_diameters)))
-    fig, ax = plt.subplots(1, 1, dpi=200, figsize=(10, 6))
+    
+    # Plot bars for each diameter
     for i, diameter in enumerate(unique_diameters):
         diameter_data = discovery_by_diameter_decade.select("diameter", diameter)
+        
+        # Calculate x position for this diameter's bars within each group
+        offset = (i - num_diameters/2 + 0.5) * (bar_width * 1.1)  # Add 10% spacing between bars
+        bar_positions = x + offset
+        
         ax.bar(
-            x + i * width,
-            diameter_data.percentage_discovered.to_numpy(zero_copy_only=False),
-            width=width,
+            bar_positions,
+            diameter_data.percentage_not_discovered.to_numpy(zero_copy_only=False),
+            width=bar_width,
             color=colors[i],
+            label=f"{diameter:.3f} km",
         )
 
-    ax.set_xticks(x + width * (len(unique_diameters) - 1) / 2)
+    # Position x-ticks at the center of each decade group
+    ax.set_xticks(x)
     ax.set_xticklabels(unique_decades)
+    
+    # Add some padding to x-axis limits
+    ax.set_xlim(min(x) - 0.5, max(x) + 0.5)
+    
     ax.set_xlabel("Impact Decade")
-    ax.set_ylabel("Percentage Discovered")
-    ax.set_title("Percentage of Objects Discovered by Diameter and Impact Decade")
+    ax.set_ylabel("Percentage Not Discovered")
+    ax.set_title("Percentage of Objects Not Discovered by Diameter and Impact Decade")
+    
+    # Move legend outside to save space
     ax.legend(
-        unique_diameters,
         title="Diameter [km]",
         frameon=False,
         bbox_to_anchor=(1.01, 1),
         loc="upper left",
     )
+    
     ax.yaxis.grid(True, linestyle="--", alpha=0.7)
+    
+    # Adjust layout to make room for the legend
+    plt.tight_layout(rect=[0, 0, 0.85, 1])
+
     return fig, ax
 
 
 class RealizationByDiameterDecade(qv.Table):
     diameter = qv.Float64Column()
     decade = qv.LargeStringColumn()
-    percentage_realized = qv.Float64Column()
+    percentage_not_realized = qv.Float64Column()
 
 
-def plot_realizations_by_diameter_decade(
+def plot_not_realized_by_diameter_decade(
     summary: ImpactorResultSummary,
 ) -> Tuple[plt.Figure, plt.Axes]:
     """
-    Plot the percentage of objects that have been realized (reached a non-zero impact probability)
-    broken down by diameter and impact decade.
+    Plot the percentage of discovered objects that have NOT been realized 
+    (have not reached the 0.01% impact probability threshold) broken down by diameter and impact decade.
 
     Parameters
     ----------
@@ -717,20 +749,19 @@ def plot_realizations_by_diameter_decade(
                 "orbit.diameter", diameter
             )
 
-            # Count objects with non-null realization time (meaning they were realized)
-            # and also have a non-null discovery time
-            realization_mask = pc.invert(
-                pc.or_(
-                    pc.is_null(
-                        orbits_at_diameter_and_decade.ip_threshold_0_dot_01_percent.mjd()
-                    ),
-                    pc.is_null(orbits_at_diameter_and_decade.discovery_time.mjd()),
-                )
+            # Count objects with null realization time or null discovery time
+            # (meaning they were NOT realized despite being discovered)
+            not_realized_mask = pc.and_(
+                pc.is_null(orbits_at_diameter_and_decade.ip_threshold_0_dot_01_percent.mjd()),
+                pc.invert(pc.is_null(orbits_at_diameter_and_decade.discovery_time.mjd()))
             )
-            realized = pc.sum(realization_mask).as_py()
-            total = len(orbits_at_diameter_and_decade)
+            not_realized = pc.sum(not_realized_mask).as_py()
+            
+            # Count total discovered objects
+            discovered_mask = pc.invert(pc.is_null(orbits_at_diameter_and_decade.discovery_time.mjd()))
+            total_discovered = pc.sum(discovered_mask).as_py()
 
-            percentage = (realized / total * 100) if total > 0 else 0
+            percentage = (not_realized / total_discovered * 100) if total_discovered > 0 else 0
 
             realization_by_diameter_decade = qv.concatenate(
                 [
@@ -738,39 +769,64 @@ def plot_realizations_by_diameter_decade(
                     RealizationByDiameterDecade.from_kwargs(
                         decade=[f"{decade}"],
                         diameter=[diameter],
-                        percentage_realized=[percentage],
+                        percentage_not_realized=[percentage],
                     ),
                 ]
             )
 
-    # Create the plot
-    width = 0.2
-    x = np.arange(len(unique_decades))
+    # Create the plot with improved spacing
+    fig, ax = plt.subplots(1, 1, dpi=200, figsize=(12, 6))  # Wider figure for better spacing
+    
+    # Calculate bar width and spacing based on number of diameters
+    num_diameters = len(unique_diameters)
+    group_width = BAR_GROUP_WIDTH  # Width allocated for each decade group (out of 1.0)
+    bar_width = group_width / num_diameters * BAR_WIDTH_SCALE  # Slightly narrower bars for spacing between them
+    
+    # Create evenly spaced x positions for decade groups
+    x = np.arange(len(unique_decades)) * (1 + BAR_GROUP_SPACING)  # Add 20% extra space between decade groups
+    
+    # Define a colormap
     colors = plt.cm.viridis(np.linspace(0, 1, len(unique_diameters)))
-    fig, ax = plt.subplots(1, 1, dpi=200, figsize=(10, 6))
-
+    
+    # Plot bars for each diameter
     for i, diameter in enumerate(unique_diameters):
         diameter_data = realization_by_diameter_decade.select("diameter", diameter)
+        
+        # Calculate x position for this diameter's bars within each group
+        offset = (i - num_diameters/2 + 0.5) * (bar_width * 1.1)  # Add 10% spacing between bars
+        bar_positions = x + offset
+        
         ax.bar(
-            x + i * width,
-            diameter_data.percentage_realized.to_numpy(zero_copy_only=False),
-            width=width,
+            bar_positions,
+            diameter_data.percentage_not_realized.to_numpy(zero_copy_only=False),
+            width=bar_width,
             color=colors[i],
+            label=f"{diameter:.3f} km",
         )
 
-    ax.set_xticks(x + width * (len(unique_diameters) - 1) / 2)
+    # Position x-ticks at the center of each decade group
+    ax.set_xticks(x)
     ax.set_xticklabels(unique_decades)
+    
+    # Add some padding to x-axis limits
+    ax.set_xlim(min(x) - 0.5, max(x) + 0.5)
+    
     ax.set_xlabel("Impact Decade")
-    ax.set_ylabel("Percentage Realized")
-    ax.set_title("Percentage of Objects Realized by Diameter and Impact Decade")
+    ax.set_ylabel("Percentage of Discovered Objects Not Realized")
+    ax.set_title("Percentage of Discovered Objects Not Reaching 0.01% Impact Probability by Diameter and Impact Decade")
+    
+    # Move legend outside to save space
     ax.legend(
-        unique_diameters,
         title="Diameter [km]",
         frameon=False,
         bbox_to_anchor=(1.01, 1),
         loc="upper left",
     )
+    
     ax.yaxis.grid(True, linestyle="--", alpha=0.7)
+    
+    # Adjust layout to make room for the legend
+    plt.tight_layout(rect=[0, 0, 0.85, 1])
 
     return fig, ax
 
@@ -783,7 +839,6 @@ class MaxImpactProbabilityByDiameterDecade(qv.Table):
 
 def plot_max_impact_probability_by_diameter_decade(
     summary: ImpactorResultSummary,
-    window_results: WindowResult,
 ) -> Tuple[plt.Figure, plt.Axes]:
     """
     Plot the mean maximum impact probability reached during the survey,
@@ -793,8 +848,6 @@ def plot_max_impact_probability_by_diameter_decade(
     ----------
     summary : ImpactorResultSummary
         The summary of impact study results.
-    window_results : WindowResult
-        The window results containing impact probabilities.
 
     Returns
     -------
@@ -821,27 +874,14 @@ def plot_max_impact_probability_by_diameter_decade(
             orbits_at_diameter_and_decade = orbits_at_decade.select(
                 "orbit.diameter", diameter
             )
-
-            # Get orbit IDs for this diameter and decade
-            orbit_ids = orbits_at_diameter_and_decade.orbit.orbit_id.to_pylist()
-
-            # Calculate max impact probability for each orbit
-            max_impact_probs = []
-            for orbit_id in orbit_ids:
-                # Filter window results for this orbit
-                orbit_results = window_results.apply_mask(
-                    pc.equal(window_results.orbit_id, orbit_id)
-                )
-
-                if len(orbit_results) > 0:
-                    # Get maximum impact probability for this orbit
-                    max_ip = pc.max(
-                        pc.fill_null(orbit_results.impact_probability, 0)
-                    ).as_py()
-                    max_impact_probs.append(max_ip)
+            max_impact_probabilities = pc.fill_null(
+                orbits_at_diameter_and_decade.maximum_impact_probability, 0
+            )
 
             # Calculate mean of maximum impact probabilities
-            mean_max_ip = np.mean(max_impact_probs) if max_impact_probs else 0
+            mean_max_ip = pc.mean(max_impact_probabilities).as_py()
+            if mean_max_ip is None:
+                mean_max_ip = 0
 
             max_ip_by_diameter_decade = qv.concatenate(
                 [
@@ -854,34 +894,59 @@ def plot_max_impact_probability_by_diameter_decade(
                 ]
             )
 
-    # Create the plot
-    width = 0.2
-    x = np.arange(len(unique_decades))
+    # Create the plot with improved spacing
+    fig, ax = plt.subplots(1, 1, dpi=200, figsize=(12, 6))  # Wider figure for better spacing
+    
+    # Calculate bar width and spacing based on number of diameters
+    num_diameters = len(unique_diameters)
+    group_width = BAR_GROUP_WIDTH  # Width allocated for each decade group (out of 1.0)
+    bar_width = group_width / num_diameters * BAR_WIDTH_SCALE  # Slightly narrower bars for spacing between them
+    
+    # Create evenly spaced x positions for decade groups
+    x = np.arange(len(unique_decades)) * (1 + BAR_GROUP_SPACING)  # Add 20% extra space between decade groups
+    
+    # Define a colormap
     colors = plt.cm.viridis(np.linspace(0, 1, len(unique_diameters)))
-    fig, ax = plt.subplots(1, 1, dpi=200, figsize=(10, 6))
-
+    
+    # Plot bars for each diameter
     for i, diameter in enumerate(unique_diameters):
         diameter_data = max_ip_by_diameter_decade.select("diameter", diameter)
+        
+        # Calculate x position for this diameter's bars within each group
+        offset = (i - num_diameters/2 + 0.5) * (bar_width * 1.1)  # Add 10% spacing between bars
+        bar_positions = x + offset
+        
         ax.bar(
-            x + i * width,
+            bar_positions,
             diameter_data.mean_max_impact_probability.to_numpy(zero_copy_only=False),
-            width=width,
+            width=bar_width,
             color=colors[i],
+            label=f"{diameter:.3f} km",
         )
 
-    ax.set_xticks(x + width * (len(unique_diameters) - 1) / 2)
+    # Position x-ticks at the center of each decade group
+    ax.set_xticks(x)
     ax.set_xticklabels(unique_decades)
+    
+    # Add some padding to x-axis limits
+    ax.set_xlim(min(x) - 0.5, max(x) + 0.5)
+
     ax.set_xlabel("Impact Decade")
     ax.set_ylabel("Mean Maximum Impact Probability")
     ax.set_title("Mean Maximum Impact Probability by Diameter and Impact Decade")
+    
+    # Move legend outside to save space
     ax.legend(
-        unique_diameters,
         title="Diameter [km]",
         frameon=False,
         bbox_to_anchor=(1.01, 1),
         loc="upper left",
     )
+    
     ax.yaxis.grid(True, linestyle="--", alpha=0.7)
+    
+    # Adjust layout to make room for the legend
+    plt.tight_layout(rect=[0, 0, 0.85, 1])
 
     return fig, ax
 
@@ -912,10 +977,11 @@ def plot_arc_length_by_diameter_decade(
             orbits_at_diameter_and_decade = orbits_at_decade.select(
                 "orbit.diameter", diameter
             )
-            arc_length = orbits_at_diameter_and_decade.arc_length().to_numpy(
+            arc_length = pc.fill_null(orbits_at_diameter_and_decade.arc_length(), 0).to_numpy(
                 zero_copy_only=False
             )
-            mean_arc_length = np.mean(arc_length) if arc_length.size > 0 else 0
+
+            mean_arc_length = pc.mean(arc_length).as_py() if len(arc_length) > 0 else 0
             arc_length_by_diameter_decade = qv.concatenate(
                 [
                     arc_length_by_diameter_decade,
@@ -927,34 +993,59 @@ def plot_arc_length_by_diameter_decade(
                 ]
             )
 
-    # Create the plot
-    width = 0.2
-    x = np.arange(len(unique_decades))
+    # Create the plot with improved spacing
+    fig, ax = plt.subplots(1, 1, dpi=200, figsize=(12, 6))  # Wider figure for better spacing
+    
+    # Calculate bar width and spacing based on number of diameters
+    num_diameters = len(unique_diameters)
+    group_width = BAR_GROUP_WIDTH  # Width allocated for each decade group (out of 1.0)
+    bar_width = group_width / num_diameters * BAR_WIDTH_SCALE  # Slightly narrower bars for spacing between them
+    
+    # Create evenly spaced x positions for decade groups
+    x = np.arange(len(unique_decades)) * (1 + BAR_GROUP_SPACING)  # Add 20% extra space between decade groups
+    
+    # Define a colormap
     colors = plt.cm.viridis(np.linspace(0, 1, len(unique_diameters)))
-    fig, ax = plt.subplots(1, 1, dpi=200, figsize=(10, 6))
-
+    
+    # Plot bars for each diameter
     for i, diameter in enumerate(unique_diameters):
         diameter_data = arc_length_by_diameter_decade.select("diameter", diameter)
+        
+        # Calculate x position for this diameter's bars within each group
+        offset = (i - num_diameters/2 + 0.5) * (bar_width * 1.1)  # Add 10% spacing between bars
+        bar_positions = x + offset
+        
         ax.bar(
-            x + i * width,
+            bar_positions,
             diameter_data.mean_arc_length.to_numpy(zero_copy_only=False),
-            width=width,
+            width=bar_width,
             color=colors[i],
+            label=f"{diameter:.3f} km",
         )
 
-    ax.set_xticks(x + width * (len(unique_diameters) - 1) / 2)
+    # Position x-ticks at the center of each decade group
+    ax.set_xticks(x)
     ax.set_xticklabels(unique_decades)
+    
+    # Add some padding to x-axis limits
+    ax.set_xlim(min(x) - 0.5, max(x) + 0.5)
+    
     ax.set_xlabel("Impact Decade")
     ax.set_ylabel("Mean Arc Length [days]")
     ax.set_title("Mean Arc Length by Diameter and Impact Decade")
+    
+    # Move legend outside to save space
     ax.legend(
-        unique_diameters,
         title="Diameter [km]",
         frameon=False,
         bbox_to_anchor=(1.01, 1),
         loc="upper left",
     )
+    
     ax.yaxis.grid(True, linestyle="--", alpha=0.7)
+    
+    # Adjust layout to make room for the legend
+    plt.tight_layout(rect=[0, 0, 0.85, 1])
 
     return fig, ax
 
@@ -1004,13 +1095,19 @@ def plot_iawn_threshold_by_diameter_decade(
             )
 
             # Count objects with null IAWN_time (meaning they never reached the threshold)
-            iawn_null_mask = pc.is_null(
-                orbits_at_diameter_and_decade.ip_threshold_1_percent.mjd()
+            # Only consider objects that have been discovered (to be consistent with realization plot)
+            # Use negated AND logic instead of OR for consistency with realization plot
+            not_reaching_threshold_mask = pc.and_(
+                pc.is_null(orbits_at_diameter_and_decade.ip_threshold_1_percent.mjd()),
+                pc.invert(pc.is_null(orbits_at_diameter_and_decade.discovery_time.mjd()))
             )
-            not_reaching_threshold = pc.sum(iawn_null_mask).as_py()
-            total = len(orbits_at_diameter_and_decade)
+            not_reaching_threshold = pc.sum(not_reaching_threshold_mask).as_py()
+            
+            # Count total discovered objects (to be consistent with realization plot)
+            discovered_mask = pc.invert(pc.is_null(orbits_at_diameter_and_decade.discovery_time.mjd()))
+            total_discovered = pc.sum(discovered_mask).as_py()
 
-            percentage = (not_reaching_threshold / total * 100) if total > 0 else 0
+            percentage = (not_reaching_threshold / total_discovered * 100) if total_discovered > 0 else 0
 
             iawn_by_diameter_decade = qv.concatenate(
                 [
@@ -1023,48 +1120,70 @@ def plot_iawn_threshold_by_diameter_decade(
                 ]
             )
 
-    # Create the plot
-    width = 0.2
-    x = np.arange(len(unique_decades))
+    # Create the plot with improved spacing
+    fig, ax = plt.subplots(1, 1, dpi=200, figsize=(12, 6))  # Wider figure for better spacing
+    
+    # Calculate bar width and spacing based on number of diameters
+    num_diameters = len(unique_diameters)
+    group_width = BAR_GROUP_WIDTH  # Width allocated for each decade group (out of 1.0)
+    bar_width = group_width / num_diameters * BAR_WIDTH_SCALE  # Slightly narrower bars for spacing between them
+    
+    # Create evenly spaced x positions for decade groups
+    x = np.arange(len(unique_decades)) * (1 + BAR_GROUP_SPACING)  # Add 20% extra space between decade groups
+    
+    # Define a colormap
     colors = plt.cm.viridis(np.linspace(0, 1, len(unique_diameters)))
-    fig, ax = plt.subplots(1, 1, dpi=200, figsize=(10, 6))
-
+    
+    # Plot bars for each diameter
     for i, diameter in enumerate(unique_diameters):
         diameter_data = iawn_by_diameter_decade.select("diameter", diameter)
+        
+        # Calculate x position for this diameter's bars within each group
+        offset = (i - num_diameters/2 + 0.5) * (bar_width * 1.1)  # Add 10% spacing between bars
+        bar_positions = x + offset
+        
         ax.bar(
-            x + i * width,
-            diameter_data.percentage_not_reaching_threshold.to_numpy(
-                zero_copy_only=False
-            ),
-            width=width,
+            bar_positions,
+            diameter_data.percentage_not_reaching_threshold.to_numpy(zero_copy_only=False),
+            width=bar_width,
             color=colors[i],
+            label=f"{diameter:.3f} km",
         )
 
-    ax.set_xticks(x + width * (len(unique_diameters) - 1) / 2)
+    # Position x-ticks at the center of each decade group
+    ax.set_xticks(x)
     ax.set_xticklabels(unique_decades)
+    
+    # Add some padding to x-axis limits
+    ax.set_xlim(min(x) - 0.5, max(x) + 0.5)
+
     ax.set_xlabel("Impact Decade")
-    ax.set_ylabel("Percentage Not Reaching IAWN Threshold")
+    ax.set_ylabel("Percentage of Discovered Objects Not Reaching IAWN Threshold")
     ax.set_title(
-        "Percentage of Objects Not Reaching IAWN Threshold (1%) by Diameter and Impact Decade"
+        "Percentage of Discovered Objects Not Reaching IAWN Threshold (1%) by Diameter and Impact Decade"
     )
+    
+    # Move legend outside to save space
     ax.legend(
-        unique_diameters,
         title="Diameter [km]",
         frameon=False,
         bbox_to_anchor=(1.01, 1),
         loc="upper left",
     )
+    
     ax.yaxis.grid(True, linestyle="--", alpha=0.7)
+    
+    # Adjust layout to make room for the legend
+    plt.tight_layout(rect=[0, 0, 0.85, 1])
 
     return fig, ax
 
 
 def plot_elements(
     summary: ImpactorResultSummary,
-    window_results: WindowResult,
 ) -> Tuple[plt.Figure, plt.Axes]:
     """
-    Plot the elements of the orbits by diameter and impact decade using density plots.
+    Plot the elements of the orbits
     """
     # summary = summary.apply_mask(summary.complete())
 
@@ -1352,6 +1471,481 @@ def plot_1_percent_ip_threshold_percentage_vs_elements(
     return fig, axes
 
 
+def plot_observation_density_vs_impact_probability(
+    summary: ImpactorResultSummary,
+) -> Tuple[plt.Figure, plt.Axes]:
+    """
+    Plot the relationship between observation density (observations per month)
+    and the maximum impact probability achieved.
+
+    Parameters
+    ----------
+    summary : ImpactorResultSummary
+        Summary of the impact study results
+
+    Returns
+    -------
+    Tuple[plt.Figure, plt.Axes]
+        The figure and axes objects for the plot
+    """
+    # Filter to only include complete results
+    summary = summary.apply_mask(summary.complete())
+
+    # Get unique orbit IDs from the summary
+    orbit_ids = summary.orbit.orbit_id.unique().to_pylist()
+
+    # Initialize arrays to store our data
+    obs_density = []
+    max_impact_prob = []
+    diameters = []
+
+    observation_densities_days = pc.divide(summary.observations, summary.arc_length())
+    observation_densities_months = pc.divide(observation_densities_days, 30.4375)
+    observation_densities_months = pc.fill_null(observation_densities_months, 0).to_numpy(zero_copy_only=False)
+
+    max_impact_probabilities = pc.fill_null(summary.maximum_impact_probability, 0).to_numpy(zero_copy_only=False)
+    diameters = summary.orbit.diameter.to_numpy(zero_copy_only=False)
+
+    # Create figure
+    fig, ax = plt.subplots(1, 1, dpi=200, figsize=(10, 6))
+
+    # Create scatter plot with color based on diameter
+    unique_diameters = np.unique(diameters)
+    colors = plt.cm.viridis(np.linspace(0, 1, len(unique_diameters)))
+
+    for i, diam in enumerate(unique_diameters):
+        mask = diameters == diam
+        scatter = ax.scatter(
+            observation_densities_months[mask],
+            max_impact_probabilities[mask],
+            color=colors[i],
+            alpha=0.7,
+            label=f"{diam:.3f} km",
+            s=30,
+        )
+
+    # Add trend line
+    if len(observation_densities_months) > 1:
+        # Use numpy's polyfit to calculate trend line
+        z = np.polyfit(observation_densities_months, max_impact_probabilities, 1)
+        p = np.poly1d(z)
+
+        # Get sorted x values for smooth line
+        x_sorted = np.sort(observation_densities_months)
+
+        # Plot the trend line
+        ax.plot(x_sorted, p(x_sorted), "r--", alpha=0.8, label="Trend")
+
+        # Calculate correlation coefficient
+        correlation = np.corrcoef(observation_densities_months, max_impact_probabilities)[0, 1]
+        ax.text(
+            0.05,
+            0.95,
+            f"Correlation: {correlation:.3f}",
+            transform=ax.transAxes,
+            bbox=dict(facecolor="white", alpha=0.8),
+        )
+
+    # Set axis labels and title
+    ax.set_xlabel("Observation Density (observations per month)")
+    ax.set_ylabel("Maximum Impact Probability")
+    ax.set_title("Relationship Between Observation Density and Impact Probability")
+
+    # Add grid for better readability
+    ax.grid(True, alpha=0.3, linestyle="--")
+
+    # Add legend outside plot area
+    ax.legend(loc="upper left", bbox_to_anchor=(1.01, 1), frameon=False)
+
+    # Set y-axis limits
+    ax.set_ylim(0, 1.05)
+
+    # If there are very high density values, use log scale for x-axis
+    if max(observation_densities_months) > 50:
+        ax.set_xscale("log")
+        ax.set_xlim(left=0.1)  # Minimum x value
+
+    # Adjust layout to make room for legend
+    plt.tight_layout()
+
+    return fig, ax
+
+
+def plot_total_arc_length_vs_max_impact_probability(
+    summary: ImpactorResultSummary,
+) -> Tuple[plt.Figure, plt.Axes]:
+    """
+    Plot the relationship between total observation arc length (days) and 
+    the maximum impact probability achieved, color-coded by impact decade.
+    
+    Parameters
+    ----------
+    summary : ImpactorResultSummary
+        Summary of the impact study results
+        
+    Returns
+    -------
+    Tuple[plt.Figure, plt.Axes]
+        The figure and axes objects for the plot
+    """
+    # Filter to only include complete results
+    summary = summary.apply_mask(summary.complete())
+    
+    # Extract impact decades
+    impact_decades, unique_decades, _ = summary.get_diameter_decade_data()
+    
+    # Get arc lengths and max impact probabilities
+    arc_lengths = summary.arc_length().to_numpy(zero_copy_only=False)
+    max_impact_probs = pc.fill_null(summary.maximum_impact_probability, 0).to_numpy(zero_copy_only=False)
+    
+    # Create figure
+    fig, ax = plt.subplots(1, 1, dpi=200, figsize=(10, 6))
+    
+    # Create scatter plot with color based on impact decade
+    unique_decades_sorted = np.sort(unique_decades)
+    colors = plt.cm.viridis(np.linspace(0, 1, len(unique_decades_sorted)))
+    
+    # Create a legend handle list
+    legend_elements = []
+    
+    # Plot each decade with a different color
+    for i, decade in enumerate(unique_decades_sorted):
+        mask = impact_decades == decade
+        
+        # Skip empty decades
+        if not np.any(mask):
+            continue
+            
+        scatter = ax.scatter(
+            arc_lengths[mask], 
+            max_impact_probs[mask], 
+            color=colors[i],
+            alpha=0.7,
+            label=f"{decade}s",
+            s=30
+        )
+        legend_elements.append(scatter)
+
+    
+    # Set axis labels and title
+    ax.set_xlabel("Total Observation Arc Length (days)")
+    ax.set_ylabel("Maximum Impact Probability")
+    ax.set_title("Relationship Between Arc Length and Impact Probability by Decade")
+    
+    # Add grid for better readability
+    ax.grid(True, alpha=0.3, linestyle="--")
+    
+    # Add legend
+    ax.legend(
+        loc="upper left", 
+        bbox_to_anchor=(1.01, 1),
+        frameon=False
+    )
+    
+    # Set y-axis limits
+    ax.set_ylim(0, 1.05)
+
+    # Adjust layout to make room for legend
+    plt.tight_layout()
+    
+    return fig, ax
+
+
+def plot_window_arc_length_vs_impact_probability(
+    summary: ImpactorResultSummary,
+    window_results: WindowResult,
+) -> Tuple[plt.Figure, plt.Axes]:
+    """
+    Plot the relationship between window arc length (days) and impact probability
+    Color-coded by impact decade.
+    """
+    # Get the impact decades for each orbit
+    impact_decades, unique_decades, _ = summary.get_diameter_decade_data()
+    
+    # Get the window arc length and impact probability
+    window_arc_lengths = window_results.arc_length().to_numpy(zero_copy_only=False)
+    window_impact_probabilities = pc.fill_null(window_results.impact_probability, 0).to_numpy(zero_copy_only=False)
+    
+    # Create figure
+    fig, ax = plt.subplots(1, 1, dpi=200, figsize=(10, 6))
+    
+    # Create scatter plot with color based on impact decade
+    unique_decades_sorted = np.sort(unique_decades)[::-1]  # Reverse the sorted decades
+    colors = plt.cm.viridis(np.linspace(0, 1, len(unique_decades_sorted)))
+    
+    # Create a legend handle list
+    legend_elements = []
+    
+    # Plot each decade with a different color
+    for i, decade in enumerate(unique_decades_sorted):
+        decade_summary_mask = impact_decades == decade
+        orbit_ids_in_decade = pa.array(summary.orbit.orbit_id.to_numpy(zero_copy_only=False)[decade_summary_mask], pa.large_string())
+        window_results_mask = pc.is_in(window_results.orbit_id, orbit_ids_in_decade)
+        
+        scatter = ax.scatter(
+            window_arc_lengths[window_results_mask],
+            window_impact_probabilities[window_results_mask],
+            color=colors[i],
+            alpha=0.7,
+            label=f"{decade}s",
+            s=30
+        )
+        legend_elements.append(scatter)
+
+    # Add legend
+    ax.legend(
+        legend_elements,
+        [f"{decade}s" for decade in unique_decades_sorted],
+        loc="upper left",
+        bbox_to_anchor=(1.01, 1),
+        frameon=False
+    )
+    
+    # Set axis labels and title
+    ax.set_xlabel("Window Arc Length (days)")
+    ax.set_ylabel("Impact Probability")
+    ax.set_title("Relationship Between Window Arc Length and Impact Probability by Decade")
+    
+    # Add grid for better readability
+    ax.grid(True, alpha=0.3, linestyle="--")
+    
+    # Adjust layout to make room for legend
+    plt.tight_layout()
+
+    return fig, ax
+
+def plot_window_arc_length_vs_impact_probability_density(
+    window_results: WindowResult,
+) -> Tuple[plt.Figure, plt.Axes]:
+    """
+    Plot the relationship between window arc length (days) and impact probability
+    as a density map, without distinguishing between impact decades.
+    
+    Parameters
+    ----------
+    window_results : WindowResult
+        The window results containing impact probabilities and observation times
+    
+    Returns
+    -------
+    Tuple[plt.Figure, plt.Axes]
+        The figure and axes objects for the plot
+    """
+    arc_lengths = window_results.arc_length().to_numpy(zero_copy_only=False)
+    impact_probs = pc.fill_null(window_results.impact_probability, 0).to_numpy(zero_copy_only=False)
+    
+    # Create figure
+    fig, ax = plt.subplots(1, 1, dpi=200, figsize=(10, 6))
+    
+    # Create density plot using hexbin
+    hb = ax.hexbin(
+        arc_lengths, 
+        impact_probs, 
+        gridsize=50,  # Number of hexagons in each direction
+        cmap='viridis',  # Color map
+        mincnt=1,  # Minimum count to color the hexagon
+        alpha=0.8,
+        bins='log'  # Use logarithmic binning to better represent the density
+    )
+    
+    # Add colorbar
+    cb = fig.colorbar(hb, ax=ax, label='Log Count')
+
+    # Set axis labels and title
+    ax.set_xlabel("Window Arc Length (days)")
+    ax.set_ylabel("Impact Probability")
+    ax.set_title("Density of Window Arc Length vs Impact Probability")
+    
+    # Add grid for better readability (behind the hexbin plot)
+    ax.grid(True, alpha=0.3, linestyle="--", zorder=0)
+    
+    # Set y-axis limits
+    ax.set_ylim(0, 1.05)
+    
+    # If there are very long arcs, use log scale for x-axis
+    if np.max(arc_lengths[~np.isnan(arc_lengths)]) > 365:
+        ax.set_xscale('log')
+        ax.set_xlim(left=0.1)  # Minimum x value
+    
+    # Adjust layout
+    plt.tight_layout()
+    
+    return fig, ax
+
+class MeanRealizationTimeByDiameterDecade(qv.Table):
+    diameter = qv.Float64Column()
+    decade = qv.Int64Column()
+    mean_realization_time = qv.Float64Column()
+    count = qv.Int64Column()
+
+def plot_mean_realization_time_by_diameter_decade(
+    summary: ImpactorResultSummary,
+) -> Tuple[plt.Figure, plt.Axes]:
+    """
+    Plot the mean realization time (number of days since discovery until reaching 0.01% impact probability) 
+    grouped by impact decade and asteroid diameter.
+    
+    Parameters
+    ----------
+    summary : ImpactorResultSummary
+        Summary of the impact study results
+        
+    Returns
+    -------
+    Tuple[plt.Figure, plt.Axes]
+        The figure and axes objects for the plot
+    """
+    # Filter to only include complete results
+    summary = summary.apply_mask(summary.complete())
+    
+    # Filter to only include discovered objects
+    summary = summary.apply_mask(summary.discovered())
+    
+    # Extract impact decades and diameters
+    impact_decades, unique_decades, unique_diameters = summary.get_diameter_decade_data()
+    
+    # Initialize results table
+    mean_realization_time_by_diameter_decade = MeanRealizationTimeByDiameterDecade.empty()
+    
+    # Calculate realization time for each orbit
+    realization_times = pc.subtract(
+        summary.discovery_time.mjd(),
+        summary.ip_threshold_0_dot_01_percent.mjd()
+    ).to_numpy(zero_copy_only=False)
+    
+    # For each combination of diameter and decade, calculate mean realization time
+    for decade in unique_decades:
+        for diameter in unique_diameters:
+            # Create mask for this diameter and decade
+            diam_mask = summary.orbit.diameter.to_numpy(zero_copy_only=False) == diameter
+            decade_mask = impact_decades == decade
+            combined_mask = diam_mask & decade_mask
+            
+            # Skip if no data for this combination
+            if not np.any(combined_mask):
+                continue
+                
+            # Get realization times for this group
+            group_realization_times = realization_times[combined_mask]
+            
+            # Skip if no valid realization times
+            valid_times = group_realization_times[~np.isnan(group_realization_times)]
+            if len(valid_times) == 0:
+                continue
+                
+            # Calculate mean realization time
+            mean_time = np.mean(valid_times)
+            
+            # Add to results table
+            mean_realization_time_by_diameter_decade = qv.concatenate(
+                [
+                    mean_realization_time_by_diameter_decade,
+                    MeanRealizationTimeByDiameterDecade.from_kwargs(
+                        diameter=[diameter],
+                        decade=[decade],
+                        mean_realization_time=[mean_time],
+                        count=[len(valid_times)]
+                    )
+                ]
+            )
+    
+    # Create the plot with improved spacing
+    fig, ax = plt.subplots(1, 1, dpi=200, figsize=(12, 6))  # Wider figure for better spacing
+    
+    # Calculate bar width and spacing based on number of diameters
+    num_diameters = len(unique_diameters)
+    group_width = 0.8  # Width allocated for each decade group (out of 1.0)
+    bar_width = group_width / num_diameters * 0.8  # Slightly narrower bars for spacing between them
+    
+    # Create evenly spaced x positions for decade groups
+    x = np.arange(len(unique_decades)) * (1 + 0.2)  # Add 20% extra space between decade groups
+    
+    # Define a colormap
+    colors = plt.cm.viridis(np.linspace(0, 1, len(unique_diameters)))
+    
+    # Plot bars for each diameter
+    for i, diameter in enumerate(unique_diameters):
+        # Get data for this diameter across all decades
+        y_values = []
+        count_values = []
+        x_positions = []
+        
+        for j, decade in enumerate(unique_decades):
+            # Get data for this diameter and decade
+            data = mean_realization_time_by_diameter_decade.apply_mask(
+                pc.and_(
+                    pc.equal(mean_realization_time_by_diameter_decade.diameter, diameter),
+                    pc.equal(mean_realization_time_by_diameter_decade.decade, decade)
+                )
+            )
+            
+            if len(data) > 0:
+                y_values.append(data.mean_realization_time[0].as_py())
+                count_values.append(data.count[0].as_py())
+                # Calculate position with proper spacing between bars
+                offset = (i - num_diameters/2 + 0.5) * (bar_width * 1.1)  # Add 10% spacing between bars
+                x_positions.append(x[j] + offset)
+            else:
+                # Add 0 or placeholder for missing data to keep bar positions consistent
+                y_values.append(0)
+                count_values.append(0)
+                # Calculate position with proper spacing between bars
+                offset = (i - num_diameters/2 + 0.5) * (bar_width * 1.1)  # Add 10% spacing between bars
+                x_positions.append(x[j] + offset)
+        
+        # Plot bars for this diameter
+        bars = ax.bar(
+            x_positions, 
+            y_values, 
+            width=bar_width,
+            color=colors[i],
+            label=f"{diameter:.3f} km",
+            alpha=0.8
+        )
+        
+        # Add count labels above bars with values
+        for k, (bar, count) in enumerate(zip(bars, count_values)):
+            if count > 0:  # Only add labels for bars with data
+                height = bar.get_height()
+                ax.text(
+                    bar.get_x() + bar.get_width()/2., 
+                    height + 0.5, 
+                    f"n={count}", 
+                    ha='center', 
+                    va='bottom',
+                    fontsize=8,
+                    rotation=90
+                )
+    
+    # Position x-ticks at the center of each decade group
+    ax.set_xticks(x)
+    ax.set_xticklabels(unique_decades)
+    
+    # Add some padding to x-axis limits
+    ax.set_xlim(min(x) - 0.5, max(x) + 0.5)
+    
+    # Set axis labels and title
+    ax.set_xlabel("Impact Decade")
+    ax.set_ylabel("Mean Days from Discovery to 0.01% Impact Probability")
+    ax.set_title("Mean Realization Time by Impact Decade and Diameter")
+    
+    # Add grid for better readability
+    ax.yaxis.grid(True, linestyle="--", alpha=0.7)
+    
+    # Add legend
+    ax.legend(
+        title="Diameter [km]",
+        frameon=False,
+        bbox_to_anchor=(1.01, 1),
+        loc="upper left"
+    )
+    
+    # Adjust layout to make room for the legend
+    plt.tight_layout(rect=[0, 0, 0.85, 1])
+    
+    return fig, ax
+
+
 def make_analysis_plots(
     summary: ImpactorResultSummary,
     window_results: WindowResult,
@@ -1412,25 +2006,25 @@ def make_analysis_plots(
     logger.info("Generated arclength by diameter plot")
     plt.close(fig)
 
-    fig, ax = plot_discoveries_by_diameter_decade(summary)
+    fig, ax = plot_not_discovered_by_diameter_decade(summary)
     fig.savefig(
-        os.path.join(out_dir, "discovered_by_diameter_decade.jpg"),
+        os.path.join(out_dir, "not_discovered_by_diameter_decade.jpg"),
         bbox_inches="tight",
         dpi=200,
     )
     logger.info("Generated percentage discovered plot")
     plt.close(fig)
 
-    fig, ax = plot_realizations_by_diameter_decade(summary)
+    fig, ax = plot_not_realized_by_diameter_decade(summary)
     fig.savefig(
-        os.path.join(out_dir, "realized_by_diameter_decade.jpg"),
+        os.path.join(out_dir, "not_realized_by_diameter_decade.jpg"),
         bbox_inches="tight",
         dpi=200,
     )
     logger.info("Generated percentage realized plot")
     plt.close(fig)
 
-    fig, ax = plot_max_impact_probability_by_diameter_decade(summary, window_results)
+    fig, ax = plot_max_impact_probability_by_diameter_decade(summary)
     fig.savefig(
         os.path.join(out_dir, "max_impact_probability_by_diameter_decade.jpg"),
         bbox_inches="tight",
@@ -1457,6 +2051,71 @@ def make_analysis_plots(
     logger.info("Generated arc length by diameter decade plot")
     plt.close(fig)
 
+    fig, ax = plot_1_percent_ip_threshold_percentage_vs_elements(summary)
+    fig.savefig(
+        os.path.join(out_dir, "1_percent_ip_threshold_percentage_vs_elements.jpg"),
+        bbox_inches="tight",
+        dpi=200,
+    )
+    logger.info("Generated 1% IP threshold percentage vs elements plot")
+    plt.close(fig)
+
+    fig, ax = plot_elements(summary)
+    fig.savefig(
+        os.path.join(out_dir, "elements.jpg"),
+        bbox_inches="tight",
+        dpi=200,
+    )
+    logger.info("Generated elements plot")
+    plt.close(fig)
+
+    # fig, ax = plot_observation_density_vs_impact_probability(summary)
+    # fig.savefig(
+    #     os.path.join(out_dir, "observation_density_vs_impact_probability.jpg"),
+    #     bbox_inches="tight",
+    #     dpi=200,
+    # )
+    # logger.info("Generated observation density vs impact probability plot")
+    # plt.close(fig)
+
+    # fig, ax = plot_total_arc_length_vs_max_impact_probability(summary)
+    # fig.savefig(
+    #     os.path.join(out_dir, "arc_length_vs_impact_probability.jpg"),
+    #     bbox_inches="tight",
+    #     dpi=200,
+    # )
+    # logger.info("Generated arc length vs impact probability plot")
+    # plt.close(fig)
+
+    # fig, ax = plot_window_arc_length_vs_impact_probability(summary, window_results)
+    # fig.savefig(
+    #     os.path.join(out_dir, "window_arc_length_vs_impact_probability.jpg"),
+    #     bbox_inches="tight",
+    #     dpi=200,
+    # )
+    # logger.info("Generated window arc length vs impact probability plot")
+    # plt.close(fig)
+
+    # fig, ax = plot_window_arc_length_vs_impact_probability_density(window_results)
+    # fig.savefig(
+    #     os.path.join(out_dir, "window_arc_length_vs_impact_probability_density.jpg"),
+    #     bbox_inches="tight",
+    #     dpi=200,
+    # )
+    # logger.info("Generated window arc length vs impact probability density plot")
+    # plt.close(fig)
+
+    
+    # # Add the new mean realization time plot
+    # fig, ax = plot_mean_realization_time_by_diameter_decade(summary)
+    # fig.savefig(
+    #     os.path.join(out_dir, "mean_realization_time_by_diameter_decade.jpg"),
+    #     bbox_inches="tight",
+    #     dpi=200,
+    # )
+    # logger.info("Generated mean realization time by diameter and decade plot")
+    # plt.close(fig)
+
     fig, ax = plot_collective_ip_over_time(window_results)
     fig.savefig(
         os.path.join(out_dir, "collective_ip_over_time.jpg"),
@@ -1465,3 +2124,5 @@ def make_analysis_plots(
     )
     logger.info("Generated collective IP over time plot")
     plt.close(fig)
+
+

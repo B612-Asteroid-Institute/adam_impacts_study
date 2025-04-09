@@ -118,6 +118,12 @@ class WindowResult(qv.Table):
 
     def failed(self) -> pa.BooleanArray:
         return pc.equal(self.status, "failed")
+    
+    def arc_length(self) -> pa.FloatArray:
+        """
+        Return the window arc length in days
+        """
+        return pc.subtract(self.observation_end.mjd(), self.observation_start.mjd())
 
 
 class ResultsTiming(qv.Table):
