@@ -237,6 +237,18 @@ class ImpactorResultSummary(qv.Table):
             discovered=discoveries_by_diameter_class["discovered_sum"],
             total=discoveries_by_diameter_class["discovered_count"],
         )
+    
+    def warning_time(self) -> pa.FloatArray:
+        """
+        Time in days from impact time to 1% IP threshold or discovery time
+        (whichever is later)
+
+        This method does not distinguish between discovered and not discovered.
+        """
+        return pc.max_element_wise(
+            pc.subtract(self.orbit.impact_time.mjd(), self.ip_threshold_1_percent.mjd()),
+            pc.subtract(self.orbit.impact_time.mjd(), self.discovery_time.mjd()),
+        )
 
     def arc_length(self) -> pa.FloatArray:
         return pc.subtract(self.last_observation.mjd(), self.first_observation.mjd())
