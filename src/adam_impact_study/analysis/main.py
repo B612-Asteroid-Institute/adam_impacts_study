@@ -451,6 +451,52 @@ def compute_observation_cadence(
     )
 
 
+class CompletenessByDiameter(qv.Table):
+    diameter = qv.Float64Column()
+    percentage_discovered = qv.Float64Column()
+
+    def weighted_average(self) -> float:
+        """
+        Calculate the weighted average of the percentage discovered by diameter size
+        """
+        # For now, just the mean
+        return pc.mean(self.percentage_discovered).as_py()
+
+    def weighted_average_pha_only(self) -> float:
+        """
+        Include only those > 140m in diameter
+        """
+        greater_than_140m = self.apply_mask(pc.greater_equal(self.diameter, .140))
+        return greater_than_140m.weighted_average()
+
+
+def calculate_completeness(
+    summary_results: ImpactorResultSummary,
+) -> CompletenessByDiameter:
+    """
+    Calculate the percentage of objects discovered by diameter size
+    """
+    grouped_by_diameter = summary_results.flattened_table().group_by("orbit.diameter")
+    discovered_count = grouped_by_diameter.aggregate(
+        [("discovery_time.days", "count"), ("orbit.diameter", "count")]
+    )
+
+    percentage_discovered = discovered_count.column(
+        "discovery_time.days_count"
+    ).to_numpy(zero_copy_only=False) / discovered_count.column(
+        "orbit.diameter_count"
+    ).to_numpy(
+        zero_copy_only=False
+    )
+
+    completeness_by_diameter = CompletenessByDiameter.from_kwargs(
+        diameter=discovered_count.column("orbit.diameter"),
+        percentage_discovered=percentage_discovered,
+    )
+
+    return completeness_by_diameter
+
+
 def _select_ip_at_discovery_time(
     orbit_id: str,
     all_window_results: WindowResult,  # Note! Pass in all windows

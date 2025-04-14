@@ -205,7 +205,6 @@ def plot_warning_time_histogram(
             label=f"{diameter:.3f} km",
             color=color,
             bins=bins,
-            density=True,
         )
 
     ax.set_xlim(0, warning_time_max)
@@ -260,7 +259,6 @@ def plot_realization_time_histogram(
             label=f"{diameter:.3f} km",
             color=color,
             bins=bins,
-            density=True,
         )
 
     # Identify number of objects beyond 100 days
@@ -524,6 +522,18 @@ def plot_collective_ip_over_time(
         )
         # ax.fill_between(offset_times, 0, probabilities, color=plot_color, alpha=alpha)
 
+    # Add vertical lines for every year (365.25 days)
+    max_days = ax.get_xlim()[1]
+    year_lines = np.arange(0, max_days, 365.25)
+    for year_line in year_lines:
+        ax.axvline(x=year_line, color='gray', linestyle=':', alpha=0.3)
+
+    # Add legend for the vertical year lines
+    ax.plot([], [], color='gray', linestyle=':', alpha=0.3, label='Year')
+    ax.plot([], [], color=plot_color, alpha=0.8, label='Individual Orbit IP')
+    ax.legend(loc='upper right', framealpha=0.8)
+
+
     # Improve grid for better readability with many overlapping lines
     ax.grid(True, alpha=0.3, linestyle="--")
 
@@ -760,7 +770,7 @@ def plot_discovered_by_diameter_decade(
     summary: ImpactorResultSummary,
 ) -> Tuple[plt.Figure, plt.Axes]:
     """
-    Plot the percentage not discovered broken down by diameter and impact decade.
+    Plot the percentage discovered broken down by diameter and impact decade.
     """
     # Filter to only include complete results
     summary = summary.apply_mask(summary.complete())
@@ -888,15 +898,33 @@ def plot_discovered_by_diameter_decade(
     ax.set_xlim(min(x) - 0.5, max(x) + 0.5)
 
     ax.set_xlabel("Impact Decade")
-    ax.set_ylabel("Percentage Not Discovered")
-    ax.set_title("Percentage of Objects Not Discovered by Diameter and Impact Decade")
+    ax.set_ylabel("Percentage Discovered")
+    ax.set_title("Percentage of Objects Discovered by Diameter and Impact Decade")
+    # Add legend entries for the hatch and empty bar patterns
+    # Create a separate legend for the pattern types
+    pattern_legend_elements = [
+        plt.Rectangle((0,0), 1, 1, facecolor='gray', alpha=0.5, hatch="///", label='Observed but Not Discovered'),
+        plt.Rectangle((0,0), 1, 1, facecolor='white', edgecolor='gray', label='Unobserved')
+    ]
 
-    # Move legend outside to save space
-    ax.legend(
+    # Create two legends - one for diameters and one for patterns
+    # Save the first legend as a variable so it doesn't get overwritten
+    diameter_legend = ax.legend(
         title="Diameter [km]",
-        frameon=False,
+        frameon=True,
         bbox_to_anchor=(1.01, 1),
-        loc="upper left",
+        loc="upper left"
+    )
+    
+    # Add the first legend explicitly as an artist
+    ax.add_artist(diameter_legend)
+    
+    # Create second legend
+    pattern_legend = ax.legend(
+        handles=pattern_legend_elements,
+        frameon=True, 
+        bbox_to_anchor=(1.01, 0.5),
+        loc="center left"
     )
 
     ax.yaxis.grid(True, linestyle="--", alpha=0.7)
@@ -932,6 +960,7 @@ def plot_not_realized_by_diameter_decade(
     """
     # Filter to only include complete results (needed for the rest of the function)
     summary = summary.apply_mask(summary.complete())
+    summary = summary.apply_mask(summary.discovered())
     # Get common data
     impact_decades, unique_decades, unique_diameters = (
         summary.get_diameter_decade_data()
@@ -951,24 +980,17 @@ def plot_not_realized_by_diameter_decade(
 
             # Count objects with null realization time or null discovery time
             # (meaning they were NOT realized despite being discovered)
-            not_realized_mask = pc.and_(
-                pc.is_null(
-                    orbits_at_diameter_and_decade.ip_threshold_0_dot_01_percent.mjd()
-                ),
-                pc.invert(
-                    pc.is_null(orbits_at_diameter_and_decade.discovery_time.mjd())
-                ),
+            not_realized_mask = pc.is_null(
+                orbits_at_diameter_and_decade.ip_threshold_0_dot_01_percent.mjd()
             )
             not_realized = pc.sum(not_realized_mask).as_py()
 
-            # Count total discovered objects
-            discovered_mask = pc.invert(
-                pc.is_null(orbits_at_diameter_and_decade.discovery_time.mjd())
-            )
-            total_discovered = pc.sum(discovered_mask).as_py()
+            total_at_diameter_and_decade = len(orbits_at_diameter_and_decade)
 
             percentage = (
-                (not_realized / total_discovered * 100) if total_discovered > 0 else 0
+                (not_realized / total_at_diameter_and_decade * 100)
+                if total_at_diameter_and_decade > 0
+                else 0
             )
 
             realization_by_diameter_decade = qv.concatenate(
@@ -1026,6 +1048,7 @@ def plot_not_realized_by_diameter_decade(
 
     # Add some padding to x-axis limits
     ax.set_xlim(min(x) - 0.5, max(x) + 0.5)
+    ax.set_ylim(0, 100)
 
     ax.set_xlabel("Impact Decade")
     ax.set_ylabel("Percentage of Discovered Objects Not Realized")
@@ -1177,6 +1200,10 @@ def plot_max_impact_probability_by_diameter_decade(
     return fig, ax
 
 
+
+
+
+
 class ArcLengthByDiameterDecade(qv.Table):
     diameter = qv.Float64Column()
     decade = qv.LargeStringColumn()
@@ -1311,6 +1338,10 @@ def plot_iawn_threshold_by_diameter_decade(
     # Filter to only include complete results (needed for the rest of the function)
     summary = summary.apply_mask(summary.complete())
 
+
+    # Only include discovered objects
+    summary = summary.apply_mask(summary.discovered())
+
     # Get common data
     impact_decades, unique_decades, unique_diameters = (
         summary.get_diameter_decade_data()
@@ -1331,23 +1362,15 @@ def plot_iawn_threshold_by_diameter_decade(
             # Count objects with null IAWN_time (meaning they never reached the threshold)
             # Only consider objects that have been discovered (to be consistent with realization plot)
             # Use negated AND logic instead of OR for consistency with realization plot
-            not_reaching_threshold_mask = pc.and_(
-                pc.is_null(orbits_at_diameter_and_decade.ip_threshold_1_percent.mjd()),
-                pc.invert(
-                    pc.is_null(orbits_at_diameter_and_decade.discovery_time.mjd())
-                ),
-            )
+            not_reaching_threshold_mask = pc.is_null(orbits_at_diameter_and_decade.ip_threshold_1_percent.mjd())
+
             not_reaching_threshold = pc.sum(not_reaching_threshold_mask).as_py()
 
-            # Count total discovered objects (to be consistent with realization plot)
-            discovered_mask = pc.invert(
-                pc.is_null(orbits_at_diameter_and_decade.discovery_time.mjd())
-            )
-            total_discovered = pc.sum(discovered_mask).as_py()
+            total_at_diameter_and_decade = len(orbits_at_diameter_and_decade)
 
             percentage = (
-                (not_reaching_threshold / total_discovered * 100)
-                if total_discovered > 0
+                (not_reaching_threshold / total_at_diameter_and_decade * 100)
+                if total_at_diameter_and_decade > 0
                 else 0
             )
 
@@ -1408,6 +1431,7 @@ def plot_iawn_threshold_by_diameter_decade(
 
     # Add some padding to x-axis limits
     ax.set_xlim(min(x) - 0.5, max(x) + 0.5)
+    ax.set_ylim(0, 100)
 
     ax.set_xlabel("Impact Decade")
     ax.set_ylabel("Percentage of Discovered Objects Not Reaching IAWN Threshold")
@@ -2236,6 +2260,24 @@ def make_analysis_plots(
     window_results: WindowResult,
     out_dir: str,
 ) -> None:
+    
+    fig, ax = plot_max_impact_probability_histograms_by_diameter_decade(summary, include_undiscovered=True)
+    fig.savefig(
+        os.path.join(out_dir, "max_impact_probability_histograms_by_diameter_decade_all.jpg"),
+        bbox_inches="tight",
+        dpi=200,
+    )
+    plt.close(fig)
+    logger.info("Generated max impact probability histograms by diameter decade plot (all)")
+
+    fig, ax = plot_max_impact_probability_histograms_by_diameter_decade(summary, include_undiscovered=False)
+    fig.savefig(
+        os.path.join(out_dir, "max_impact_probability_histograms_by_diameter_decade_discovered.jpg"),
+        bbox_inches="tight",
+        dpi=200,
+    )
+    logger.info("Generated max impact probability histograms by diameter decade plot (discovered)")
+    plt.close(fig)
 
     fig, ax = plot_warning_time_histogram(summary)
     fig.savefig(
@@ -2271,6 +2313,7 @@ def make_analysis_plots(
         dpi=200,
     )
     logger.info("Generated realization time by diameter decade plot")
+    plt.close(fig)
 
     fig, ax = plot_discoveries_by_diameter(summary)
     fig.savefig(
@@ -2379,3 +2422,134 @@ def make_analysis_plots(
     )
     logger.info("Generated collective IP over time plot")
     plt.close(fig)
+
+
+def plot_max_impact_probability_histograms_by_diameter_decade(
+    summary: ImpactorResultSummary,
+    include_undiscovered: bool = False,
+) -> Tuple[plt.Figure, plt.Axes]:
+    """
+    Plot a grid of histograms showing the maximum impact probability distribution
+    for each diameter and decade combination. Diameters are arranged in rows and
+    decades in columns.
+
+    Parameters
+    ----------
+    summary : ImpactorResultSummary
+        The summary of impact study results.
+    include_undiscovered : bool, optional
+        Whether to include undiscovered objects in the histograms. If False,
+        only discovered objects are included. Default is False.
+
+    Returns
+    -------
+    Tuple[plt.Figure, plt.Axes]
+        The figure and axes objects for the plot.
+    """
+    # Filter to only include complete results
+    summary = summary.apply_mask(summary.complete())
+    logger.info(f"Total complete results: {len(summary)}")
+
+    if not include_undiscovered:
+        summary = summary.apply_mask(summary.discovered())
+        logger.info(f"Total discovered results: {len(summary)}")
+
+    # Get common data
+    impact_decades, unique_decades, unique_diameters = (
+        summary.get_diameter_decade_data()
+    )
+
+
+    # Sort decades and diameters for consistent ordering
+    unique_decades = np.sort(unique_decades)
+    unique_diameters = np.sort(unique_diameters)
+
+    # Create figure with subplots
+    n_rows = len(unique_diameters)
+    n_cols = len(unique_decades)
+    fig, axes = plt.subplots(
+        n_rows, n_cols, dpi=200, figsize=(3 * n_cols, 2.5 * n_rows)
+    )
+
+    # Define a colormap for consistency with other plots
+    colors = plt.cm.viridis(np.linspace(0, 1, len(unique_diameters)))
+
+    max_y = 0
+
+
+    # Second pass: plot the histograms
+    for i, diameter in enumerate(unique_diameters):
+        for j, decade in enumerate(unique_decades):
+            # Get the current axis
+            ax = axes[i, j] if n_rows > 1 else axes[j]
+
+            # Filter data for this diameter and decade
+            diameter_mask = summary.orbit.diameter.to_numpy(zero_copy_only=False) == diameter
+            decade_mask = impact_decades == decade
+            combined_mask = diameter_mask & decade_mask
+
+            # Get maximum impact probabilities for this group
+            max_impact_probs = summary.maximum_impact_probability.to_numpy(zero_copy_only=False)
+            max_impact_probs = np.where(np.isnan(max_impact_probs), 0, max_impact_probs)
+            max_impact_probs = max_impact_probs[combined_mask]
+
+            # Skip if no data
+            if len(max_impact_probs) == 0:
+                ax.text(0.5, 0.5, "No data", ha="center", va="center")
+                continue
+
+            # Create histogram
+            ax.hist(
+                max_impact_probs,
+                range=(0, 1),
+                bins=20,
+                # bins="fd",
+                color=colors[i],
+                alpha=0.7,
+            )
+
+            # Get the y-limit
+            y_limit = ax.get_ylim()[1]
+            max_y = max(max_y, y_limit)
+
+            # Add grid
+            ax.grid(True, alpha=0.3, linestyle="--")
+
+            # Only add x-axis label to bottom row
+            if i == n_rows - 1:
+                ax.set_xlabel(f"{decade}s")
+
+            # Only add y-axis label to leftmost column
+            if j == 0:
+                ax.set_ylabel("Count")
+
+
+    # Collect all the y-limits and set them all to be the same max value
+    axes_flat = axes.flatten()
+    for ax in axes_flat:
+        ax.set_ylim(0, max_y)
+
+    # Add a single legend for all plots
+    legend_elements = [
+        plt.Rectangle((0, 0), 1, 1, color=colors[i], label=f"{d:.3f} km")
+        for i, d in enumerate(unique_diameters)
+    ]
+    fig.legend(
+        handles=legend_elements,
+        title="Diameter",
+        loc="upper right",
+        bbox_to_anchor=(0.99, 0.99),
+        frameon=False,
+    )
+
+    # Add overall title
+    if include_undiscovered:
+        title = "Maximum Impact Probability Distribution (Including Undiscovered)"
+    else:
+        title = "Maximum Impact Probability Distribution (Only Discovered)"
+    fig.suptitle(title, y=0.99)
+
+    # Adjust layout
+    plt.tight_layout(rect=[0, 0, 0.95, 0.95])
+
+    return fig, axes
