@@ -1,6 +1,6 @@
 import logging
 import os
-from typing import Optional, Tuple
+from typing import Literal, Optional, Tuple
 
 import matplotlib.pyplot as plt
 import numpy as np
@@ -41,7 +41,10 @@ def plot_warning_time_by_diameter_year(
 
     # Calculate the impact years for each row
     impact_year = np.array(
-        [impact_time.datetime.year for impact_time in summary.orbit.impact_time.to_astropy()]
+        [
+            impact_time.datetime.year
+            for impact_time in summary.orbit.impact_time.to_astropy()
+        ]
     )
 
     # Take the earliest impact year and then filter
@@ -49,7 +52,7 @@ def plot_warning_time_by_diameter_year(
     earliest_impact_year = np.min(impact_year)
     unique_diameters = summary.orbit.diameter.unique().sort().to_pylist()
     warning_time_by_diameter_year = WarningTimeByDiameterYear.empty()
-    
+
     # Iterate through each year and diameter and calculate the average warning time
     for year in range(earliest_impact_year + 11, earliest_impact_year + 21):
         for diameter in unique_diameters:
@@ -96,10 +99,10 @@ def plot_warning_time_by_diameter_year(
         offset = (i - num_diameters / 2 + 0.5) * (
             bar_width * 1.1
         )  # Add 10% spacing between bars
-        
+
         y_values = []
         bar_positions = []
-        
+
         for j, year in enumerate(unique_years):
             # Get data for this diameter and year
             data = warning_time_by_diameter_year.apply_mask(
@@ -108,14 +111,14 @@ def plot_warning_time_by_diameter_year(
                     pc.equal(warning_time_by_diameter_year.year, year),
                 )
             )
-            
+
             if len(data) > 0:
                 y_values.append(data.mean_warning_time[0].as_py())
                 bar_positions.append(x[j] + offset)
             else:
                 y_values.append(0)
                 bar_positions.append(x[j] + offset)
-        
+
         # Plot the bars for this diameter across all years
         bars = ax.bar(
             bar_positions,
@@ -125,7 +128,7 @@ def plot_warning_time_by_diameter_year(
             label=f"{diameter:.3f} km",
             alpha=0.8,
         )
-        
+
         # Add value labels above bars
         for bar, y_val in zip(bars, y_values):
             if y_val > 0:  # Only add labels for bars with data
@@ -146,10 +149,10 @@ def plot_warning_time_by_diameter_year(
 
     # Add some padding to x-axis limits
     ax.set_xlim(min(x) - 0.5, max(x) + 0.5)
-    
+
     # Add grid for better readability
     ax.yaxis.grid(True, linestyle="--", alpha=0.7)
-    
+
     # Set axis labels and title
     ax.set_xlabel("Impact Year")
     ax.set_ylabel("Mean Warning Time (days)")
@@ -526,13 +529,12 @@ def plot_collective_ip_over_time(
     max_days = ax.get_xlim()[1]
     year_lines = np.arange(0, max_days, 365.25)
     for year_line in year_lines:
-        ax.axvline(x=year_line, color='gray', linestyle=':', alpha=0.3)
+        ax.axvline(x=year_line, color="gray", linestyle=":", alpha=0.3)
 
     # Add legend for the vertical year lines
-    ax.plot([], [], color='gray', linestyle=':', alpha=0.3, label='Year')
-    ax.plot([], [], color=plot_color, alpha=0.8, label='Individual Orbit IP')
-    ax.legend(loc='upper right', framealpha=0.8)
-
+    ax.plot([], [], color="gray", linestyle=":", alpha=0.3, label="Year")
+    ax.plot([], [], color=plot_color, alpha=0.8, label="Individual Orbit IP")
+    ax.legend(loc="upper right", framealpha=0.8)
 
     # Improve grid for better readability with many overlapping lines
     ax.grid(True, alpha=0.3, linestyle="--")
@@ -776,7 +778,7 @@ def plot_discovered_by_diameter_decade(
     summary = summary.apply_mask(summary.complete())
 
     impact_decades, unique_decades, unique_diameters = (
-        summary.get_diameter_decade_data()
+        summary.get_diameter_impact_period_data(period_breakdown="decade")
     )
 
     discovery_by_diameter_decade = DiscoveryByDiameterDecade.empty()
@@ -903,28 +905,35 @@ def plot_discovered_by_diameter_decade(
     # Add legend entries for the hatch and empty bar patterns
     # Create a separate legend for the pattern types
     pattern_legend_elements = [
-        plt.Rectangle((0,0), 1, 1, facecolor='gray', alpha=0.5, hatch="///", label='Observed but Not Discovered'),
-        plt.Rectangle((0,0), 1, 1, facecolor='white', edgecolor='gray', label='Unobserved')
+        plt.Rectangle(
+            (0, 0),
+            1,
+            1,
+            facecolor="gray",
+            alpha=0.5,
+            hatch="///",
+            label="Observed but Not Discovered",
+        ),
+        plt.Rectangle(
+            (0, 0), 1, 1, facecolor="white", edgecolor="gray", label="Unobserved"
+        ),
     ]
 
     # Create two legends - one for diameters and one for patterns
     # Save the first legend as a variable so it doesn't get overwritten
     diameter_legend = ax.legend(
-        title="Diameter [km]",
-        frameon=True,
-        bbox_to_anchor=(1.01, 1),
-        loc="upper left"
+        title="Diameter [km]", frameon=True, bbox_to_anchor=(1.01, 1), loc="upper left"
     )
-    
+
     # Add the first legend explicitly as an artist
     ax.add_artist(diameter_legend)
-    
+
     # Create second legend
     pattern_legend = ax.legend(
         handles=pattern_legend_elements,
-        frameon=True, 
+        frameon=True,
         bbox_to_anchor=(1.01, 0.5),
-        loc="center left"
+        loc="center left",
     )
 
     ax.yaxis.grid(True, linestyle="--", alpha=0.7)
@@ -963,7 +972,7 @@ def plot_not_realized_by_diameter_decade(
     summary = summary.apply_mask(summary.discovered())
     # Get common data
     impact_decades, unique_decades, unique_diameters = (
-        summary.get_diameter_decade_data()
+        summary.get_diameter_impact_period_data(period_breakdown="decade")
     )
 
     realization_by_diameter_decade = RealizationByDiameterDecade.empty()
@@ -1070,7 +1079,8 @@ def plot_not_realized_by_diameter_decade(
     plt.tight_layout(rect=[0, 0, 0.85, 1])
 
     return fig, ax
- 
+
+
 class MaxImpactProbabilityByDiameterDecade(qv.Table):
     diameter = qv.Float64Column()
     decade = qv.LargeStringColumn()
@@ -1101,7 +1111,7 @@ def plot_max_impact_probability_by_diameter_decade(
 
     # Get common data
     impact_decades, unique_decades, unique_diameters = (
-        summary.get_diameter_decade_data()
+        summary.get_diameter_impact_period_data(period_breakdown="decade")
     )
 
     max_ip_by_diameter_decade = MaxImpactProbabilityByDiameterDecade.empty()
@@ -1200,10 +1210,6 @@ def plot_max_impact_probability_by_diameter_decade(
     return fig, ax
 
 
-
-
-
-
 class ArcLengthByDiameterDecade(qv.Table):
     diameter = qv.Float64Column()
     decade = qv.LargeStringColumn()
@@ -1219,7 +1225,7 @@ def plot_arc_length_by_diameter_decade(
     summary = summary.apply_mask(summary.complete())
 
     impact_decades, unique_decades, unique_diameters = (
-        summary.get_diameter_decade_data()
+        summary.get_diameter_impact_period_data(period_breakdown="decade")
     )
 
     arc_length_by_diameter_decade = ArcLengthByDiameterDecade.empty()
@@ -1311,13 +1317,162 @@ def plot_arc_length_by_diameter_decade(
     return fig, ax
 
 
-class IAWNThresholdByDiameterDecade(qv.Table):
+class IAWNThresholdReachedByDiameterImpactTime(qv.Table):
+    diameter = qv.Float64Column()
+    impact_period = qv.Int64Column()
+    percentage_reaching_threshold = qv.Float64Column()
+
+
+def plot_iawn_threshold_reached_by_diameter_impact_time(
+    summary: ImpactorResultSummary,
+    period: Literal["year", "5year", "decade"] = "decade",
+    max_impact_time: Optional[Timestamp] = None,
+) -> Tuple[plt.Figure, plt.Axes]:
+    """
+    Plot the percentage of objects that reach the IAWN threshold (1% impact probability)
+    broken down by diameter and impact period.
+    """
+    summary = summary.apply_mask(summary.complete())
+
+    # Only include discovered objects
+    summary = summary.apply_mask(summary.discovered())
+
+    if max_impact_time is not None:
+        logger.info(
+            f"Filtering {len(summary)} objects that impact before {max_impact_time.to_astropy().iso}"
+        )
+        summary = summary.apply_mask(
+            pc.less_equal(summary.orbit.impact_time.mjd(), max_impact_time.mjd()[0])
+        )
+        logger.info(f"After filtering, {len(summary)} objects remain")
+
+    # Get common data
+    impact_periods, unique_periods, unique_diameters = (
+        summary.get_diameter_impact_period_data(period_breakdown=period)
+    )
+
+    iawn_by_diameter_impact_period = IAWNThresholdReachedByDiameterImpactTime.empty()
+
+    for impact_period in unique_periods:
+        orbits_at_impact_period = summary.apply_mask(impact_periods == impact_period)
+        for diameter in unique_diameters:
+            orbits_at_diameter_and_impact_period = orbits_at_impact_period.select(
+                "orbit.diameter", diameter
+            )
+
+            # Count objects with non-null IAWN_time (meaning they reached the threshold)
+            reaching_threshold_mask = pc.invert(
+                pc.is_null(
+                    orbits_at_diameter_and_impact_period.ip_threshold_1_percent.mjd()
+                )
+            )
+
+            reaching_threshold = pc.sum(reaching_threshold_mask).as_py()
+
+            total_at_diameter_and_impact_period = len(
+                orbits_at_diameter_and_impact_period
+            )
+
+            percentage = (
+                (reaching_threshold / total_at_diameter_and_impact_period * 100)
+                if total_at_diameter_and_impact_period > 0
+                else 0
+            )
+
+            iawn_by_diameter_impact_period = qv.concatenate(
+                [
+                    iawn_by_diameter_impact_period,
+                    IAWNThresholdReachedByDiameterImpactTime.from_kwargs(
+                        impact_period=[impact_period],
+                        diameter=[diameter],
+                        percentage_reaching_threshold=[percentage],
+                    ),
+                ]
+            )
+
+    # Create the plot with improved spacing
+    fig, ax = plt.subplots(
+        1, 1, dpi=200, figsize=(12, 6)
+    )  # Wider figure for better spacing
+
+    # Calculate bar width and spacing based on number of diameters
+    num_diameters = len(unique_diameters)
+    group_width = (
+        BAR_GROUP_WIDTH  # Width allocated for each five year group (out of 1.0)
+    )
+    bar_width = (
+        group_width / num_diameters * BAR_WIDTH_SCALE
+    )  # Slightly narrower bars for spacing between them
+
+    # Create evenly spaced x positions for five year groups
+    x = np.arange(len(unique_periods)) * (
+        1 + BAR_GROUP_SPACING
+    )  # Add 20% extra space between five year groups
+
+    # Define a colormap
+    colors = plt.cm.viridis(np.linspace(0, 1, len(unique_diameters)))
+
+    # Plot bars for each diameter
+    for i, diameter in enumerate(unique_diameters):
+        diameter_data = iawn_by_diameter_impact_period.select("diameter", diameter)
+
+        # Calculate x position for this diameter's bars within each group
+        offset = (i - num_diameters / 2 + 0.5) * (
+            bar_width * 1.1
+        )  # Add 10% spacing between bars
+        bar_positions = x + offset
+
+        ax.bar(
+            bar_positions,
+            diameter_data.percentage_reaching_threshold.to_numpy(zero_copy_only=False),
+            width=bar_width,
+            color=colors[i],
+            label=f"{diameter:.3f} km",
+        )
+
+    # Position x-ticks at the center of each five year group
+    ax.set_xticks(x)
+    ax.set_xticklabels(unique_periods)
+
+    # Add some padding to x-axis limits
+    ax.set_xlim(min(x) - 0.5, max(x) + 0.5)
+    ax.set_ylim(0, 100)
+
+    if period == "year":
+        ax.set_xlabel("Impact Year")
+    elif period == "5year":
+        ax.set_xlabel("Impact 5-Year Period")
+    elif period == "decade":
+        ax.set_xlabel("Impact Decade")
+
+    ax.set_ylabel("Percentage of Discovered Objects Reaching IAWN Threshold (1%)")
+    ax.set_title(
+        "Percentage of Discovered Objects Reaching IAWN Threshold (1%) by Diameter"
+    )
+
+    # Move legend outside to save space
+    ax.legend(
+        title="Diameter [km]",
+        frameon=False,
+        bbox_to_anchor=(1.01, 1),
+        loc="upper left",
+    )
+
+    ax.yaxis.grid(True, linestyle="--", alpha=0.7)
+
+    # Adjust layout to make room for the legend
+    plt.tight_layout(rect=[0, 0, 0.85, 1])
+
+    return fig, ax
+
+
+class IAWNThresholdNotReachedByDiameterDecade(qv.Table):
     diameter = qv.Float64Column()
     decade = qv.LargeStringColumn()
     percentage_not_reaching_threshold = qv.Float64Column()
 
 
-def plot_iawn_threshold_by_diameter_decade(
+def plot_iawn_threshold_not_reached_by_diameter_decade(
     summary: ImpactorResultSummary,
 ) -> Tuple[plt.Figure, plt.Axes]:
     """
@@ -1338,16 +1493,15 @@ def plot_iawn_threshold_by_diameter_decade(
     # Filter to only include complete results (needed for the rest of the function)
     summary = summary.apply_mask(summary.complete())
 
-
     # Only include discovered objects
     summary = summary.apply_mask(summary.discovered())
 
     # Get common data
     impact_decades, unique_decades, unique_diameters = (
-        summary.get_diameter_decade_data()
+        summary.get_diameter_impact_period_data(period_breakdown="decade")
     )
 
-    iawn_by_diameter_decade = IAWNThresholdByDiameterDecade.empty()
+    iawn_by_diameter_decade = IAWNThresholdNotReachedByDiameterDecade.empty()
 
     # Process each decade
     for decade in unique_decades:
@@ -1362,7 +1516,9 @@ def plot_iawn_threshold_by_diameter_decade(
             # Count objects with null IAWN_time (meaning they never reached the threshold)
             # Only consider objects that have been discovered (to be consistent with realization plot)
             # Use negated AND logic instead of OR for consistency with realization plot
-            not_reaching_threshold_mask = pc.is_null(orbits_at_diameter_and_decade.ip_threshold_1_percent.mjd())
+            not_reaching_threshold_mask = pc.is_null(
+                orbits_at_diameter_and_decade.ip_threshold_1_percent.mjd()
+            )
 
             not_reaching_threshold = pc.sum(not_reaching_threshold_mask).as_py()
 
@@ -1377,7 +1533,7 @@ def plot_iawn_threshold_by_diameter_decade(
             iawn_by_diameter_decade = qv.concatenate(
                 [
                     iawn_by_diameter_decade,
-                    IAWNThresholdByDiameterDecade.from_kwargs(
+                    IAWNThresholdNotReachedByDiameterDecade.from_kwargs(
                         decade=[f"{decade}"],
                         diameter=[diameter],
                         percentage_not_reaching_threshold=[percentage],
@@ -1874,7 +2030,9 @@ def plot_total_arc_length_vs_max_impact_probability(
     summary = summary.apply_mask(summary.complete())
 
     # Extract impact decades
-    impact_decades, unique_decades, _ = summary.get_diameter_decade_data()
+    impact_decades, unique_decades, _ = summary.get_diameter_impact_period_data(
+        period_breakdown="decade"
+    )
 
     # Get arc lengths and max impact probabilities
     arc_lengths = summary.arc_length().to_numpy(zero_copy_only=False)
@@ -1939,7 +2097,9 @@ def plot_window_arc_length_vs_impact_probability(
     Color-coded by impact decade.
     """
     # Get the impact decades for each orbit
-    impact_decades, unique_decades, _ = summary.get_diameter_decade_data()
+    impact_decades, unique_decades, _ = summary.get_diameter_impact_period_data(
+        period_breakdown="decade"
+    )
 
     # Get the window arc length and impact probability
     window_arc_lengths = window_results.arc_length().to_numpy(zero_copy_only=False)
@@ -2094,7 +2254,7 @@ def plot_mean_realization_time_by_diameter_decade(
 
     # Extract impact decades and diameters
     impact_decades, unique_decades, unique_diameters = (
-        summary.get_diameter_decade_data()
+        summary.get_diameter_impact_period_data(period_breakdown="decade")
     )
 
     # Initialize results table
@@ -2260,23 +2420,46 @@ def make_analysis_plots(
     window_results: WindowResult,
     out_dir: str,
 ) -> None:
-    
-    fig, ax = plot_max_impact_probability_histograms_by_diameter_decade(summary, include_undiscovered=True)
+
+    fig, ax = plot_iawn_threshold_reached_by_diameter_impact_time(
+        summary, period="5year", max_impact_time=Timestamp.from_iso8601(["2140-01-01"])
+    )
     fig.savefig(
-        os.path.join(out_dir, "max_impact_probability_histograms_by_diameter_decade_all.jpg"),
+        os.path.join(out_dir, "iawn_threshold_reached_by_diameter_5year.jpg"),
         bbox_inches="tight",
         dpi=200,
     )
     plt.close(fig)
-    logger.info("Generated max impact probability histograms by diameter decade plot (all)")
 
-    fig, ax = plot_max_impact_probability_histograms_by_diameter_decade(summary, include_undiscovered=False)
+    fig, ax = plot_max_impact_probability_histograms_by_diameter_decade(
+        summary, include_undiscovered=True
+    )
     fig.savefig(
-        os.path.join(out_dir, "max_impact_probability_histograms_by_diameter_decade_discovered.jpg"),
+        os.path.join(
+            out_dir, "max_impact_probability_histograms_by_diameter_decade_all.jpg"
+        ),
         bbox_inches="tight",
         dpi=200,
     )
-    logger.info("Generated max impact probability histograms by diameter decade plot (discovered)")
+    plt.close(fig)
+    logger.info(
+        "Generated max impact probability histograms by diameter decade plot (all)"
+    )
+
+    fig, ax = plot_max_impact_probability_histograms_by_diameter_decade(
+        summary, include_undiscovered=False
+    )
+    fig.savefig(
+        os.path.join(
+            out_dir,
+            "max_impact_probability_histograms_by_diameter_decade_discovered.jpg",
+        ),
+        bbox_inches="tight",
+        dpi=200,
+    )
+    logger.info(
+        "Generated max impact probability histograms by diameter decade plot (discovered)"
+    )
     plt.close(fig)
 
     fig, ax = plot_warning_time_histogram(summary)
@@ -2378,7 +2561,7 @@ def make_analysis_plots(
     logger.info("Generated max impact probability plot")
     plt.close(fig)
 
-    fig, ax = plot_iawn_threshold_by_diameter_decade(summary)
+    fig, ax = plot_iawn_threshold_not_reached_by_diameter_decade(summary)
     fig.savefig(
         os.path.join(out_dir, "iawn_threshold_by_diameter_decade.jpg"),
         bbox_inches="tight",
@@ -2456,9 +2639,8 @@ def plot_max_impact_probability_histograms_by_diameter_decade(
 
     # Get common data
     impact_decades, unique_decades, unique_diameters = (
-        summary.get_diameter_decade_data()
+        summary.get_diameter_impact_period_data(period_breakdown="decade")
     )
-
 
     # Sort decades and diameters for consistent ordering
     unique_decades = np.sort(unique_decades)
@@ -2476,7 +2658,6 @@ def plot_max_impact_probability_histograms_by_diameter_decade(
 
     max_y = 0
 
-
     # Second pass: plot the histograms
     for i, diameter in enumerate(unique_diameters):
         for j, decade in enumerate(unique_decades):
@@ -2484,12 +2665,16 @@ def plot_max_impact_probability_histograms_by_diameter_decade(
             ax = axes[i, j] if n_rows > 1 else axes[j]
 
             # Filter data for this diameter and decade
-            diameter_mask = summary.orbit.diameter.to_numpy(zero_copy_only=False) == diameter
+            diameter_mask = (
+                summary.orbit.diameter.to_numpy(zero_copy_only=False) == diameter
+            )
             decade_mask = impact_decades == decade
             combined_mask = diameter_mask & decade_mask
 
             # Get maximum impact probabilities for this group
-            max_impact_probs = summary.maximum_impact_probability.to_numpy(zero_copy_only=False)
+            max_impact_probs = summary.maximum_impact_probability.to_numpy(
+                zero_copy_only=False
+            )
             max_impact_probs = np.where(np.isnan(max_impact_probs), 0, max_impact_probs)
             max_impact_probs = max_impact_probs[combined_mask]
 
@@ -2522,7 +2707,6 @@ def plot_max_impact_probability_histograms_by_diameter_decade(
             # Only add y-axis label to leftmost column
             if j == 0:
                 ax.set_ylabel("Count")
-
 
     # Collect all the y-limits and set them all to be the same max value
     axes_flat = axes.flatten()

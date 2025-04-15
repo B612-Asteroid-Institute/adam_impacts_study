@@ -1,6 +1,6 @@
 import json
 from dataclasses import asdict, dataclass
-from typing import Optional, Tuple
+from typing import Literal, Optional, Tuple
 
 import numpy as np
 import numpy.typing as npt
@@ -311,37 +311,48 @@ class ImpactorResultSummary(qv.Table):
             self.orbit.impact_time.mjd(), self.ip_threshold_100_percent.mjd()
         )
 
-    def get_diameter_decade_data(
+    def get_diameter_impact_period_data(
         self,
+        period_breakdown: Literal['decade', '5year', 'year'] = 'decade',
     ) -> Tuple[npt.NDArray[np.int64], npt.NDArray[np.int64], list]:
         """
-        Extract impact decades and common data needed for diameter-decade analysis.
+        Extract impact time periods and common data needed for diameter-time analysis.
+        
+        Parameters
+        ----------
+        period_breakdown : Literal['decade', '5year', 'year']
+            How to break down the impact times:
+            - 'decade': Group by 10-year periods (e.g., 2020-2029)
+            - '5year': Group by 5-year periods (e.g., 2020-2024)
+            - 'year': Group by individual years
+            
         Returns
         -------
         Tuple[np.ndarray, np.ndarray, list]
             A tuple containing:
-            - impact_decades: Array of impact decades for each orbit
-            - unique_decades: Sorted array of unique decades
+            - impact_periods: Array of impact periods for each orbit
+            - unique_periods: Sorted array of unique periods
             - unique_diameters: Sorted list of unique diameters
         """
-        # Filter to only include complete results
-        # summary = self.apply_mask(self.complete())
-
-        # Extract impact dates and convert to decades
+        # Extract impact dates and convert to periods based on breakdown
         impact_years = np.array(
             [
                 impact_time.datetime.year
                 for impact_time in self.orbit.impact_time.to_astropy()
             ]
         )
-        impact_decades = (
-            impact_years // 10
-        ) * 10  # Convert year to decade (2023 -> 2020)
+        
+        if period_breakdown == 'decade':
+            impact_periods = (impact_years // 10) * 10  # Convert year to decade (2023 -> 2020)
+        elif period_breakdown == '5year':
+            impact_periods = (impact_years // 5) * 5  # Convert year to 5-year period (2023 -> 2020)
+        else:  # year
+            impact_periods = impact_years  # Keep individual years
 
-        unique_decades = np.sort(np.unique(impact_decades))
+        unique_periods = np.sort(np.unique(impact_periods))
         unique_diameters = self.orbit.diameter.unique().sort().to_pylist()
 
-        return impact_decades, unique_decades, unique_diameters
+        return impact_periods, unique_periods, unique_diameters
 
 
 class DiscoveryDates(qv.Table):
