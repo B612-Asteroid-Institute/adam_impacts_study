@@ -619,27 +619,32 @@ def plot_individual_orbit_ip_over_time(
             logger.warning(f"No complete results found for orbit {orbit_id}")
             continue
 
-        # Sort by observation end time
-        mjd_times = ips.observation_end.mjd().to_numpy(zero_copy_only=False)
-        probabilities = ips.impact_probability.to_numpy(zero_copy_only=False)
-        sort_indices = mjd_times.argsort()
-        mjd_times = mjd_times[sort_indices]
-        probabilities = probabilities[sort_indices]
-
         # Plot sorted data on primary axis (MJD)
         ax1.set_xlabel("MJD")
         ax1.set_ylabel("Impact Probability")
         for condition in ips.condition_id.unique():
             results_at_condition = ips.select("condition_id", condition)
+
+            # Sort by observation end time
+            mjd_times = results_at_condition.observation_end.mjd().to_numpy(
+                zero_copy_only=False
+            )
+            probabilities = results_at_condition.impact_probability.to_numpy(
+                zero_copy_only=False
+            )
+            sort_indices = mjd_times.argsort()
+            mjd_times = mjd_times[sort_indices]
+            probabilities = probabilities[sort_indices]
+
             ax1.plot(
-                results_at_condition.observation_end.mjd(),
-                results_at_condition.impact_probability,
+                mjd_times,
+                probabilities,
                 label=condition,
                 lw=1,
             )
             ax1.scatter(
-                results_at_condition.observation_end.mjd(),
-                results_at_condition.impact_probability,
+                mjd_times,
+                probabilities,
                 label=condition,
             )
 
@@ -2434,9 +2439,7 @@ def make_analysis_plots(
     plt.close(fig)
 
     fig, ax = plot_discovered_by_diameter_impact_period(
-        summary,
-        period="5year",
-        max_impact_time=Timestamp.from_iso8601(["2070-01-01"])
+        summary, period="5year", max_impact_time=Timestamp.from_iso8601(["2070-01-01"])
     )
     fig.savefig(
         os.path.join(out_dir, "discovered_by_diameter_5year_2070.jpg"),
@@ -2847,8 +2850,9 @@ def plot_discovered_by_diameter_impact_period(
                     discovered_orbits_at_diameter_and_period.ip_threshold_50_percent.mjd()
                 ),
             )
-            num_above_1_percent_below_50_percent = pc.sum(reaching_1_percent_mask).as_py()
-
+            num_above_1_percent_below_50_percent = pc.sum(
+                reaching_1_percent_mask
+            ).as_py()
 
             # Count discovered objects that do not reach the 1% threshold
             num_below_1_percent = pc.sum(
@@ -2857,7 +2861,6 @@ def plot_discovered_by_diameter_impact_period(
                 )
             ).as_py()
 
-
             discovered_by_diameter_period = qv.concatenate(
                 [
                     discovered_by_diameter_period,
@@ -2865,7 +2868,9 @@ def plot_discovered_by_diameter_impact_period(
                         impact_period=[impact_period],
                         diameter=[diameter],
                         num_discovered_above_50_percent=[num_above_50_percent],
-                        num_discovered_1_percent_to_50_percent=[num_above_1_percent_below_50_percent],
+                        num_discovered_1_percent_to_50_percent=[
+                            num_above_1_percent_below_50_percent
+                        ],
                         num_discovered_below_1_percent=[num_below_1_percent],
                         total_including_undiscovered=[
                             len(orbits_at_diameter_and_period)
