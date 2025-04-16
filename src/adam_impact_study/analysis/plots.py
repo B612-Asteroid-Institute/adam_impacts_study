@@ -2420,6 +2420,30 @@ def make_analysis_plots(
     window_results: WindowResult,
     out_dir: str,
 ) -> None:
+    fig, ax = plot_discovered_by_diameter_impact_period(
+        summary,
+        period="5year",
+        # max_impact_time=Timestamp.from_iso8601(["2070-01-01"])
+    )
+    fig.savefig(
+        # os.path.join(out_dir, "discovered_by_diameter_5year_2070.jpg"),
+        os.path.join(out_dir, "discovered_by_diameter_5year.jpg"),
+        bbox_inches="tight",
+        dpi=200,
+    )
+    plt.close(fig)
+
+    fig, ax = plot_discovered_by_diameter_impact_period(
+        summary,
+        period="5year",
+        max_impact_time=Timestamp.from_iso8601(["2070-01-01"])
+    )
+    fig.savefig(
+        os.path.join(out_dir, "discovered_by_diameter_5year_2070.jpg"),
+        bbox_inches="tight",
+        dpi=200,
+    )
+    plt.close(fig)
 
     fig, ax = plot_iawn_threshold_reached_by_diameter_impact_time(
         summary, period="5year", max_impact_time=Timestamp.from_iso8601(["2140-01-01"])
@@ -2737,3 +2761,266 @@ def plot_max_impact_probability_histograms_by_diameter_decade(
     plt.tight_layout(rect=[0, 0, 0.95, 0.95])
 
     return fig, axes
+
+
+class DiscoveredByDiameterImpactPeriod(qv.Table):
+    diameter = qv.Float64Column()
+    impact_period = qv.Int64Column()
+    num_discovered_above_50_percent = qv.Int64Column()
+    num_discovered_1_percent_to_50_percent = qv.Int64Column()
+    num_discovered_below_1_percent = qv.Int64Column()
+    total_including_undiscovered = qv.Int64Column()
+
+
+def plot_discovered_by_diameter_impact_period(
+    summary: ImpactorResultSummary,
+    period: Literal["year", "5year", "decade"] = "5year",
+    max_impact_time: Optional[Timestamp] = None,
+) -> Tuple[plt.Figure, plt.Axes]:
+    """
+    Plot the percentage of discovered objects broken down by diameter and impact period.
+    Each bar is further subdivided into objects that reached the 1% IAWN threshold (solid)
+    and those that did not (patterned).
+
+    Parameters
+    ----------
+    summary : ImpactorResultSummary
+        The summary of impact study results.
+    period : Literal["year", "5year", "decade"], optional
+        The time period to group impacts by. Default is "5year".
+    max_impact_time : Optional[Timestamp], optional
+        The maximum impact time to consider. If None, all impacts are included.
+
+    Returns
+    -------
+    Tuple[plt.Figure, plt.Axes]
+        The figure and axes objects for the plot.
+    """
+    # Filter to only include complete results
+    summary = summary.apply_mask(summary.complete())
+
+    if max_impact_time is not None:
+        logger.info(
+            f"Filtering {len(summary)} objects that impact before {max_impact_time.to_astropy().iso}"
+        )
+        summary = summary.apply_mask(
+            pc.less_equal(summary.orbit.impact_time.mjd(), max_impact_time.mjd()[0])
+        )
+        logger.info(f"After filtering, {len(summary)} objects remain")
+
+    # Get common data
+    impact_periods, unique_periods, unique_diameters = (
+        summary.get_diameter_impact_period_data(period_breakdown=period)
+    )
+
+    discovered_by_diameter_period = DiscoveredByDiameterImpactPeriod.empty()
+
+    for impact_period in unique_periods:
+        orbits_at_impact_period = summary.apply_mask(impact_periods == impact_period)
+        for diameter in unique_diameters:
+            orbits_at_diameter_and_period = orbits_at_impact_period.select(
+                "orbit.diameter", diameter
+            )
+
+            discovered_orbits_at_diameter_and_period = (
+                orbits_at_diameter_and_period.apply_mask(
+                    orbits_at_diameter_and_period.discovered()
+                )
+            )
+
+            # Count discovered objects that reach 50% threshold
+            reaching_50_percent_mask = pc.invert(
+                pc.is_null(
+                    discovered_orbits_at_diameter_and_period.ip_threshold_50_percent.mjd()
+                )
+            )
+            num_above_50_percent = pc.sum(reaching_50_percent_mask).as_py()
+
+            # Count discovered objects that reach 1% threshold but do not reach 50% threshold
+            reaching_1_percent_mask = pc.and_(
+                pc.invert(
+                    pc.is_null(
+                        discovered_orbits_at_diameter_and_period.ip_threshold_1_percent.mjd()
+                    )
+                ),
+                pc.is_null(
+                    discovered_orbits_at_diameter_and_period.ip_threshold_50_percent.mjd()
+                ),
+            )
+            num_above_1_percent_below_50_percent = pc.sum(reaching_1_percent_mask).as_py()
+
+
+            # Count discovered objects that do not reach the 1% threshold
+            num_below_1_percent = pc.sum(
+                pc.is_null(
+                    discovered_orbits_at_diameter_and_period.ip_threshold_1_percent.mjd()
+                )
+            ).as_py()
+
+
+            discovered_by_diameter_period = qv.concatenate(
+                [
+                    discovered_by_diameter_period,
+                    DiscoveredByDiameterImpactPeriod.from_kwargs(
+                        impact_period=[impact_period],
+                        diameter=[diameter],
+                        num_discovered_above_50_percent=[num_above_50_percent],
+                        num_discovered_1_percent_to_50_percent=[num_above_1_percent_below_50_percent],
+                        num_discovered_below_1_percent=[num_below_1_percent],
+                        total_including_undiscovered=[
+                            len(orbits_at_diameter_and_period)
+                        ],
+                    ),
+                ]
+            )
+
+    # Create the plot with improved spacing
+    fig, ax = plt.subplots(
+        1, 1, dpi=200, figsize=(12, 6)
+    )  # Wider figure for better spacing
+
+    # Calculate bar width and spacing based on number of diameters
+    num_diameters = len(unique_diameters)
+    group_width = BAR_GROUP_WIDTH  # Width allocated for each period group
+    bar_width = (
+        group_width / num_diameters * BAR_WIDTH_SCALE
+    )  # Slightly narrower bars for spacing between them
+
+    # Create evenly spaced x positions for period groups
+    x = np.arange(len(unique_periods)) * (
+        1 + BAR_GROUP_SPACING
+    )  # Add spacing between period groups
+
+    # Define a colormap
+    colors = plt.cm.viridis(np.linspace(0, 1, len(unique_diameters)))
+
+    # Plot bars for each diameter
+    for i, diameter in enumerate(unique_diameters):
+        diameter_data = discovered_by_diameter_period.select("diameter", diameter)
+
+        # Calculate x position for this diameter's bars within each group
+        offset = (i - num_diameters / 2 + 0.5) * (
+            bar_width * 1.1
+        )  # Add 10% spacing between bars
+        bar_positions = x + offset
+
+        # Get the data for this diameter
+        above_50_percent = diameter_data.num_discovered_above_50_percent.to_numpy(
+            zero_copy_only=False
+        )
+        above_1_percent = diameter_data.num_discovered_1_percent_to_50_percent.to_numpy(
+            zero_copy_only=False
+        )
+        below_1_percent = diameter_data.num_discovered_below_1_percent.to_numpy(
+            zero_copy_only=False
+        )
+        total = diameter_data.total_including_undiscovered.to_numpy(
+            zero_copy_only=False
+        )
+
+        # Calculate percentages
+        pct_above_50 = above_50_percent / total * 100
+        pct_above_1 = above_1_percent / total * 100
+        pct_below_1 = below_1_percent / total * 100
+
+        # Plot stacked bars
+        ax.bar(
+            bar_positions,
+            pct_above_50,
+            width=bar_width,
+            color=colors[i],
+            label=f"{diameter:.3f} km",
+            alpha=0.8,
+        )
+
+        ax.bar(
+            bar_positions,
+            pct_above_1,
+            bottom=pct_above_50,
+            width=bar_width,
+            color=colors[i],
+            alpha=0.6,
+            label="_nolegend_",
+        )
+
+        ax.bar(
+            bar_positions,
+            pct_below_1,
+            bottom=pct_above_50 + pct_above_1,
+            width=bar_width,
+            color=colors[i],
+            alpha=0.4,
+            hatch="///",
+            label="_nolegend_",
+        )
+
+    # Position x-ticks at the center of each period group
+    ax.set_xticks(x)
+
+    # Format tick labels to show year ranges for multi-year periods
+    tick_labels = []
+    for period_start in unique_periods:
+        if isinstance(period_start, str):
+            tick_labels.append(period_start)
+        else:
+            if period == "5year":
+                tick_labels.append(f"{period_start}-{period_start+4}")
+            elif period == "decade":
+                tick_labels.append(f"{period_start}-{period_start+9}")
+            else:
+                tick_labels.append(str(period_start))
+    ax.set_xticklabels(tick_labels, rotation=45, ha="right")
+
+    # Add some padding to x-axis limits
+    ax.set_xlim(min(x) - 0.5, max(x) + 0.5)
+    ax.set_ylim(0, 100)
+
+    if period == "year":
+        ax.set_xlabel("Impact Year")
+    elif period == "5year":
+        ax.set_xlabel("Impact 5-Year Period")
+    elif period == "decade":
+        ax.set_xlabel("Impact Decade")
+
+    ax.set_ylabel("Percentage of Discovered Objects")
+    ax.set_title("Percentage of Discovered Objects by Diameter and Impact Period")
+
+    # Add legend entries for the hatch pattern
+    pattern_legend_elements = [
+        plt.Rectangle(
+            (0, 0),
+            1,
+            1,
+            facecolor="gray",
+            alpha=0.5,
+            hatch="///",
+            label="Below 1% IP Threshold",
+        ),
+        plt.Rectangle(
+            (0, 0), 1, 1, facecolor="gray", alpha=0.6, label="1% - 50% IP Threshold"
+        ),
+        plt.Rectangle(
+            (0, 0), 1, 1, facecolor="gray", alpha=0.8, label="Above 50% IP Threshold"
+        ),
+    ]
+
+    # Create two legends - one for diameters and one for patterns
+    diameter_legend = ax.legend(
+        title="Diameter [km]", frameon=True, bbox_to_anchor=(1.01, 1), loc="upper left"
+    )
+    ax.add_artist(diameter_legend)
+
+    # Create second legend for patterns
+    pattern_legend = ax.legend(
+        handles=pattern_legend_elements,
+        frameon=True,
+        bbox_to_anchor=(1.01, 0.5),
+        loc="center left",
+    )
+
+    ax.yaxis.grid(True, linestyle="--", alpha=0.7)
+
+    # Adjust layout to make room for the legend
+    plt.tight_layout(rect=[0, 0, 0.85, 1])
+
+    return fig, ax
