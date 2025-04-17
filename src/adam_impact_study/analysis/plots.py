@@ -3029,3 +3029,147 @@ def plot_discovered_by_diameter_impact_period(
     plt.tight_layout(rect=[0, 0, 0.85, 1])
 
     return fig, ax
+
+
+def plot_observed_vs_unobserved_elements(
+    summary: ImpactorResultSummary,
+    diameter: float = 1,
+) -> Tuple[plt.Figure, plt.Axes]:
+    """
+    Plot the distribution of objects in orbital element space with three categories:
+    - Discovered (blue)
+    - Observed but not discovered (yellow)
+    - Unobserved (red)
+    
+    Parameters
+    ----------
+    summary : ImpactorResultSummary
+        The summary of impact study results.
+    diameter : float, optional
+        The diameter [km] to filter the results by, by default 1.
+
+    Returns
+    -------
+    Tuple[plt.Figure, plt.Axes]
+        The figure and axes objects for the plot.
+    """
+    # Filter to only include the given diameter
+    summary = summary.apply_mask(pc.equal(summary.orbit.diameter, diameter))
+
+    if len(summary) == 0:
+        print(f"No data found for diameter {diameter} km.")
+        return 
+
+    orbits_at_diameter = summary.apply_mask(pc.equal(summary.orbit.diameter, diameter))
+    print("num orbits:", len(orbits_at_diameter))
+    
+    # Get Keplerian coordinates
+    kep_coordinates = summary.orbit.coordinates.to_keplerian()
+    a_au = kep_coordinates.a.to_numpy(zero_copy_only=False)
+    i_deg = kep_coordinates.i.to_numpy(zero_copy_only=False)
+    e = kep_coordinates.e.to_numpy(zero_copy_only=False)
+
+    #print discovered objedts by those with a non null discovery time
+    discovered_objects = summary.apply_mask(pc.invert(pc.is_null(summary.discovery_time.days)))
+    print(discovered_objects)
+    #do the same for undiscovered by the null discovery time
+    undiscovered_objects = summary.apply_mask(pc.is_null(summary.discovery_time.days))
+    print(undiscovered_objects)
+
+    #print the object names that are observed but not discovered
+
+    assert len(orbits_discovered) + len(orbits_observed_not_discovered) + len(orbits_unobserved) == len(orbits_at_diameter)
+    # Create the plots
+    fig, axes = plt.subplots(1, 2, dpi=200, figsize=(18, 7))
+
+    # --- Plot a vs i ---
+    # Plot discovered (blue) first
+    axes[0].scatter(
+        a_au[discovered_mask],
+        i_deg[discovered_mask],
+        c='blue',
+        alpha=0.6,
+        label='Discovered',
+        s=20
+    )
+    # Plot observed but not discovered (yellow) second
+    axes[0].scatter(
+        a_au[observed_not_discovered_mask],
+        i_deg[observed_not_discovered_mask],
+        c='yellow',
+        alpha=0.6,
+        label='Observed (Not Discovered)',
+        s=20
+    )
+    # Plot unobserved (red) last
+    axes[0].scatter(
+        a_au[unobserved_mask],
+        i_deg[unobserved_mask],
+        c='red',
+        alpha=0.6,
+        label='Unobserved',
+        s=20
+    )
+
+    axes[0].set_xlabel("Semimajor Axis (a) [AU]")
+    axes[0].set_ylabel("Inclination (i) [deg]")
+    axes[0].set_title("a vs i")
+    axes[0].legend()
+    axes[0].grid(True, alpha=0.3)
+
+    # --- Plot a vs e ---
+    # Plot discovered (blue) first
+    axes[1].scatter(
+        a_au[discovered_mask],
+        e[discovered_mask],
+        c='blue',
+        alpha=0.6,
+        label='Discovered',
+        s=20
+    )
+    # Plot observed but not discovered (yellow) second
+    axes[1].scatter(
+        a_au[observed_not_discovered_mask],
+        e[observed_not_discovered_mask],
+        c='yellow',
+        alpha=0.6,
+        label='Observed (Not Discovered)',
+        s=20
+    )
+    # Plot unobserved (red) last
+    axes[1].scatter(
+        a_au[unobserved_mask],
+        e[unobserved_mask],
+        c='red',
+        alpha=0.6,
+        label='Unobserved',
+        s=20
+    )
+
+    axes[1].set_xlabel("Semimajor Axis (a) [AU]")
+    axes[1].set_ylabel("Eccentricity (e)")
+    axes[1].set_title("a vs e")
+    axes[1].legend()
+    axes[1].grid(True, alpha=0.3)
+
+    # Add overall title with statistics
+    n_total = len(observed_mask)
+    n_discovered = discovered_mask.sum()
+    n_observed_not_discovered = observed_not_discovered_mask.sum()
+    n_unobserved = unobserved_mask.sum()
+    assert n_total == n_discovered + n_observed_not_discovered + n_unobserved
+    
+    percent_discovered = (n_discovered / n_total) * 100
+    percent_observed_not_discovered = (n_observed_not_discovered / n_total) * 100
+    percent_unobserved = (n_unobserved / n_total) * 100
+    
+    fig.suptitle(
+        f"Distribution of Objects (Diameter: {diameter} km)\n"
+        f"Total Objects: {n_total}, "
+        f"Discovered: {n_discovered} ({percent_discovered:.1f}%), "
+        f"Observed Not Discovered: {n_observed_not_discovered} ({percent_observed_not_discovered:.1f}%), "
+        f"Unobserved: {n_unobserved} ({percent_unobserved:.1f}%)"
+    )
+
+    plt.tight_layout(rect=[0, 0.03, 1, 0.95])
+    return fig, axes
