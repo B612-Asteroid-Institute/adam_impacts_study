@@ -118,7 +118,7 @@ class WindowResult(qv.Table):
 
     def failed(self) -> pa.BooleanArray:
         return pc.equal(self.status, "failed")
-    
+
     def arc_length(self) -> pa.FloatArray:
         """
         Return the window arc length in days
@@ -136,6 +136,10 @@ class ResultsTiming(qv.Table):
     mean_window_runtime = qv.Float64Column(nullable=True)
     total_window_runtime = qv.Float64Column(nullable=True)
     total_runtime = qv.Float64Column(nullable=True)
+
+
+# Define Earth's approximate orbital period in days
+EARTH_ORBITAL_PERIOD_DAYS = 365.256363004
 
 
 class ImpactorResultSummary(qv.Table):
@@ -159,6 +163,9 @@ class ImpactorResultSummary(qv.Table):
     # Time when observations met minimum artificial discovery criteria
     # Currently set to 3 unique nights of tracklets
     discovery_time = Timestamp.as_column(nullable=True)
+    # Time when observations met optimistic discovery criteria
+    # Currently set to 6 observations in 30 days
+    discovery_time_optimistic = Timestamp.as_column(nullable=True)
     # Impact probability at discovery time
     ip_at_discovery_time = qv.Float64Column(nullable=True)
     # Date object first reaches 0.01% impact probability
@@ -237,7 +244,7 @@ class ImpactorResultSummary(qv.Table):
             discovered=discoveries_by_diameter_class["discovered_sum"],
             total=discoveries_by_diameter_class["discovered_count"],
         )
-    
+
     def warning_time(self) -> pa.FloatArray:
         """
         Time in days from impact time to 1% IP threshold or discovery time
@@ -246,7 +253,9 @@ class ImpactorResultSummary(qv.Table):
         This method does not distinguish between discovered and not discovered.
         """
         return pc.max_element_wise(
-            pc.subtract(self.orbit.impact_time.mjd(), self.ip_threshold_1_percent.mjd()),
+            pc.subtract(
+                self.orbit.impact_time.mjd(), self.ip_threshold_1_percent.mjd()
+            ),
             pc.subtract(self.orbit.impact_time.mjd(), self.discovery_time.mjd()),
         )
 
@@ -313,11 +322,11 @@ class ImpactorResultSummary(qv.Table):
 
     def get_diameter_impact_period_data(
         self,
-        period_breakdown: Literal['decade', '5year', 'year'] = 'decade',
+        period_breakdown: Literal["decade", "5year", "year"] = "decade",
     ) -> Tuple[npt.NDArray[np.int64], npt.NDArray[np.int64], list]:
         """
         Extract impact time periods and common data needed for diameter-time analysis.
-        
+
         Parameters
         ----------
         period_breakdown : Literal['decade', '5year', 'year']
@@ -325,7 +334,7 @@ class ImpactorResultSummary(qv.Table):
             - 'decade': Group by 10-year periods (e.g., 2020-2029)
             - '5year': Group by 5-year periods (e.g., 2020-2024)
             - 'year': Group by individual years
-            
+
         Returns
         -------
         Tuple[np.ndarray, np.ndarray, list]
@@ -341,11 +350,15 @@ class ImpactorResultSummary(qv.Table):
                 for impact_time in self.orbit.impact_time.to_astropy()
             ]
         )
-        
-        if period_breakdown == 'decade':
-            impact_periods = (impact_years // 10) * 10  # Convert year to decade (2023 -> 2020)
-        elif period_breakdown == '5year':
-            impact_periods = (impact_years // 5) * 5  # Convert year to 5-year period (2023 -> 2020)
+
+        if period_breakdown == "decade":
+            impact_periods = (
+                impact_years // 10
+            ) * 10  # Convert year to decade (2023 -> 2020)
+        elif period_breakdown == "5year":
+            impact_periods = (
+                impact_years // 5
+            ) * 5  # Convert year to 5-year period (2023 -> 2020)
         else:  # year
             impact_periods = impact_years  # Keep individual years
 
@@ -353,6 +366,51 @@ class ImpactorResultSummary(qv.Table):
         unique_diameters = self.orbit.diameter.unique().sort().to_pylist()
 
         return impact_periods, unique_periods, unique_diameters
+
+    def synodic_period_wrt_earth(self) -> pa.FloatArray:
+        """
+        Calculate the synodic period in days with respect to Earth for each orbit.
+
+        Assumes the orbit's coordinates are heliocentric. Uses Kepler's Third Law
+        to estimate the orbital period from the semi-major axis.
+
+        Returns
+        -------
+        pa.FloatArray
+            The synodic period in days for each orbit. Returns NaN if the
+            orbital period is exactly Earth's period.
+        """
+        # Get Keplerian elements, specifically the semi-major axis (a) in AU
+        keplerian_coords = self.orbit.coordinates.to_keplerian()
+        a_au = keplerian_coords.a
+
+        # Calculate the orbital period in days using Kepler's Third Law
+        # P_days = (2 * pi / k) * a_au^(3/2), where k is the Gaussian gravitational constant
+        # P_years = a_au^(3/2)
+        # P_days = P_years * EARTH_ORBITAL_PERIOD_DAYS
+        object_period_days = pc.multiply(
+            pc.power(a_au, 1.5), pa.scalar(EARTH_ORBITAL_PERIOD_DAYS, type=pa.float64())
+        )
+
+        # Calculate the difference in mean motion (1/P)
+        # Handle cases where the object period might be very close to Earth's period
+        delta_mean_motion = pc.subtract(
+            pc.divide(1.0, object_period_days),
+            pc.divide(1.0, pa.scalar(EARTH_ORBITAL_PERIOD_DAYS, type=pa.float64())),
+        )
+
+        # Synodic Period S = 1 / |delta_mean_motion|
+        # Use safe_divide to handle potential division by zero (object_period == earth_period)
+        # which results in infinity, represented as NaN in floating point.
+        synodic_period = pc.divide(1.0, pc.abs(delta_mean_motion))
+
+        # Replace potential infinities (from zero division) with NaN
+        is_inf = pc.or_(
+            pc.equal(synodic_period, np.inf), pc.equal(synodic_period, -np.inf)
+        )
+        synodic_period = pc.if_else(is_inf, np.nan, synodic_period)
+
+        return synodic_period
 
 
 class DiscoveryDates(qv.Table):

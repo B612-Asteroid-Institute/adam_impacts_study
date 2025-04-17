@@ -3,6 +3,7 @@ import logging
 import pathlib
 from typing import Optional, Union
 
+import numpy as np
 import pyarrow as pa
 import pyarrow.compute as pc
 import quivr as qv
@@ -98,6 +99,89 @@ def compute_discovery_dates(
                 ),
             ]
         )
+
+    return results
+
+
+def compute_discovery_dates_optimistic(
+    observations: Observations,
+    min_observations: int = 6,
+    max_days: float = 30,
+    min_arc_length_days: float = 1.0,
+) -> DiscoveryDates:
+    """
+    Return when each object is considered discoverable based on an optimistic criterion.
+    An object is considered discoverable if it has at least `min_observations` observations
+    within a `max_days` window, and the arc length spanning those specific `min_observations`
+    is at least `min_arc_length_days`. The discovery date is the timestamp of the
+    last observation in the first window that meets these criteria.
+
+    Parameters
+    ----------
+    observations: Observations
+        The observations for potentially multiple objects.
+    min_observations: int, optional
+        The minimum number of observations required. Default is 6.
+    max_days: float, optional
+        The maximum number of days over which to find the required observations. Default is 30.
+    min_arc_length_days: float, optional
+        The minimum arc length in days for the window of `min_observations`. Default is 1.0.
+
+    Returns
+    -------
+    DiscoveryDates
+        The discovery dates for each object based on the optimistic criteria.
+        Contains orbit_id and discovery_date (Timestamp). discovery_date will be null
+        if the criteria are not met.
+    """
+    results = DiscoveryDates.empty()
+    orbit_ids = observations.orbit_id.unique().to_pylist()
+
+    for orbit_id in orbit_ids:
+        orbit_observations = observations.select("orbit_id", orbit_id)
+        # Sort observations by time
+        sorted_indices = pc.sort_indices(orbit_observations.coordinates.time.mjd())
+        sorted_observations = orbit_observations.take(sorted_indices)
+
+        discovery_time = Timestamp.nulls(
+            1, scale=orbit_observations.coordinates.time.scale
+        )  # Default to null
+
+        if len(sorted_observations) >= min_observations:
+            # Use numpy for efficient window checking after sorting
+            obs_mjds_np = sorted_observations.coordinates.time.mjd().to_numpy()
+
+            # Calculate time differences (arc lengths) between observations `min_observations - 1` apart
+            # Example: for min_observations=6, we look at obs[5]-obs[0], obs[6]-obs[1], etc.
+            # The index in diffs corresponds to the *end* observation of the window.
+            diffs = (
+                obs_mjds_np[min_observations - 1 :]
+                - obs_mjds_np[: -(min_observations - 1)]
+            )
+
+            # Find indices where the window duration is <= max_days AND >= min_arc_length_days
+            # We only care about the *first* time this happens.
+            valid_indices = np.where(
+                (diffs <= max_days) & (diffs >= min_arc_length_days)
+            )[0]
+
+            if len(valid_indices) > 0:
+                # The first valid index in `diffs` corresponds to the end of the first discovery window.
+                # Add (min_observations - 1) to get the index in the original sorted_observations array.
+                first_discovery_window_end_index = valid_indices[0] + (
+                    min_observations - 1
+                )
+
+                # Get the timestamp of that Nth observation
+                discovery_time = sorted_observations.coordinates.time.take(
+                    pa.array([first_discovery_window_end_index])
+                )
+
+        orbit_result = DiscoveryDates.from_kwargs(
+            orbit_id=[orbit_id],
+            discovery_date=discovery_time,
+        )
+        results = qv.concatenate([results, orbit_result])
 
     return results
 
@@ -466,7 +550,7 @@ class CompletenessByDiameter(qv.Table):
         """
         Include only those > 140m in diameter
         """
-        greater_than_140m = self.apply_mask(pc.greater_equal(self.diameter, .140))
+        greater_than_140m = self.apply_mask(pc.greater_equal(self.diameter, 0.140))
         return greater_than_140m.weighted_average()
 
 
@@ -545,6 +629,9 @@ def summarize_impact_study_object_results(
     orbit_results_timing = results_timing.select("orbit_id", orbit_id)
     orbit_window_results = window_results.select("orbit_id", orbit_id)
     orbit_discovery_dates = compute_discovery_dates(orbit_observations)
+    orbit_discovery_dates_optimistic = compute_discovery_dates_optimistic(
+        orbit_observations
+    )
     completed_window_results = orbit_window_results.apply_mask(
         orbit_window_results.complete()
     )
@@ -592,6 +679,7 @@ def summarize_impact_study_object_results(
             first_observation=Timestamp.nulls(1, scale="utc"),
             last_observation=Timestamp.nulls(1, scale="utc"),
             discovery_time=Timestamp.nulls(1, scale="utc"),
+            discovery_time_optimistic=Timestamp.nulls(1, scale="utc"),
             ip_at_discovery_time=[ip_at_discovery_time],
             ip_threshold_0_dot_01_percent=Timestamp.nulls(1, scale="utc"),
             ip_threshold_1_percent=Timestamp.nulls(1, scale="utc"),
@@ -618,6 +706,7 @@ def summarize_impact_study_object_results(
             first_observation=first_observation,
             last_observation=last_observation,
             discovery_time=orbit_discovery_dates.discovery_date,
+            discovery_time_optimistic=orbit_discovery_dates_optimistic.discovery_date,
             ip_at_discovery_time=[ip_at_discovery_time],
             ip_threshold_0_dot_01_percent=ip_threshold_0_dot_01_percent.date,
             ip_threshold_1_percent=ip_threshold_1_percent.date,
@@ -644,6 +733,7 @@ def summarize_impact_study_object_results(
             first_observation=first_observation,
             last_observation=last_observation,
             discovery_time=orbit_discovery_dates.discovery_date,
+            discovery_time_optimistic=orbit_discovery_dates_optimistic.discovery_date,
             ip_at_discovery_time=[ip_at_discovery_time],
             ip_threshold_0_dot_01_percent=ip_threshold_0_dot_01_percent.date,
             ip_threshold_1_percent=ip_threshold_1_percent.date,
@@ -669,6 +759,7 @@ def summarize_impact_study_object_results(
             first_observation=first_observation,
             last_observation=last_observation,
             discovery_time=orbit_discovery_dates.discovery_date,
+            discovery_time_optimistic=orbit_discovery_dates_optimistic.discovery_date,
             ip_at_discovery_time=[ip_at_discovery_time],
             ip_threshold_0_dot_01_percent=ip_threshold_0_dot_01_percent.date,
             ip_threshold_1_percent=ip_threshold_1_percent.date,
@@ -701,6 +792,7 @@ def summarize_impact_study_object_results(
         first_observation=first_observation,
         last_observation=last_observation,
         discovery_time=orbit_discovery_dates.discovery_date,
+        discovery_time_optimistic=orbit_discovery_dates_optimistic.discovery_date,
         ip_at_discovery_time=[ip_at_discovery_time],
         ip_threshold_0_dot_01_percent=ip_threshold_0_dot_01_percent.date,
         ip_threshold_1_percent=ip_threshold_1_percent.date,

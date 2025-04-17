@@ -10,12 +10,7 @@ import quivr as qv
 import scipy.ndimage
 from adam_core.time import Timestamp
 
-from adam_impact_study.types import (
-    ImpactorOrbits,
-    ImpactorResultSummary,
-    Observations,
-    WindowResult,
-)
+from adam_impact_study.types import ImpactorOrbits, ImpactorResultSummary, WindowResult
 
 logger = logging.getLogger(__name__)
 
@@ -113,7 +108,7 @@ def plot_warning_time_by_diameter_year(
             )
 
             if len(data) > 0:
-                y_values.append(data.mean_warning_time[0].as_py())
+                y_values.append(data.mean_warning_time[0].as_py() / 365.25)
                 bar_positions.append(x[j] + offset)
             else:
                 y_values.append(0)
@@ -135,7 +130,7 @@ def plot_warning_time_by_diameter_year(
                 height = bar.get_height()
                 ax.text(
                     bar.get_x() + bar.get_width() / 2.0,
-                    height + 1,  # 1 day offset
+                    height + 0.1,  # 1 day offset
                     f"{y_val:.1f}",
                     ha="center",
                     va="bottom",
@@ -155,7 +150,7 @@ def plot_warning_time_by_diameter_year(
 
     # Set axis labels and title
     ax.set_xlabel("Impact Year")
-    ax.set_ylabel("Mean Warning Time (days)")
+    ax.set_ylabel("Mean Warning Time (years)")
     ax.set_title("Mean Warning Time by Impact Year and Diameter")
 
     # Move legend outside to save space
@@ -178,6 +173,7 @@ def plot_warning_time_histogram(
 
     # Filter to only include complete results
     summary = summary.apply_mask(summary.complete())
+    summary = summary.apply_mask(pc.invert(pc.is_null(summary.discovery_time.days)))
 
     fig, ax = plt.subplots(1, 1, dpi=200)
     warning_time_max = pc.ceil(
@@ -563,6 +559,7 @@ def plot_individual_orbit_ip_over_time(
     out_dir: str,
     summary_results: Optional[ImpactorResultSummary] = None,
     survey_start: Optional[Timestamp] = None,
+    plot_discovery_time_optimistic: Optional[bool] = False,
 ) -> None:
     """
     Plot the impact probability (IP) over time for each object in the provided orbits.
@@ -598,6 +595,7 @@ def plot_individual_orbit_ip_over_time(
 
     # Store discovery times for quick lookup
     discovery_times = {}
+    discovery_times_optimistic = {}
     if summary_results is not None:
         summary_orbit_ids = summary_results.orbit.orbit_id.to_pylist()
         for i, orbit_id in enumerate(summary_orbit_ids):
@@ -606,6 +604,10 @@ def plot_individual_orbit_ip_over_time(
                 discovery_times[orbit_id] = orbit_summary.discovery_time.mjd()[
                     0
                 ].as_py()
+            if orbit_summary.discovery_time_optimistic is not None:
+                discovery_times_optimistic[orbit_id] = (
+                    orbit_summary.discovery_time_optimistic.mjd()[0].as_py()
+                )
 
     for orbit_id in orbit_ids:
         logger.info(f"Orbit ID Plotting: {orbit_id}")
@@ -749,6 +751,42 @@ def plot_individual_orbit_ip_over_time(
                 0.5,  # Middle of y-axis
                 "DISCOVERY",
                 color="red",
+                fontsize=6,
+                fontweight="bold",
+                rotation=90,
+                zorder=100,
+            )
+
+        if orbit_id in discovery_times_optimistic and plot_discovery_time_optimistic:
+            discovery_time_optimistic = discovery_times_optimistic[orbit_id]
+            if discovery_time_optimistic is None:
+                continue
+            # Check if discovery time is within the plot range
+            x_min, x_max = ax1.get_xlim()
+            if discovery_time_optimistic < x_min or discovery_time_optimistic > x_max:
+                # If not, expand the range slightly
+                buffer = (x_max - x_min) * 0.05  # 5% buffer
+                ax1.set_xlim(
+                    min(x_min, discovery_time_optimistic - buffer),
+                    max(x_max, discovery_time_optimistic + buffer),
+                )
+
+            # Draw a VERY visible vertical line
+            ax1.axvline(
+                x=discovery_time_optimistic,
+                color="#FF0000",  # Pure red
+                linestyle="-",  # Solid line
+                linewidth=1,  # Thick line
+                zorder=100,  # Very high z-order
+                label="Discovery (Optimistic)",  # Add to legend
+            )
+
+            # Add visible text
+            ax1.text(
+                discovery_time_optimistic + ((x_max - x_min) * 0.02),  # Slight offset
+                0.5,  # Middle of y-axis
+                "DISCOVERY (OPTIMISTIC)",
+                color="green",
                 fontsize=6,
                 fontweight="bold",
                 rotation=90,
@@ -1928,12 +1966,7 @@ def plot_observation_density_vs_impact_probability(
     # Filter to only include complete results
     summary = summary.apply_mask(summary.complete())
 
-    # Get unique orbit IDs from the summary
-    orbit_ids = summary.orbit.orbit_id.unique().to_pylist()
-
     # Initialize arrays to store our data
-    obs_density = []
-    max_impact_prob = []
     diameters = []
 
     observation_densities_days = pc.divide(summary.observations, summary.arc_length())
