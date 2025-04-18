@@ -1,7 +1,7 @@
 import argparse
 import logging
 import pathlib
-from typing import Optional, Union
+from typing import Literal, Optional, Union
 
 import numpy as np
 import pyarrow as pa
@@ -610,12 +610,12 @@ def _select_ip_at_discovery_time(
     return discovery_window.impact_probability[0].as_py()
 
 
-def _is_object_complete(
+def _orbit_complete_status(
     window_results: WindowResult,
     observations: Observations,
-) -> bool:
+) -> Literal["complete", "incomplete"]:
     """
-    Determines if an object should be considered complete
+    Determines if an orbit should be considered complete
 
     Parameters
     ----------
@@ -624,18 +624,27 @@ def _is_object_complete(
     observations: Observations
         The observations for a particular orbit id
     """
-    # If any windows are incomplete, the object is not complete
-    if pc.any(pc.equal(window_results.status, "incomplete")).as_py():
-        return False
-
     # If there are no observations, the object is complete
+    # No observations means an IP of 0.
     if len(observations) == 0:
-        return True
+        return "complete"
     
     # If there are no windows, the object is complete
+    # This can occur if the observations occur over less than 3 unique nights
     if len(window_results) == 0:
-        return True
+        return "complete"
 
+    assert len(observations.orbit_id.unique().to_pylist()) == 1, "Observations must be for a single orbit"
+    assert len(window_results.orbit_id.unique().to_pylist()) == 1, "Window results must be for a single orbit"
+
+    # If any windows are incomplete, the object is not complete
+    if pc.any(pc.equal(window_results.status, "incomplete")).as_py():
+        return "incomplete"
+
+    # The large majority of our errors are due to find_orb failures (likely couldn't fit an orbit)
+    # or the covariance matrix was ill defined enough to not be useful for IP calculation
+    # We consider these situations to be complete, as the tools available couldn't generate
+    # an orbit sufficient for the IP calculation, and therefore an IP of 0.
     find_orb_failed = "Find_Orb failed"
     covariance_failed = "Covariance matrix"
 
@@ -645,9 +654,10 @@ def _is_object_complete(
     matches_covariance_failed = pc.match_substring(window_results.error, covariance_failed)
     combined_mask = pc.or_(matches_find_orb_failed, matches_covariance_failed)
     if pc.any(pc.invert(combined_mask)).as_py():
-        return False
+        return "incomplete"
 
-    return True
+    # All other cases are complete
+    return "complete"
 
 
 def summarize_impact_study_object_results(
@@ -677,13 +687,7 @@ def summarize_impact_study_object_results(
     )
     orbit_observation_cadence = compute_observation_cadence(orbit_observations)
 
-    all_orbit_windows_completed = pc.all(
-        pc.equal(orbit_window_results.status, "complete")
-    ).as_py()
-
-    all_orbit_windows_not_incomplete = pc.all(
-        pc.not_equal(orbit_window_results.status, "incomplete")
-    ).as_py()
+    orbit_complete = _orbit_complete_status(orbit_window_results, orbit_observations)
 
     first_observation = orbit_observations.coordinates.time.min()
     last_observation = orbit_observations.coordinates.time.max()
@@ -734,7 +738,7 @@ def summarize_impact_study_object_results(
             maximum_impact_probability=[0],
             results_timing=orbit_results_timing,
             error=[None],
-            status=["complete"],
+            status=[orbit_complete],
         )
 
 
@@ -763,7 +767,7 @@ def summarize_impact_study_object_results(
                 pc.max(orbit_window_results.impact_probability)
             ],
             results_timing=orbit_results_timing,
-            status=["complete" if all_orbit_windows_completed else "incomplete"],
+            status=[orbit_complete],
         )
 
     if len(orbit_window_results) == 0:
@@ -788,11 +792,11 @@ def summarize_impact_study_object_results(
             ip_threshold_100_percent=ip_threshold_100_percent.date,
             maximum_impact_probability=[0],
             results_timing=orbit_results_timing,
-            error=["Orbit has no windows"],
-            status=["incomplete"],
+            error=[None],
+            status=[orbit_complete],
         )
 
-    if not all_orbit_windows_completed:
+    if orbit_complete == "incomplete":
         return ImpactorResultSummary.from_kwargs(
             orbit=impactor_orbit,
             mean_impact_time=Timestamp.nulls(1, scale="tdb"),
@@ -817,7 +821,7 @@ def summarize_impact_study_object_results(
             ],
             results_timing=orbit_results_timing,
             error=["Orbit has incomplete windows"],
-            status=["incomplete"],
+            status=[orbit_complete],
         )
 
     mean_impact_mjd = pc.mean(orbit_window_results.mean_impact_time.mjd()).as_py()
@@ -847,7 +851,7 @@ def summarize_impact_study_object_results(
         ip_threshold_100_percent=ip_threshold_100_percent.date,
         maximum_impact_probability=[pc.max(orbit_window_results.impact_probability)],
         results_timing=orbit_results_timing,
-        status=["complete"],
+        status=[orbit_complete],
     )
 
 

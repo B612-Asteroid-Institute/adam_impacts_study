@@ -2766,12 +2766,23 @@ def plot_max_impact_probability_histograms_by_diameter_decade(
 
             # Only add y-axis label to leftmost column
             if j == 0:
-                ax.set_ylabel("Count")
+                ax.set_ylabel("Count (log scale)")
 
     # Collect all the y-limits and set them all to be the same max value
     axes_flat = axes.flatten()
     for ax in axes_flat:
-        ax.set_ylim(0, max_y)
+        ax.set_ylim(0.1, max_y * 1.1)  # Start at 0.1 to avoid log(0) issues
+
+    # Make the y axis log scale with proper tick formatting
+    for ax in axes_flat:
+        ax.set_yscale("log")
+        # Set major ticks at powers of 10
+        ax.yaxis.set_major_locator(plt.LogLocator(base=10, numticks=5))
+        # Set minor ticks between major ticks
+        ax.yaxis.set_minor_locator(plt.LogLocator(base=10, subs=np.arange(2, 10) * 0.1, numticks=5))
+        # Format the tick labels to be more readable
+        ax.yaxis.set_major_formatter(plt.ScalarFormatter())
+        ax.grid(True, which='major', alpha=0.3, linestyle='--')
 
     # Add a single legend for all plots
     legend_elements = [
