@@ -2458,13 +2458,21 @@ def make_analysis_plots(
     window_results: WindowResult,
     out_dir: str,
 ) -> None:
+
+    for diameter in summary.orbit.diameter.unique().to_pylist():
+        fig, ax = plot_observed_vs_unobserved_elements(summary, diameter=diameter)
+        fig.savefig(
+            os.path.join(out_dir, f"observed_vs_unobserved_elements_{diameter}km.jpg"),
+            bbox_inches="tight",
+            dpi=200,
+        )
+        plt.close(fig)
+
     fig, ax = plot_discovered_by_diameter_impact_period(
         summary,
         period="5year",
-        # max_impact_time=Timestamp.from_iso8601(["2070-01-01"])
     )
     fig.savefig(
-        # os.path.join(out_dir, "discovered_by_diameter_5year_2070.jpg"),
         os.path.join(out_dir, "discovered_by_diameter_5year.jpg"),
         bbox_inches="tight",
         dpi=200,
@@ -2492,7 +2500,8 @@ def make_analysis_plots(
     plt.close(fig)
 
     fig, ax = plot_max_impact_probability_histograms_by_diameter_decade(
-        summary, include_undiscovered=True
+        summary, include_undiscovered=True,
+        x_log_scale=True
     )
     fig.savefig(
         os.path.join(
@@ -2501,13 +2510,13 @@ def make_analysis_plots(
         bbox_inches="tight",
         dpi=200,
     )
-    plt.close(fig)
     logger.info(
         "Generated max impact probability histograms by diameter decade plot (all)"
     )
 
     fig, ax = plot_max_impact_probability_histograms_by_diameter_decade(
-        summary, include_undiscovered=False
+        summary, include_undiscovered=False,
+        x_log_scale=True
     )
     fig.savefig(
         os.path.join(
@@ -2670,6 +2679,8 @@ def make_analysis_plots(
 def plot_max_impact_probability_histograms_by_diameter_decade(
     summary: ImpactorResultSummary,
     include_undiscovered: bool = False,
+    y_log_scale: bool = False,
+    x_log_scale: bool = False,
 ) -> Tuple[plt.Figure, plt.Axes]:
     """
     Plot a grid of histograms showing the maximum impact probability distribution
@@ -2683,6 +2694,11 @@ def plot_max_impact_probability_histograms_by_diameter_decade(
     include_undiscovered : bool, optional
         Whether to include undiscovered objects in the histograms. If False,
         only discovered objects are included. Default is False.
+    y_log_scale : bool, optional
+        Whether to use a log scale for the y-axis. Default is False.
+    x_log_scale : bool, optional
+        Whether to use a log scale for the x-axis. Default is False.
+
 
     Returns
     -------
@@ -2744,14 +2760,29 @@ def plot_max_impact_probability_histograms_by_diameter_decade(
                 continue
 
             # Create histogram
-            ax.hist(
-                max_impact_probs,
-                range=(0, 1),
-                bins=20,
-                # bins="fd",
-                color=colors[i],
-                alpha=0.7,
-            )
+            if x_log_scale:
+                bins = [0.00001, 0.0001, 0.001, 0.01, 0.1, 1]
+                ax.hist(
+                    np.where(max_impact_probs == 0, 0.00001, max_impact_probs),
+                    bins=bins,
+                    color=colors[i],
+                    alpha=0.7,
+                )
+                ax.set_xscale('log')
+                # Set the x-axis ticks to match our bin edges
+                ax.set_xticks(bins)
+                # Format the tick labels to be more readable
+                ax.set_xticklabels([f"{x:.0e}" for x in bins])
+                # Rotate the tick labels
+                ax.tick_params(axis='x', rotation=45)
+            else:
+                ax.hist(
+                    max_impact_probs,
+                    range=(0, 1),
+                    bins=20,
+                    color=colors[i],
+                    alpha=0.7,
+                )
 
             # Get the y-limit
             y_limit = ax.get_ylim()[1]
@@ -2766,23 +2797,29 @@ def plot_max_impact_probability_histograms_by_diameter_decade(
 
             # Only add y-axis label to leftmost column
             if j == 0:
-                ax.set_ylabel("Count (log scale)")
+                if y_log_scale:
+                    ax.set_ylabel("Count (log scale)")
+                else:
+                    ax.set_ylabel("Count")
 
     # Collect all the y-limits and set them all to be the same max value
     axes_flat = axes.flatten()
     for ax in axes_flat:
         ax.set_ylim(0.1, max_y * 1.1)  # Start at 0.1 to avoid log(0) issues
 
-    # Make the y axis log scale with proper tick formatting
-    for ax in axes_flat:
-        ax.set_yscale("log")
-        # Set major ticks at powers of 10
-        ax.yaxis.set_major_locator(plt.LogLocator(base=10, numticks=5))
-        # Set minor ticks between major ticks
-        ax.yaxis.set_minor_locator(plt.LogLocator(base=10, subs=np.arange(2, 10) * 0.1, numticks=5))
-        # Format the tick labels to be more readable
-        ax.yaxis.set_major_formatter(plt.ScalarFormatter())
-        ax.grid(True, which='major', alpha=0.3, linestyle='--')
+    if y_log_scale:
+        # Make the y axis log scale with proper tick formatting
+        for ax in axes_flat:
+            ax.set_yscale("log")
+            # Set major ticks at powers of 10
+            ax.yaxis.set_major_locator(plt.LogLocator(base=10, numticks=5))
+            # Set minor ticks between major ticks
+            ax.yaxis.set_minor_locator(
+                plt.LogLocator(base=10, subs=np.arange(2, 10) * 0.1, numticks=5)
+            )
+            # Format the tick labels to be more readable
+            ax.yaxis.set_major_formatter(plt.ScalarFormatter())
+            ax.grid(True, which="major", alpha=0.3, linestyle="--")
 
     # Add a single legend for all plots
     legend_elements = [
@@ -3084,7 +3121,7 @@ def plot_observed_vs_unobserved_elements(
     - Discovered (blue)
     - Observed but not discovered (yellow)
     - Unobserved (red)
-    
+
     Parameters
     ----------
     summary : ImpactorResultSummary
@@ -3097,62 +3134,75 @@ def plot_observed_vs_unobserved_elements(
     Tuple[plt.Figure, plt.Axes]
         The figure and axes objects for the plot.
     """
+    summary = summary.apply_mask(summary.complete())
     # Filter to only include the given diameter
+
     summary = summary.apply_mask(pc.equal(summary.orbit.diameter, diameter))
 
-    if len(summary) == 0:
-        print(f"No data found for diameter {diameter} km.")
-        return 
-
     orbits_at_diameter = summary.apply_mask(pc.equal(summary.orbit.diameter, diameter))
-    print("num orbits:", len(orbits_at_diameter))
-    
+
     # Get Keplerian coordinates
     kep_coordinates = summary.orbit.coordinates.to_keplerian()
     a_au = kep_coordinates.a.to_numpy(zero_copy_only=False)
     i_deg = kep_coordinates.i.to_numpy(zero_copy_only=False)
     e = kep_coordinates.e.to_numpy(zero_copy_only=False)
 
-    #print discovered objedts by those with a non null discovery time
-    discovered_objects = summary.apply_mask(pc.invert(pc.is_null(summary.discovery_time.days)))
-    print(discovered_objects)
-    #do the same for undiscovered by the null discovery time
-    undiscovered_objects = summary.apply_mask(pc.is_null(summary.discovery_time.days))
-    print(undiscovered_objects)
+    # print discovered objedts by those with a non null discovery time
+    discovered_objects_mask = pc.invert(
+        pc.is_null(summary.discovery_time.days)
+    ).to_numpy(zero_copy_only=False)
+    # do the same for undiscovered by the null discovery time
+    observed_not_discovered_objects_mask = pc.and_(
+        pc.is_null(summary.discovery_time.days),
+        pc.greater(summary.observations, 0),
+    ).to_numpy(zero_copy_only=False)
+    unobserved_objects_mask = pc.and_(
+        pc.is_null(summary.discovery_time.days), pc.equal(summary.observations, 0)
+    ).to_numpy(zero_copy_only=False)
 
-    #print the object names that are observed but not discovered
-
-    assert len(orbits_discovered) + len(orbits_observed_not_discovered) + len(orbits_unobserved) == len(orbits_at_diameter)
+    assert np.sum(discovered_objects_mask) + np.sum(
+        observed_not_discovered_objects_mask
+    ) + np.sum(unobserved_objects_mask) == len(orbits_at_diameter)
     # Create the plots
     fig, axes = plt.subplots(1, 2, dpi=200, figsize=(18, 7))
+
+    scatter_dot_size = 10
+    scatter_dot_alpha = 0.3
+    # Uses contrasting colors that don't include yellow
+    # colors = plt.cm.coolwarm(np.linspace(0, 1, 3))
+    # colors = plt.cm.viridis(np.linspace(0, 1, 3))
+    colors = ["blue", "green", "red"]
 
     # --- Plot a vs i ---
     # Plot discovered (blue) first
     axes[0].scatter(
-        a_au[discovered_mask],
-        i_deg[discovered_mask],
-        c='blue',
-        alpha=0.6,
-        label='Discovered',
-        s=20
+        a_au[discovered_objects_mask],
+        i_deg[discovered_objects_mask],
+        c=colors[0],
+        alpha=scatter_dot_alpha,
+        linewidths=0,
+        label="Discovered",
+        s=scatter_dot_size,
     )
     # Plot observed but not discovered (yellow) second
     axes[0].scatter(
-        a_au[observed_not_discovered_mask],
-        i_deg[observed_not_discovered_mask],
-        c='yellow',
-        alpha=0.6,
-        label='Observed (Not Discovered)',
-        s=20
+        a_au[observed_not_discovered_objects_mask],
+        i_deg[observed_not_discovered_objects_mask],
+        c=colors[1],
+        alpha=scatter_dot_alpha,
+        linewidths=0,
+        label="Observed (Not Discovered)",
+        s=scatter_dot_size,
     )
     # Plot unobserved (red) last
     axes[0].scatter(
-        a_au[unobserved_mask],
-        i_deg[unobserved_mask],
-        c='red',
-        alpha=0.6,
-        label='Unobserved',
-        s=20
+        a_au[unobserved_objects_mask],
+        i_deg[unobserved_objects_mask],
+        c=colors[2],
+        alpha=scatter_dot_alpha,
+        linewidths=0,
+        label="Unobserved",
+        s=scatter_dot_size,
     )
 
     axes[0].set_xlabel("Semimajor Axis (a) [AU]")
@@ -3164,30 +3214,33 @@ def plot_observed_vs_unobserved_elements(
     # --- Plot a vs e ---
     # Plot discovered (blue) first
     axes[1].scatter(
-        a_au[discovered_mask],
-        e[discovered_mask],
-        c='blue',
-        alpha=0.6,
-        label='Discovered',
-        s=20
+        a_au[discovered_objects_mask],
+        e[discovered_objects_mask],
+        c=colors[0],
+        alpha=scatter_dot_alpha,
+        linewidths=0,
+        label="Discovered",
+        s=scatter_dot_size,
     )
     # Plot observed but not discovered (yellow) second
     axes[1].scatter(
-        a_au[observed_not_discovered_mask],
-        e[observed_not_discovered_mask],
-        c='yellow',
-        alpha=0.6,
-        label='Observed (Not Discovered)',
-        s=20
+        a_au[observed_not_discovered_objects_mask],
+        e[observed_not_discovered_objects_mask],
+        c=colors[1],
+        alpha=scatter_dot_alpha,
+        linewidths=0,
+        label="Observed (Not Discovered)",
+        s=scatter_dot_size,
     )
     # Plot unobserved (red) last
     axes[1].scatter(
-        a_au[unobserved_mask],
-        e[unobserved_mask],
-        c='red',
-        alpha=0.6,
-        label='Unobserved',
-        s=20
+        a_au[unobserved_objects_mask],
+        e[unobserved_objects_mask],
+        c=colors[2],
+        alpha=scatter_dot_alpha,
+        linewidths=0,
+        label="Unobserved",
+        s=scatter_dot_size,
     )
 
     axes[1].set_xlabel("Semimajor Axis (a) [AU]")
@@ -3197,16 +3250,16 @@ def plot_observed_vs_unobserved_elements(
     axes[1].grid(True, alpha=0.3)
 
     # Add overall title with statistics
-    n_total = len(observed_mask)
-    n_discovered = discovered_mask.sum()
-    n_observed_not_discovered = observed_not_discovered_mask.sum()
-    n_unobserved = unobserved_mask.sum()
+    n_total = len(orbits_at_diameter)
+    n_discovered = np.sum(discovered_objects_mask)
+    n_observed_not_discovered = np.sum(observed_not_discovered_objects_mask)
+    n_unobserved = np.sum(unobserved_objects_mask)
     assert n_total == n_discovered + n_observed_not_discovered + n_unobserved
-    
+
     percent_discovered = (n_discovered / n_total) * 100
     percent_observed_not_discovered = (n_observed_not_discovered / n_total) * 100
     percent_unobserved = (n_unobserved / n_total) * 100
-    
+
     fig.suptitle(
         f"Distribution of Objects (Diameter: {diameter} km)\n"
         f"Total Objects: {n_total}, "
