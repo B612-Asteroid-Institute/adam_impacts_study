@@ -610,6 +610,46 @@ def _select_ip_at_discovery_time(
     return discovery_window.impact_probability[0].as_py()
 
 
+def _is_object_complete(
+    window_results: WindowResult,
+    observations: Observations,
+) -> bool:
+    """
+    Determines if an object should be considered complete
+
+    Parameters
+    ----------
+    window_results: WindowResult
+        The window results for a particular orbit id
+    observations: Observations
+        The observations for a particular orbit id
+    """
+    # If any windows are incomplete, the object is not complete
+    if pc.any(pc.equal(window_results.status, "incomplete")).as_py():
+        return False
+
+    # If there are no observations, the object is complete
+    if len(observations) == 0:
+        return True
+    
+    # If there are no windows, the object is complete
+    if len(window_results) == 0:
+        return True
+
+    find_orb_failed = "Find_Orb failed"
+    covariance_failed = "Covariance matrix"
+
+    # If any windows has an error that don't match the two above substrings, then mark
+    # as incomplete
+    matches_find_orb_failed = pc.equal(window_results.error, find_orb_failed)
+    matches_covariance_failed = pc.match_substring(window_results.error, covariance_failed)
+    combined_mask = pc.or_(matches_find_orb_failed, matches_covariance_failed)
+    if pc.any(pc.invert(combined_mask)).as_py():
+        return False
+
+    return True
+
+
 def summarize_impact_study_object_results(
     impactor_orbits: ImpactorOrbits,
     observations: Observations,
@@ -639,6 +679,10 @@ def summarize_impact_study_object_results(
 
     all_orbit_windows_completed = pc.all(
         pc.equal(orbit_window_results.status, "complete")
+    ).as_py()
+
+    all_orbit_windows_not_incomplete = pc.all(
+        pc.not_equal(orbit_window_results.status, "incomplete")
     ).as_py()
 
     first_observation = orbit_observations.coordinates.time.min()
@@ -692,6 +736,7 @@ def summarize_impact_study_object_results(
             error=[None],
             status=["complete"],
         )
+
 
     # If the observations are not linked, we can return early
     if not pc.all(pc.equal(orbit_observations.linked, True)).as_py():
