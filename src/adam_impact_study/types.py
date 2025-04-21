@@ -215,6 +215,13 @@ class ImpactorResultSummary(qv.Table):
             ),
         )
 
+    def prograde_orbits(self) -> pa.BooleanArray:
+        """
+        Return a mask for orbits with inclination less than 90 degrees (prograde).
+        """
+        keplerian_coords = self.orbit.coordinates.to_keplerian()
+        return pc.less(keplerian_coords.i, 90.0)
+
     def summarize_discoveries(self) -> "DiscoverySummary":
         # Filter to completed orbits
         completed_orbits = self.apply_mask(self.complete())
