@@ -803,190 +803,6 @@ def plot_individual_orbit_ip_over_time(
         plt.close()
 
 
-class DiscoveryByDiameterDecade(qv.Table):
-    diameter = qv.Float64Column()
-    decade = qv.LargeStringColumn()
-    num_discovered = qv.Int64Column()
-    num_observed_not_discovered = qv.Int64Column()
-    num_unobserved = qv.Int64Column()
-
-
-def plot_discovered_by_diameter_decade(
-    summary: ImpactorResultSummary,
-) -> Tuple[plt.Figure, plt.Axes]:
-    """
-    Plot the percentage discovered broken down by diameter and impact decade.
-    """
-    # Filter to only include complete results
-    summary = summary.apply_mask(summary.complete())
-
-    impact_decades, unique_decades, unique_diameters = (
-        summary.get_diameter_impact_period_data(period_breakdown="decade")
-    )
-
-    discovery_by_diameter_decade = DiscoveryByDiameterDecade.empty()
-
-    # Plot each decade as a set of bars
-    for decade in unique_decades:
-        # Filter by impact decade
-        orbits_at_decade = summary.apply_mask(impact_decades == decade)
-        for diameter in unique_diameters:
-            # Filter by diameter
-            orbits_at_diameter_and_decade = orbits_at_decade.select(
-                "orbit.diameter", diameter
-            )
-
-            discovered_mask = orbits_at_diameter_and_decade.discovered()
-            num_discovered = pc.sum(discovered_mask).as_py()
-            observed_not_discovered_mask = (
-                orbits_at_diameter_and_decade.observed_but_not_discovered()
-            )
-            num_observed_not_discovered = pc.sum(observed_not_discovered_mask).as_py()
-            unobserved_mask = pc.equal(orbits_at_diameter_and_decade.observations, 0)
-            num_unobserved = pc.sum(unobserved_mask).as_py()
-
-            assert num_discovered + num_observed_not_discovered + num_unobserved == len(
-                orbits_at_diameter_and_decade
-            )
-
-            discovery_by_diameter_decade = qv.concatenate(
-                [
-                    discovery_by_diameter_decade,
-                    DiscoveryByDiameterDecade.from_kwargs(
-                        decade=[f"{decade}"],
-                        diameter=[diameter],
-                        num_discovered=[num_discovered],
-                        num_observed_not_discovered=[num_observed_not_discovered],
-                        num_unobserved=[num_unobserved],
-                    ),
-                ]
-            )
-
-    # Create the plot with improved spacing
-    fig, ax = plt.subplots(
-        1, 1, dpi=200, figsize=(12, 6)
-    )  # Wider figure for better spacing
-
-    # Calculate bar width and spacing based on number of diameters
-    num_diameters = len(unique_diameters)
-    group_width = BAR_GROUP_WIDTH  # Width allocated for each decade group (out of 1.0)
-    bar_width = (
-        group_width / num_diameters * BAR_WIDTH_SCALE
-    )  # Slightly narrower bars for spacing between them
-
-    # Create evenly spaced x positions for decade groups
-    x = np.arange(len(unique_decades)) * (
-        1 + BAR_GROUP_SPACING
-    )  # Add 20% extra space between decade groups
-
-    # Define a colormap
-    colors = plt.cm.viridis(np.linspace(0, 1, len(unique_diameters)))
-
-    # Plot bars for each diameter
-    for i, diameter in enumerate(unique_diameters):
-        diameter_data = discovery_by_diameter_decade.select("diameter", diameter)
-
-        # Calculate x position for this diameter's bars within each group
-        offset = (i - num_diameters / 2 + 0.5) * (
-            bar_width * 1.1
-        )  # Add 10% spacing between bars
-        bar_positions = x + offset
-
-        num_discovered = diameter_data.num_discovered.to_numpy(zero_copy_only=False)
-        num_observed_not_discovered = (
-            diameter_data.num_observed_not_discovered.to_numpy(zero_copy_only=False)
-        )
-        num_unobserved = diameter_data.num_unobserved.to_numpy(zero_copy_only=False)
-
-        # Calculate percentages
-        total = num_discovered + num_observed_not_discovered + num_unobserved
-
-        pct_discovered = num_discovered / total * 100
-        pct_observed_not_discovered = num_observed_not_discovered / total * 100
-        pct_unobserved = num_unobserved / total * 100
-
-        # Plot stacked bars
-        ax.bar(
-            bar_positions,
-            pct_discovered,
-            width=bar_width,
-            color=colors[i],
-            label=f"{diameter:.3f} km",
-        )
-
-        ax.bar(
-            bar_positions,
-            pct_observed_not_discovered,
-            bottom=pct_discovered,
-            width=bar_width,
-            color=colors[i],
-            alpha=0.5,
-            hatch="///",
-            label="_nolegend_",
-        )
-
-        ax.bar(
-            bar_positions,
-            pct_unobserved,
-            bottom=pct_discovered + pct_observed_not_discovered,
-            width=bar_width,
-            color="none",
-            edgecolor=colors[i],
-            label="_nolegend_",
-        )
-
-    # Position x-ticks at the center of each decade group
-    ax.set_xticks(x)
-    ax.set_xticklabels(unique_decades)
-
-    # Add some padding to x-axis limits
-    ax.set_xlim(min(x) - 0.5, max(x) + 0.5)
-
-    ax.set_xlabel("Impact Decade")
-    ax.set_ylabel("Percentage Discovered")
-    ax.set_title("Percentage of Objects Discovered by Diameter and Impact Decade")
-    # Add legend entries for the hatch and empty bar patterns
-    # Create a separate legend for the pattern types
-    pattern_legend_elements = [
-        plt.Rectangle(
-            (0, 0),
-            1,
-            1,
-            facecolor="gray",
-            alpha=0.5,
-            hatch="///",
-            label="Observed but Not Discovered",
-        ),
-        plt.Rectangle(
-            (0, 0), 1, 1, facecolor="white", edgecolor="gray", label="Unobserved"
-        ),
-    ]
-
-    # Create two legends - one for diameters and one for patterns
-    # Save the first legend as a variable so it doesn't get overwritten
-    diameter_legend = ax.legend(
-        title="Diameter [km]", frameon=True, bbox_to_anchor=(1.01, 1), loc="upper left"
-    )
-
-    # Add the first legend explicitly as an artist
-    ax.add_artist(diameter_legend)
-
-    # Create second legend
-    pattern_legend = ax.legend(
-        handles=pattern_legend_elements,
-        frameon=True,
-        bbox_to_anchor=(1.01, 0.5),
-        loc="center left",
-    )
-
-    ax.yaxis.grid(True, linestyle="--", alpha=0.7)
-
-    # Adjust layout to make room for the legend
-    plt.tight_layout(rect=[0, 0, 0.85, 1])
-
-    return fig, ax
-
-
 class RealizationByDiameterDecade(qv.Table):
     diameter = qv.Float64Column()
     decade = qv.LargeStringColumn()
@@ -2460,6 +2276,7 @@ def make_analysis_plots(
 ) -> None:
 
     for diameter in summary.orbit.diameter.unique().to_pylist():
+        # Plot observed vs unobserved elements
         fig, ax = plot_observed_vs_unobserved_elements(summary, diameter=diameter)
         fig.savefig(
             os.path.join(out_dir, f"observed_vs_unobserved_elements_{diameter}km.jpg"),
@@ -2468,9 +2285,19 @@ def make_analysis_plots(
         )
         plt.close(fig)
 
+        # Plot discovery heatmap
+        fig, ax = plot_discovery_heatmap(summary, diameter=diameter)
+        fig.savefig(
+            os.path.join(out_dir, f"discovery_heatmap_{diameter}km.jpg"),
+            bbox_inches="tight",
+            dpi=200,
+        )
+        plt.close(fig)
+
     fig, ax = plot_discovered_by_diameter_impact_period(
         summary,
         period="5year",
+        time_before_impact_limit_days=365
     )
     fig.savefig(
         os.path.join(out_dir, "discovered_by_diameter_5year.jpg"),
@@ -2480,7 +2307,10 @@ def make_analysis_plots(
     plt.close(fig)
 
     fig, ax = plot_discovered_by_diameter_impact_period(
-        summary, period="5year", max_impact_time=Timestamp.from_iso8601(["2070-01-01"])
+        summary,
+        period="5year",
+        max_impact_time=Timestamp.from_iso8601(["2070-01-01"]),
+        time_before_impact_limit_days=365
     )
     fig.savefig(
         os.path.join(out_dir, "discovered_by_diameter_5year_2070.jpg"),
@@ -2500,8 +2330,7 @@ def make_analysis_plots(
     plt.close(fig)
 
     fig, ax = plot_max_impact_probability_histograms_by_diameter_decade(
-        summary, include_undiscovered=True,
-        x_log_scale=True
+        summary, include_undiscovered=True, x_log_scale=True
     )
     fig.savefig(
         os.path.join(
@@ -2515,8 +2344,7 @@ def make_analysis_plots(
     )
 
     fig, ax = plot_max_impact_probability_histograms_by_diameter_decade(
-        summary, include_undiscovered=False,
-        x_log_scale=True
+        summary, include_undiscovered=False, x_log_scale=True
     )
     fig.savefig(
         os.path.join(
@@ -2603,15 +2431,6 @@ def make_analysis_plots(
     logger.info("Generated arclength by diameter plot")
     plt.close(fig)
 
-    fig, ax = plot_discovered_by_diameter_decade(summary)
-    fig.savefig(
-        os.path.join(out_dir, "discovered_by_diameter_decade.jpg"),
-        bbox_inches="tight",
-        dpi=200,
-    )
-    logger.info("Generated discovered by diameter decade plot")
-    plt.close(fig)
-
     fig, ax = plot_not_realized_by_diameter_decade(summary)
     fig.savefig(
         os.path.join(out_dir, "not_realized_by_diameter_decade.jpg"),
@@ -2679,6 +2498,7 @@ def make_analysis_plots(
 def plot_max_impact_probability_histograms_by_diameter_decade(
     summary: ImpactorResultSummary,
     include_undiscovered: bool = False,
+    limit_to_5_years_prior_to_impact: bool = False,
     y_log_scale: bool = False,
     x_log_scale: bool = False,
 ) -> Tuple[plt.Figure, plt.Axes]:
@@ -2751,6 +2571,13 @@ def plot_max_impact_probability_histograms_by_diameter_decade(
             max_impact_probs = summary.maximum_impact_probability.to_numpy(
                 zero_copy_only=False
             )
+
+            if limit_to_5_years_prior_to_impact:
+                max_impact_probs = (
+                    summary.maximum_impact_probability_5_years_prior.to_numpy(
+                        zero_copy_only=False
+                    )
+                )
             max_impact_probs = np.where(np.isnan(max_impact_probs), 0, max_impact_probs)
             max_impact_probs = max_impact_probs[combined_mask]
 
@@ -2768,13 +2595,13 @@ def plot_max_impact_probability_histograms_by_diameter_decade(
                     color=colors[i],
                     alpha=0.7,
                 )
-                ax.set_xscale('log')
+                ax.set_xscale("log")
                 # Set the x-axis ticks to match our bin edges
                 ax.set_xticks(bins)
                 # Format the tick labels to be more readable
                 ax.set_xticklabels([f"{x:.0e}" for x in bins])
                 # Rotate the tick labels
-                ax.tick_params(axis='x', rotation=45)
+                ax.tick_params(axis="x", rotation=45)
             else:
                 ax.hist(
                     max_impact_probs,
@@ -2850,16 +2677,19 @@ def plot_max_impact_probability_histograms_by_diameter_decade(
 class DiscoveredByDiameterImpactPeriod(qv.Table):
     diameter = qv.Float64Column()
     impact_period = qv.Int64Column()
-    num_discovered_above_50_percent = qv.Int64Column()
-    num_discovered_1_percent_to_50_percent = qv.Int64Column()
-    num_discovered_below_1_percent = qv.Int64Column()
+    num_discovered_after_time_limit = qv.Int64Column()
+    num_discovered_before_time_limit_above_1_percent = qv.Int64Column()
+    num_discovered_before_time_limit_below_1_percent = qv.Int64Column()
+    num_observed_but_not_discovered = qv.Int64Column()
     total_including_undiscovered = qv.Int64Column()
 
 
 def plot_discovered_by_diameter_impact_period(
     summary: ImpactorResultSummary,
     period: Literal["year", "5year", "decade"] = "5year",
+    min_impact_time: Optional[Timestamp] = None,
     max_impact_time: Optional[Timestamp] = None,
+    time_before_impact_limit_days: int = 365 * 5,
 ) -> Tuple[plt.Figure, plt.Axes]:
     """
     Plot the percentage of discovered objects broken down by diameter and impact period.
@@ -2872,8 +2702,12 @@ def plot_discovered_by_diameter_impact_period(
         The summary of impact study results.
     period : Literal["year", "5year", "decade"], optional
         The time period to group impacts by. Default is "5year".
+    min_impact_time : Optional[Timestamp], optional
+        The minimum impact time to consider. If None, all impacts are included.
     max_impact_time : Optional[Timestamp], optional
         The maximum impact time to consider. If None, all impacts are included.
+    time_before_impact_limit_days : int, optional
+        The number of days before the impact time to consider. Default is 365 * 5.
 
     Returns
     -------
@@ -2882,6 +2716,15 @@ def plot_discovered_by_diameter_impact_period(
     """
     # Filter to only include complete results
     summary = summary.apply_mask(summary.complete())
+
+    if min_impact_time is not None:
+        logger.info(
+            f"Filtering {len(summary)} objects that impact after {min_impact_time.to_astropy().iso}"
+        )
+        summary = summary.apply_mask(
+            pc.greater_equal(summary.orbit.impact_time.mjd(), min_impact_time.mjd())
+        )
+        logger.info(f"After filtering, {len(summary)} objects remain")
 
     if max_impact_time is not None:
         logger.info(
@@ -2912,35 +2755,68 @@ def plot_discovered_by_diameter_impact_period(
                 )
             )
 
-            # Count discovered objects that reach 50% threshold
-            reaching_50_percent_mask = pc.invert(
-                pc.is_null(
-                    discovered_orbits_at_diameter_and_period.ip_threshold_50_percent.mjd()
+            # Count discovered objects that were discovered after the impact time limit
+            # e.g. too late
+            num_discovered_after_time_limit = pc.sum(
+                pc.less(
+                    discovered_orbits_at_diameter_and_period.orbit.impact_time.mjd(),
+                    pc.add(
+                        discovered_orbits_at_diameter_and_period.discovery_time.mjd(),
+                        time_before_impact_limit_days,
+                    ),
                 )
-            )
-            num_above_50_percent = pc.sum(reaching_50_percent_mask).as_py()
-
-            # Count discovered objects that reach 1% threshold but do not reach 50% threshold
-            reaching_1_percent_mask = pc.and_(
-                pc.invert(
-                    pc.is_null(
-                        discovered_orbits_at_diameter_and_period.ip_threshold_1_percent.mjd()
-                    )
-                ),
-                pc.is_null(
-                    discovered_orbits_at_diameter_and_period.ip_threshold_50_percent.mjd()
-                ),
-            )
-            num_above_1_percent_below_50_percent = pc.sum(
-                reaching_1_percent_mask
             ).as_py()
 
-            # Count discovered objects that do not reach the 1% threshold
-            num_below_1_percent = pc.sum(
+            discovered_before_time_limit_mask = pc.greater_equal(
+                discovered_orbits_at_diameter_and_period.orbit.impact_time.mjd(),
+                pc.add(
+                    discovered_orbits_at_diameter_and_period.discovery_time.mjd(),
+                    time_before_impact_limit_days,
+                ),
+            )
+
+
+            # Count discovered objects that reach 1% threshold but do not reach 50% threshold
+            reaching_1_percent_mask = pc.invert(
                 pc.is_null(
                     discovered_orbits_at_diameter_and_period.ip_threshold_1_percent.mjd()
                 )
+            )
+
+            num_discovered_before_time_limit_above_1_percent = pc.sum(
+                pc.and_(reaching_1_percent_mask, discovered_before_time_limit_mask)
             ).as_py()
+
+            num_discovered_before_time_limit_below_1_percent = pc.sum(
+                pc.and_(
+                    pc.invert(reaching_1_percent_mask),
+                    discovered_before_time_limit_mask,
+                )
+            ).as_py()
+
+            num_observed_but_not_discovered = pc.sum(
+                pc.and_(
+                    pc.greater(
+                        orbits_at_diameter_and_period.observations, 0
+                    ),
+                    pc.is_null(
+                        orbits_at_diameter_and_period.discovery_time.mjd()
+                    ),
+                )
+            ).as_py()
+
+            unseen = pc.sum(
+                    pc.equal(orbits_at_diameter_and_period.observations, 0),
+            ).as_py()
+
+            assert (
+                num_discovered_after_time_limit
+                + num_discovered_before_time_limit_above_1_percent
+                + num_discovered_before_time_limit_below_1_percent
+                + num_observed_but_not_discovered
+                + unseen
+                == len(orbits_at_diameter_and_period)
+            )
 
             discovered_by_diameter_period = qv.concatenate(
                 [
@@ -2948,11 +2824,18 @@ def plot_discovered_by_diameter_impact_period(
                     DiscoveredByDiameterImpactPeriod.from_kwargs(
                         impact_period=[impact_period],
                         diameter=[diameter],
-                        num_discovered_above_50_percent=[num_above_50_percent],
-                        num_discovered_1_percent_to_50_percent=[
-                            num_above_1_percent_below_50_percent
+                        num_discovered_after_time_limit=[
+                            num_discovered_after_time_limit
                         ],
-                        num_discovered_below_1_percent=[num_below_1_percent],
+                        num_discovered_before_time_limit_above_1_percent=[
+                            num_discovered_before_time_limit_above_1_percent
+                        ],
+                        num_discovered_before_time_limit_below_1_percent=[
+                            num_discovered_before_time_limit_below_1_percent
+                        ],
+                        num_observed_but_not_discovered=[
+                            num_observed_but_not_discovered
+                        ],
                         total_including_undiscovered=[
                             len(orbits_at_diameter_and_period)
                         ],
@@ -2991,52 +2874,80 @@ def plot_discovered_by_diameter_impact_period(
         bar_positions = x + offset
 
         # Get the data for this diameter
-        above_50_percent = diameter_data.num_discovered_above_50_percent.to_numpy(
+
+        num_discovered_after_time_limit = diameter_data.num_discovered_after_time_limit.to_numpy(
             zero_copy_only=False
         )
-        above_1_percent = diameter_data.num_discovered_1_percent_to_50_percent.to_numpy(
-            zero_copy_only=False
-        )
-        below_1_percent = diameter_data.num_discovered_below_1_percent.to_numpy(
-            zero_copy_only=False
-        )
-        total = diameter_data.total_including_undiscovered.to_numpy(
+        num_discovered_before_time_limit_above_1_percent = diameter_data.num_discovered_before_time_limit_above_1_percent.to_numpy(
             zero_copy_only=False
         )
 
-        # Calculate percentages
-        pct_above_50 = above_50_percent / total * 100
-        pct_above_1 = above_1_percent / total * 100
-        pct_below_1 = below_1_percent / total * 100
+        num_discovered_before_time_limit_below_1_percent = diameter_data.num_discovered_before_time_limit_below_1_percent.to_numpy(
+            zero_copy_only=False
+        )
+
+        num_observed_but_not_discovered = diameter_data.num_observed_but_not_discovered.to_numpy(
+            zero_copy_only=False
+        )
+
+        total_including_undiscovered = diameter_data.total_including_undiscovered.to_numpy(
+            zero_copy_only=False
+        )
+
+        pct_discovered_after_time_limit = (
+            num_discovered_after_time_limit / total_including_undiscovered * 100
+        )
+
+        pct_discovered_before_time_limit_above_1_percent = (
+            num_discovered_before_time_limit_above_1_percent / total_including_undiscovered * 100
+        )
+
+        pct_discovered_before_time_limit_below_1_percent = (
+            num_discovered_before_time_limit_below_1_percent / total_including_undiscovered * 100
+        )
+
+        pct_observed_but_not_discovered = (
+            num_observed_but_not_discovered / total_including_undiscovered * 100
+        )
 
         # Plot stacked bars
         ax.bar(
             bar_positions,
-            pct_above_50,
+            pct_discovered_before_time_limit_above_1_percent,
             width=bar_width,
             color=colors[i],
             label=f"{diameter:.3f} km",
-            alpha=0.8,
+            alpha=1,
         )
 
         ax.bar(
             bar_positions,
-            pct_above_1,
-            bottom=pct_above_50,
+            pct_discovered_before_time_limit_below_1_percent,
+            bottom=pct_discovered_before_time_limit_above_1_percent,
             width=bar_width,
             color=colors[i],
-            alpha=0.6,
+            alpha=0.8,
             label="_nolegend_",
         )
 
         ax.bar(
             bar_positions,
-            pct_below_1,
-            bottom=pct_above_50 + pct_above_1,
+            pct_discovered_after_time_limit,
+            bottom=pct_discovered_before_time_limit_above_1_percent + pct_discovered_before_time_limit_below_1_percent,
             width=bar_width,
             color=colors[i],
-            alpha=0.4,
-            hatch="///",
+            alpha=0.2,
+            label="_nolegend_",
+        )
+
+        ax.bar(
+            bar_positions,
+            pct_observed_but_not_discovered,
+            bottom=pct_discovered_before_time_limit_above_1_percent + pct_discovered_before_time_limit_below_1_percent + pct_discovered_after_time_limit,
+            width=bar_width,
+            edgecolor=colors[i],
+            alpha=0.5,  # Add transparency to the edge color
+            facecolor='none',
             label="_nolegend_",
         )
 
@@ -3069,25 +2980,46 @@ def plot_discovered_by_diameter_impact_period(
         ax.set_xlabel("Impact Decade")
 
     ax.set_ylabel("Percentage of Discovered Objects")
-    ax.set_title("Percentage of Discovered Objects by Diameter and Impact Period")
 
-    # Add legend entries for the hatch pattern
+    ax.set_title("Percentage of Discovered Objects")
+
+    # Add legend entries for the shading patterns
+
+    time_limit_years = time_before_impact_limit_days / 365
+
     pattern_legend_elements = [
         plt.Rectangle(
             (0, 0),
             1,
             1,
             facecolor="gray",
-            alpha=0.5,
-            hatch="///",
-            label="Below 1% IP Threshold",
+            alpha=1,
+            label=f"Discovered ≥ {time_limit_years} Years Before Impact, ≥ 1% IP"
         ),
         plt.Rectangle(
-            (0, 0), 1, 1, facecolor="gray", alpha=0.6, label="1% - 50% IP Threshold"
+            (0, 0),
+            1,
+            1,
+            facecolor="gray",
+            alpha=0.8,
+            label=f"Discovered ≥ {time_limit_years} Years Before Impact, < 1% IP"
         ),
         plt.Rectangle(
-            (0, 0), 1, 1, facecolor="gray", alpha=0.8, label="Above 50% IP Threshold"
+            (0, 0),
+            1,
+            1,
+            facecolor="gray", 
+            alpha=0.2,
+            label=f"Discovered < {time_limit_years} Years Before Impact"
         ),
+        plt.Rectangle(
+            (0, 0),
+            1,
+            1,
+            edgecolor="gray",
+            facecolor="none",
+            label="Observed But Not Discovered"
+        )
     ]
 
     # Create two legends - one for diameters and one for patterns
@@ -3166,12 +3098,12 @@ def plot_observed_vs_unobserved_elements(
     # Create the plots
     fig, axes = plt.subplots(1, 2, dpi=200, figsize=(18, 7))
 
-    scatter_dot_size = 10
+    scatter_dot_size = 15
     scatter_dot_alpha = 0.3
     # Uses contrasting colors that don't include yellow
     # colors = plt.cm.coolwarm(np.linspace(0, 1, 3))
     # colors = plt.cm.viridis(np.linspace(0, 1, 3))
-    colors = ["blue", "green", "red"]
+    colors = ["blue", "orange", "red"]
 
     # --- Plot a vs i ---
     # Plot discovered (blue) first
@@ -3269,4 +3201,117 @@ def plot_observed_vs_unobserved_elements(
     )
 
     plt.tight_layout(rect=[0, 0.03, 1, 0.95])
+    return fig, axes
+
+
+def plot_discovery_heatmap(
+    summary: ImpactorResultSummary,
+    diameter: float = 1,
+    bins: int = 50,  # Increased from 20 to 50 for higher resolution
+) -> Tuple[plt.Figure, plt.Axes]:
+    """
+    Plot a heatmap showing the ratio of discovered to undiscovered objects in orbital element space.
+
+    Parameters
+    ----------
+    summary : ImpactorResultSummary
+        The summary of impact study results.
+    diameter : float, optional
+        The diameter [km] to filter the results by, by default 1.
+    bins : int, optional
+        Number of bins for the heatmap, by default 50.
+
+    Returns
+    -------
+    Tuple[plt.Figure, plt.Axes]
+        The figure and axes objects for the plot.
+    """
+    summary = summary.apply_mask(summary.complete())
+    # Filter to only include the given diameter
+    summary = summary.apply_mask(pc.equal(summary.orbit.diameter, diameter))
+
+    # Get Keplerian coordinates
+    kep_coordinates = summary.orbit.coordinates.to_keplerian()
+    a_au = kep_coordinates.a.to_numpy(zero_copy_only=False)
+    i_deg = kep_coordinates.i.to_numpy(zero_copy_only=False)
+    e = kep_coordinates.e.to_numpy(zero_copy_only=False)
+
+    # Create masks for discovered and undiscovered objects
+    discovered_mask = pc.invert(pc.is_null(summary.discovery_time.days)).to_numpy(zero_copy_only=False)
+    undiscovered_mask = pc.is_null(summary.discovery_time.days).to_numpy(zero_copy_only=False)
+
+    # Create the plots
+    fig, axes = plt.subplots(1, 2, dpi=200, figsize=(18, 7))
+
+    # --- Plot a vs i ---
+    # Calculate 2D histograms for discovered and undiscovered
+    discovered_hist, xedges, yedges = np.histogram2d(
+        a_au[discovered_mask],
+        i_deg[discovered_mask],
+        bins=bins,
+        density=True
+    )
+    undiscovered_hist, _, _ = np.histogram2d(
+        a_au[undiscovered_mask],
+        i_deg[undiscovered_mask],
+        bins=bins,
+        density=True
+    )
+
+    # Calculate ratio of discovered to total (discovered + undiscovered)
+    total_hist = discovered_hist + undiscovered_hist
+    ratio = np.zeros_like(discovered_hist)
+    mask = total_hist > 0  # Only calculate ratio where we have data
+    ratio[mask] = discovered_hist[mask] / total_hist[mask]
+    ratio[~mask] = np.nan  # Set empty bins to NaN
+
+    # Plot heatmap
+    im = axes[0].imshow(
+        ratio.T,
+        origin='lower',
+        extent=[xedges[0], xedges[-1], yedges[0], yedges[-1]],
+        aspect='auto',
+        cmap='viridis',
+    )
+    fig.colorbar(im, ax=axes[0], label='Discovery Ratio')
+    axes[0].set_xlabel('Semi-major Axis [AU]')
+    axes[0].set_ylabel('Inclination [deg]')
+    axes[0].set_title('Discovery Ratio (a vs i)')
+
+    # --- Plot a vs e ---
+    # Calculate 2D histograms for discovered and undiscovered
+    discovered_hist, xedges, yedges = np.histogram2d(
+        a_au[discovered_mask],
+        e[discovered_mask],
+        bins=bins,
+        density=True
+    )
+    undiscovered_hist, _, _ = np.histogram2d(
+        a_au[undiscovered_mask],
+        e[undiscovered_mask],
+        bins=bins,
+        density=True
+    )
+
+    # Calculate ratio of discovered to total
+    total_hist = discovered_hist + undiscovered_hist
+    ratio = np.zeros_like(discovered_hist)
+    mask = total_hist > 0  # Only calculate ratio where we have data
+    ratio[mask] = discovered_hist[mask] / total_hist[mask]
+    ratio[~mask] = np.nan  # Set empty bins to NaN
+
+    # Plot heatmap
+    im = axes[1].imshow(
+        ratio.T,
+        origin='lower',
+        extent=[xedges[0], xedges[-1], yedges[0], yedges[-1]],
+        aspect='auto',
+        cmap='viridis',
+    )
+    fig.colorbar(im, ax=axes[1], label='Discovery Ratio')
+    axes[1].set_xlabel('Semi-major Axis [AU]')
+    axes[1].set_ylabel('Eccentricity')
+    axes[1].set_title('Discovery Ratio (a vs e)')
+
+    plt.tight_layout()
     return fig, axes

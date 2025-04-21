@@ -1,4 +1,4 @@
-import argparse
+
 import logging
 import pathlib
 from typing import Literal, Optional, Union
@@ -535,6 +535,60 @@ def compute_observation_cadence(
     )
 
 
+class MaximumImpactProbabilityPriorToImpact(qv.Table):
+    orbit_id = qv.LargeStringColumn()
+    maximum_impact_probability = qv.Float64Column(nullable=True)
+
+
+def compute_maximum_impact_probability_5_years_prior_to_impact(
+    impactor_orbits: ImpactorOrbits,
+    results: WindowResult,
+) -> MaximumImpactProbabilityPriorToImpact:
+    """
+    Compute the maximum impact probability 5 years prior to impact for each object.
+    """
+    maximum_impact_probability_prior_to_impact = (
+        MaximumImpactProbabilityPriorToImpact.empty()
+    )
+    unique_orbits = impactor_orbits.orbit_id.unique()
+    for orbit_id in unique_orbits:
+        impactor_orbit = impactor_orbits.select("orbit_id", orbit_id)
+        orbit_results = results.select("orbit_id", orbit_id)
+        if len(orbit_results) == 0:
+            maximum_impact_probability_prior_to_impact = qv.concatenate(
+                [
+                    maximum_impact_probability_prior_to_impact,
+                    MaximumImpactProbabilityPriorToImpact.from_kwargs(
+                        orbit_id=[orbit_id], maximum_impact_probability=[None]
+                    ),
+                ]
+            )
+            continue
+
+        # Filter windows to those five years prior to impact
+        five_years_prior_to_impact = impactor_orbit.impact_time.add_days(365 * -5)
+        windows_five_years_prior_to_impact = orbit_results.apply_mask(
+            pc.greater_equal(
+                orbit_results.observation_end.mjd(), five_years_prior_to_impact.mjd()[0]
+            )
+        )
+
+        maximum_impact_probability = pc.max(
+            windows_five_years_prior_to_impact.impact_probability
+        ).as_py()
+        maximum_impact_probability_prior_to_impact = qv.concatenate(
+            [
+                maximum_impact_probability_prior_to_impact,
+                MaximumImpactProbabilityPriorToImpact.from_kwargs(
+                    orbit_id=[orbit_id],
+                    maximum_impact_probability=[maximum_impact_probability],
+                ),
+            ]
+        )
+
+    return maximum_impact_probability_prior_to_impact
+
+
 class CompletenessByDiameter(qv.Table):
     diameter = qv.Float64Column()
     percentage_discovered = qv.Float64Column()
@@ -628,14 +682,18 @@ def _orbit_complete_status(
     # No observations means an IP of 0.
     if len(observations) == 0:
         return "complete"
-    
+
     # If there are no windows, the object is complete
     # This can occur if the observations occur over less than 3 unique nights
     if len(window_results) == 0:
         return "complete"
 
-    assert len(observations.orbit_id.unique().to_pylist()) == 1, "Observations must be for a single orbit"
-    assert len(window_results.orbit_id.unique().to_pylist()) == 1, "Window results must be for a single orbit"
+    assert (
+        len(observations.orbit_id.unique().to_pylist()) == 1
+    ), "Observations must be for a single orbit"
+    assert (
+        len(window_results.orbit_id.unique().to_pylist()) == 1
+    ), "Window results must be for a single orbit"
 
     # If any windows are incomplete, the object is not complete
     if pc.any(pc.equal(window_results.status, "incomplete")).as_py():
@@ -651,7 +709,9 @@ def _orbit_complete_status(
     # If any windows has an error that don't match the two above substrings, then mark
     # as incomplete
     matches_find_orb_failed = pc.equal(window_results.error, find_orb_failed)
-    matches_covariance_failed = pc.match_substring(window_results.error, covariance_failed)
+    matches_covariance_failed = pc.match_substring(
+        window_results.error, covariance_failed
+    )
     combined_mask = pc.or_(matches_find_orb_failed, matches_covariance_failed)
     if pc.any(pc.invert(combined_mask)).as_py():
         return "incomplete"
@@ -715,6 +775,12 @@ def summarize_impact_study_object_results(
         orbit_id, orbit_window_results, orbit_discovery_dates
     )
 
+    maximum_impact_probability_prior_to_impact = (
+        compute_maximum_impact_probability_5_years_prior_to_impact(
+            impactor_orbit, completed_window_results
+        )
+    )
+
     if len(orbit_observations) == 0:
         return ImpactorResultSummary.from_kwargs(
             orbit=impactor_orbit,
@@ -736,11 +802,11 @@ def summarize_impact_study_object_results(
             ip_threshold_90_percent=Timestamp.nulls(1, scale="utc"),
             ip_threshold_100_percent=Timestamp.nulls(1, scale="utc"),
             maximum_impact_probability=[0],
+            maximum_impact_probability_5_years_prior=[0],
             results_timing=orbit_results_timing,
             error=[None],
             status=[orbit_complete],
         )
-
 
     # If the observations are not linked, we can return early
     if not pc.all(pc.equal(orbit_observations.linked, True)).as_py():
@@ -766,6 +832,7 @@ def summarize_impact_study_object_results(
             maximum_impact_probability=[
                 pc.max(orbit_window_results.impact_probability)
             ],
+            maximum_impact_probability_5_years_prior=maximum_impact_probability_prior_to_impact.maximum_impact_probability,
             results_timing=orbit_results_timing,
             status=[orbit_complete],
         )
@@ -791,6 +858,7 @@ def summarize_impact_study_object_results(
             ip_threshold_90_percent=ip_threshold_90_percent.date,
             ip_threshold_100_percent=ip_threshold_100_percent.date,
             maximum_impact_probability=[0],
+            maximum_impact_probability_5_years_prior=[0],
             results_timing=orbit_results_timing,
             error=[None],
             status=[orbit_complete],
@@ -819,6 +887,7 @@ def summarize_impact_study_object_results(
             maximum_impact_probability=[
                 pc.max(orbit_window_results.impact_probability)
             ],
+            maximum_impact_probability_5_years_prior=maximum_impact_probability_prior_to_impact.maximum_impact_probability,
             results_timing=orbit_results_timing,
             error=["Orbit has incomplete windows"],
             status=[orbit_complete],
@@ -850,6 +919,7 @@ def summarize_impact_study_object_results(
         ip_threshold_90_percent=ip_threshold_90_percent.date,
         ip_threshold_100_percent=ip_threshold_100_percent.date,
         maximum_impact_probability=[pc.max(orbit_window_results.impact_probability)],
+        maximum_impact_probability_5_years_prior=maximum_impact_probability_prior_to_impact.maximum_impact_probability,
         results_timing=orbit_results_timing,
         status=[orbit_complete],
     )

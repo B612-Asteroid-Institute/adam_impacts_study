@@ -182,6 +182,8 @@ class ImpactorResultSummary(qv.Table):
     ip_threshold_100_percent = Timestamp.as_column(nullable=True)
     # How close all the windows got to discovering the definite impact nature
     maximum_impact_probability = qv.Float64Column(nullable=True)
+    # Maximum impact probability reached at least 5 years prior to impact
+    maximum_impact_probability_5_years_prior = qv.Float64Column(nullable=True)
     # Error message from the impact study
     error = qv.LargeStringColumn(nullable=True)
     # Runtime of the impact study
