@@ -25,6 +25,169 @@ class WarningTimeByDiameterYear(qv.Table):
     mean_warning_time = qv.Float64Column()
 
 
+def plot_impact_probability_distribution(summary: ImpactorResultSummary, window_results: WindowResult, num_years_before_impact: int, diameter_km=None):
+    """
+    Plot the distribution of impact probability at a specified number of years before impact.
+    
+    Parameters:
+    -----------
+    summary : ImpactorResultSummary
+        Summary of impactor results
+    window_results : WindowResult
+        Window results data
+    num_years_before_impact : int
+        Number of years before impact to analyze
+    diameter_km : float or None
+        Filter to only asteroids with this specific diameter in km.
+        If None, use all asteroids.
+    """
+    
+    # Filter summary by diameter if specified
+    if diameter_km is not None:
+        summary = summary.apply_mask(pc.equal(summary.orbit.diameter, diameter_km))
+        print(f"Filtering to asteroids with diameter = {diameter_km} km")
+        print(f"Found {len(summary)} asteroids with this diameter")
+    
+    impact_probabilities = []
+    # for each orbits, find the last observation before the number of years before impact
+    for orbit_id in summary.orbit.orbit_id.unique():
+        orbit_summary = summary.apply_mask(pc.equal(summary.orbit.orbit_id, orbit_id))
+        orbit_window_results = window_results.apply_mask(pc.equal(window_results.orbit_id, orbit_id))
+        cut_off_time = orbit_summary.orbit.impact_time.mjd()[0].as_py() - num_years_before_impact * 365.25
+        #round to the nearest day
+        cut_off_time = np.round(cut_off_time)
+        # get ONLY the last observation before the cut off time
+        pre_cut_off_window_results = orbit_window_results.apply_mask(pc.less(orbit_window_results.observation_end.mjd(), cut_off_time))
+        
+        # Check if there are any observations before the cutoff time
+        if len(pre_cut_off_window_results) == 0:
+            impact_probabilities.append(0)
+            continue
+            
+        last_observation_time = pc.max(pre_cut_off_window_results.observation_end.mjd())
+        last_observation = pre_cut_off_window_results.apply_mask(pc.equal(pre_cut_off_window_results.observation_end.mjd(), last_observation_time))
+        
+        # get the impact probability at the last observation
+        impact_probability = last_observation.impact_probability.to_numpy(zero_copy_only=False)
+        
+        # Extract the scalar value(s) from the array and add to list
+        if len(impact_probability) > 0:
+            impact_prob_value = impact_probability.flatten()[0]
+            impact_probabilities.append(impact_prob_value)
+        else:
+            impact_probabilities.append(0)
+            
+    # Convert to numpy array for cleaner plotting
+    impact_probabilities = np.array(impact_probabilities)
+    
+    # plot the distribution of impact probabilities
+    plt.figure(figsize=(10, 6))
+    plt.hist(impact_probabilities, bins=100, alpha=0.7, edgecolor='black')
+    plt.xlabel("Impact Probability")
+    plt.ylabel("Number of Orbits")
+    plt.title(f"Distribution of Impact Probability at {num_years_before_impact} Years Before Impact")
+    plt.grid(True, alpha=0.3)
+    plt.tight_layout()
+    plt.show()
+
+
+def plot_collective_ip_over_time_before_impact(
+    window_results: WindowResult, summary: ImpactorResultSummary
+) -> None:
+    """
+    Plot the impact probability (IP) over time for all objects in the provided orbits.
+    """
+    # We want to align it so the first window results is at the same location
+    # on the x-axis
+    fig, ax = plt.subplots(1, 1, dpi=200, figsize=(10, 6))
+
+    completed_window_results = window_results.apply_mask(
+        pc.equal(window_results.status, "complete")
+    )
+
+    # get the unique orbit_ids
+    orbit_ids = completed_window_results.orbit_id.unique().to_pylist()
+
+    # Calculate dynamic alpha value based on the number of orbits
+    # Formula: alpha = min(0.3, 10/n) where n is the number of orbits
+    # This ensures alpha decreases as number of orbits increases
+    n_orbits = len(orbit_ids)
+    alpha = min(0.1, 100 / max(1, n_orbits))
+
+    # Use a single color with dynamic alpha for all plots
+    plot_color = "steelblue"
+
+    # Plot the IP for each orbit
+    for orbit_id in orbit_ids:
+        orbit_summary = summary.apply_mask(pc.equal(summary.orbit.orbit_id, orbit_id))
+        impact_time = orbit_summary.orbit.impact_time.mjd().to_numpy(zero_copy_only=False)
+        orbit_ips = completed_window_results.apply_mask(
+            pc.equal(completed_window_results.orbit_id, orbit_id)
+        )
+
+        # Sort by observation end time
+        mjd_times = orbit_ips.observation_end.mjd().to_numpy(zero_copy_only=False)
+        probabilities = orbit_ips.impact_probability.to_numpy(zero_copy_only=False)
+        sort_indices = mjd_times.argsort()
+        mjd_times = mjd_times[sort_indices]
+        probabilities = probabilities[sort_indices]
+
+        # Adjust all times to be relative to the days before impact 
+        impact_times = pa.repeat(impact_time, len(mjd_times))
+        # if mjd time is larger than impact time, print it here
+        weird_list = []
+        if np.any(mjd_times > impact_time):
+            print(f"Orbit {orbit_id} has a mjd time larger than impact time")
+            print(mjd_times)
+            print(impact_time)
+            weird_list.append(orbit_id)
+
+        offset_times = impact_times - mjd_times
+
+        # Plot the IP with shaded area using the same dynamic alpha for both line and fill
+        ax.plot(
+            offset_times, probabilities, color=plot_color, alpha=alpha, linewidth=0.8
+        )
+        # ax.fill_between(offset_times, 0, probabilities, color=plot_color, alpha=alpha)
+
+    # Add vertical lines for every year (365.25 days)
+    max_days = ax.get_xlim()[1]
+    year_lines = np.arange(0, max_days, 365.25)
+    for year_line in year_lines:
+        ax.axvline(x=year_line, color="gray", linestyle=":", alpha=0.3)
+
+    # Add legend for the vertical year lines
+    ax.plot([], [], color="gray", linestyle=":", alpha=0.3, label="Year")
+    ax.plot([], [], color=plot_color, alpha=0.8, label="Individual Orbit IP")
+    ax.legend(loc="upper right", framealpha=0.8)
+
+    # Set y-axis to log scale for impact probability
+    ax.set_yscale("log")
+    
+    # Set y-axis limits to avoid log(0) issues and provide reasonable range
+    ax.set_ylim(1e-6, 1.1)
+
+    # Improve grid for better readability with many overlapping lines
+    ax.grid(True, alpha=0.3, linestyle="--")
+
+    # Add statistics including number of orbits and alpha value used
+    ax.text(
+        0.98,
+        0.02,
+        f"Total orbits: {n_orbits}",
+        transform=ax.transAxes,
+        ha="right",
+        va="bottom",
+        bbox=dict(boxstyle="round", facecolor="white", alpha=0.8),
+    )
+
+    ax.set_xlabel("Days Before Impact")
+    ax.set_ylabel("Impact Probability (log scale)")
+    ax.set_title("Impact Probability Over Time Before Impact for All Orbits")
+
+    return fig, ax
+
+
 def plot_warning_time_by_diameter_year(
     summary: ImpactorResultSummary,
 ) -> Tuple[plt.Figure, plt.Axes]:
