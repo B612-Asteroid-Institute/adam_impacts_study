@@ -23,6 +23,7 @@ dependencies = [
     "naif-eop-predict",
     "naif-eop-historical",
     "naif-earth-itrf93",
+    "plotly>=6.6.0",
 ]
 requires-python = "<3.13,>=3.11"
 readme = "README.md"

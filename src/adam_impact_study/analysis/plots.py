@@ -1,5 +1,6 @@
 import logging
 import os
+import re
 from typing import Literal, Optional, Tuple
 
 import matplotlib.pyplot as plt
@@ -174,6 +175,11 @@ def plot_warning_time_histogram(
     # Filter to only include complete results
     summary = summary.apply_mask(summary.complete())
     summary = summary.apply_mask(pc.invert(pc.is_null(summary.discovery_time.days)))
+    # Warning time is only defined for objects that crossed the 1% IP threshold;
+    # never-crossing objects must not be binned at zero warning time.
+    summary = summary.apply_mask(
+        pc.invert(pc.is_null(summary.ip_threshold_1_percent.days))
+    )
 
     fig, ax = plt.subplots(1, 1, dpi=200)
     warning_time_max = pc.ceil(
@@ -199,7 +205,7 @@ def plot_warning_time_histogram(
         ).to_numpy(zero_copy_only=False)
 
         ax.hist(
-            np.where(np.isnan(warning_time), 0, warning_time) / 365.25,
+            warning_time / 365.25,
             histtype="step",
             label=f"{diameter:.3f} km",
             color=color,
@@ -210,7 +216,7 @@ def plot_warning_time_histogram(
     ax.set_xticks(np.arange(0, warning_time_max + 20, 20))
     ax.legend(frameon=False, bbox_to_anchor=(1.01, 0.75))
     ax.set_xlabel("Warning Time for Discoveries [years]")
-    ax.set_ylabel("PDF")
+    ax.set_ylabel("Count")
 
     return fig, ax
 
@@ -595,7 +601,6 @@ def plot_individual_orbit_ip_over_time(
 
     # Store discovery times for quick lookup
     discovery_times = {}
-    discovery_times_optimistic = {}
     if summary_results is not None:
         summary_orbit_ids = summary_results.orbit.orbit_id.to_pylist()
         for i, orbit_id in enumerate(summary_orbit_ids):
@@ -604,10 +609,6 @@ def plot_individual_orbit_ip_over_time(
                 discovery_times[orbit_id] = orbit_summary.discovery_time.mjd()[
                     0
                 ].as_py()
-            if orbit_summary.discovery_time_optimistic is not None:
-                discovery_times_optimistic[orbit_id] = (
-                    orbit_summary.discovery_time_optimistic.mjd()[0].as_py()
-                )
 
     for orbit_id in orbit_ids:
         logger.info(f"Orbit ID Plotting: {orbit_id}")
@@ -620,6 +621,22 @@ def plot_individual_orbit_ip_over_time(
         if len(ips) == 0:
             logger.warning(f"No complete results found for orbit {orbit_id}")
             continue
+        discovery_time_optimistic = None
+        if plot_discovery_time_optimistic:
+            # Recompute the optimistic linking marker from the same plotted windows so
+            # the line always aligns with an IP point on the x-axis.
+            optimistic_mask = pc.and_(
+                pc.greater_equal(ips.observation_count, 6),
+                pc.and_(
+                    pc.greater_equal(ips.arc_length(), 1.0),
+                    pc.less_equal(ips.arc_length(), 30.0),
+                ),
+            )
+            optimistic_windows = ips.apply_mask(optimistic_mask).sort_by("observation_end")
+            if len(optimistic_windows) > 0:
+                discovery_time_optimistic = (
+                    optimistic_windows.observation_end.mjd()[0].as_py()
+                )
 
         # Plot sorted data on primary axis (MJD)
         ax1.set_xlabel("MJD")
@@ -665,11 +682,34 @@ def plot_individual_orbit_ip_over_time(
         ax1.set_yticks(y_ticks)
         ax1.set_yticklabels([f"{y_tick:.1f}" for y_tick in y_ticks])
 
-        # Get impact time for this object
+        # Get impact time for this object and build a readable title.
         impact_orbit = impacting_orbits.apply_mask(
             pc.equal(impacting_orbits.orbit_id, orbit_id)
         )
+        display_title = orbit_id
         if len(impact_orbit) > 0:
+            object_id = impact_orbit.object_id[0].as_py()
+            orbit_number = object_id if object_id is not None else orbit_id
+            match = re.search(r"\d+", str(orbit_number))
+            if match is not None:
+                orbit_number = str(int(match.group(0)))
+
+            diameter = impact_orbit.diameter[0].as_py()
+            diameter_label = None
+            if diameter is not None:
+                diameter_label = f"{diameter:g}km"
+
+            impact_year = impact_orbit.impact_time.to_astropy()[0].datetime.year
+            decade_start = ((impact_year - 1) // 10) * 10 + 1
+            decade_end = decade_start + 9
+            decade_label = f"{decade_start}-{decade_end}"
+
+            title_parts = [f"Orbit {orbit_number}"]
+            if diameter_label is not None:
+                title_parts.append(diameter_label)
+            title_parts.append(decade_label)
+            display_title = " ".join(title_parts)
+
             impact_time = impact_orbit.impact_time.mjd()[0].as_py()
 
             # Add days until impact axis
@@ -720,80 +760,69 @@ def plot_individual_orbit_ip_over_time(
             )
             ax3.set_xlabel("Days Since Survey Start")
 
-        # Now add discovery time marker IF AVAILABLE - MOVED TO END
+        # Now add discovery/linking time markers IF AVAILABLE - MOVED TO END.
+        # NOTE: Do not `continue`; always save the plot even if markers are missing.
         if orbit_id in discovery_times:
             discovery_time = discovery_times[orbit_id]
-            if discovery_time is None:
-                continue
-            # Check if discovery time is within the plot range
-            x_min, x_max = ax1.get_xlim()
-            if discovery_time < x_min or discovery_time > x_max:
-                # If not, expand the range slightly
-                buffer = (x_max - x_min) * 0.05  # 5% buffer
-                ax1.set_xlim(
-                    min(x_min, discovery_time - buffer),
-                    max(x_max, discovery_time + buffer),
+            if discovery_time is not None:
+                # Check if discovery time is within the plot range
+                x_min, x_max = ax1.get_xlim()
+                if discovery_time < x_min or discovery_time > x_max:
+                    # If not, expand the range slightly
+                    buffer = (x_max - x_min) * 0.05  # 5% buffer
+                    ax1.set_xlim(
+                        min(x_min, discovery_time - buffer),
+                        max(x_max, discovery_time + buffer),
+                    )
+
+                # Draw a visible vertical line
+                ax1.axvline(
+                    x=discovery_time,
+                    color="#FF0000",  # red
+                    linestyle="-",
+                    linewidth=1.5,
+                    zorder=100,
+                    label="LSST linking discovery",
                 )
 
-            # Draw a VERY visible vertical line
-            ax1.axvline(
-                x=discovery_time,
-                color="#FF0000",  # Pure red
-                linestyle="-",  # Solid line
-                linewidth=1,  # Thick line
-                zorder=100,  # Very high z-order
-                label="Discovery",  # Add to legend
-            )
-
-            # Add visible text
-            ax1.text(
-                discovery_time + ((x_max - x_min) * 0.02),  # Slight offset
-                0.5,  # Middle of y-axis
-                "DISCOVERY",
-                color="red",
-                fontsize=6,
-                fontweight="bold",
-                rotation=90,
-                zorder=100,
-            )
-
-        if orbit_id in discovery_times_optimistic and plot_discovery_time_optimistic:
-            discovery_time_optimistic = discovery_times_optimistic[orbit_id]
-            if discovery_time_optimistic is None:
-                continue
-            # Check if discovery time is within the plot range
-            x_min, x_max = ax1.get_xlim()
-            if discovery_time_optimistic < x_min or discovery_time_optimistic > x_max:
-                # If not, expand the range slightly
-                buffer = (x_max - x_min) * 0.05  # 5% buffer
-                ax1.set_xlim(
-                    min(x_min, discovery_time_optimistic - buffer),
-                    max(x_max, discovery_time_optimistic + buffer),
+                # Add visible text
+                x_min, x_max = ax1.get_xlim()
+                ax1.text(
+                    discovery_time + ((x_max - x_min) * 0.02),  # Slight offset
+                    0.5,  # Middle of y-axis
+                    "LSST DISCOVERY",
+                    color="red",
+                    fontsize=6,
+                    fontweight="bold",
+                    rotation=90,
+                    zorder=100,
                 )
 
-            # Draw a VERY visible vertical line
+        if plot_discovery_time_optimistic and discovery_time_optimistic is not None:
+            # Draw a visible vertical line (green for "minimal/THOR")
             ax1.axvline(
                 x=discovery_time_optimistic,
-                color="#FF0000",  # Pure red
-                linestyle="-",  # Solid line
-                linewidth=1,  # Thick line
-                zorder=100,  # Very high z-order
-                label="Discovery (Optimistic)",  # Add to legend
+                color="#2E7D32",  # green
+                linestyle="-",
+                linewidth=1.5,
+                zorder=100,
+                label="THOR minimal linking",
             )
 
             # Add visible text
+            x_min, x_max = ax1.get_xlim()
             ax1.text(
                 discovery_time_optimistic + ((x_max - x_min) * 0.02),  # Slight offset
                 0.5,  # Middle of y-axis
-                "DISCOVERY (OPTIMISTIC)",
-                color="green",
+                "THOR (MIN)",
+                color="#2E7D32",
                 fontsize=6,
                 fontweight="bold",
                 rotation=90,
                 zorder=100,
             )
 
-        fig.suptitle(orbit_id)
+        fig.suptitle(display_title)
         plt.tight_layout()
         fig.savefig(
             os.path.join(out_dir, f"IP_{orbit_id}.png"),
@@ -2979,7 +3008,7 @@ def plot_discovered_by_diameter_impact_period(
     elif period == "decade":
         ax.set_xlabel("Impact Decade")
 
-    ax.set_ylabel("Percentage of Discovered Objects")
+    ax.set_ylabel("Percentage")
 
     ax.set_title("Percentage of Discovered Objects")
 
@@ -3047,11 +3076,12 @@ def plot_discovered_by_diameter_impact_period(
 def plot_observed_vs_unobserved_elements(
     summary: ImpactorResultSummary,
     diameter: float = 1,
+    split: bool = False,
 ) -> Tuple[plt.Figure, plt.Axes]:
     """
     Plot the distribution of objects in orbital element space with three categories:
     - Discovered (blue)
-    - Observed but not discovered (yellow)
+    - Observed but not discovered (orange)
     - Unobserved (red)
 
     Parameters
@@ -3060,6 +3090,9 @@ def plot_observed_vs_unobserved_elements(
         The summary of impact study results.
     diameter : float, optional
         The diameter [km] to filter the results by, by default 1.
+    split : bool, optional
+        If True, plot each category in its own column (2 rows: a-i and a-e)
+        with shared axes, instead of overplotting all three in two panels.
 
     Returns
     -------
@@ -3095,6 +3128,44 @@ def plot_observed_vs_unobserved_elements(
     assert np.sum(discovered_objects_mask) + np.sum(
         observed_not_discovered_objects_mask
     ) + np.sum(unobserved_objects_mask) == len(orbits_at_diameter)
+
+    if split:
+        n_total = len(orbits_at_diameter)
+        categories = [
+            ("Discovered", discovered_objects_mask, "blue"),
+            ("Observed (Not Discovered)", observed_not_discovered_objects_mask, "orange"),
+            ("Unobserved", unobserved_objects_mask, "red"),
+        ]
+        element_rows = [(i_deg, "Inclination (i) [deg]"), (e, "Eccentricity (e)")]
+        fig, axes = plt.subplots(
+            2, 3, dpi=200, figsize=(18, 10), sharex=True, sharey="row"
+        )
+        for col, (label, mask, color) in enumerate(categories):
+            n_cat = int(np.sum(mask))
+            for row, (yvals, ylabel) in enumerate(element_rows):
+                ax = axes[row, col]
+                ax.scatter(
+                    a_au[mask],
+                    yvals[mask],
+                    c=color,
+                    alpha=0.3,
+                    linewidths=0,
+                    s=15,
+                )
+                ax.grid(True, alpha=0.3)
+                if row == 0:
+                    ax.set_title(f"{label}\nn={n_cat} ({n_cat / n_total * 100:.1f}%)")
+                if row == 1:
+                    ax.set_xlabel("Semimajor Axis (a) [AU]")
+                if col == 0:
+                    ax.set_ylabel(ylabel)
+        fig.suptitle(
+            f"Distribution of Objects by Detection Category (Diameter: {diameter} km, "
+            f"Total: {n_total})"
+        )
+        plt.tight_layout(rect=[0, 0.02, 1, 0.95])
+        return fig, axes
+
     # Create the plots
     fig, axes = plt.subplots(1, 2, dpi=200, figsize=(18, 7))
 

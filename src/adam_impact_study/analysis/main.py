@@ -1,4 +1,5 @@
 
+import argparse
 import logging
 import pathlib
 from typing import Literal, Optional, Union
@@ -996,7 +997,11 @@ def summarize_impact_study_results(
 
     out_dir_path = pathlib.Path(out_dir).absolute()
     out_dir_path.mkdir(parents=True, exist_ok=True)
+    # Backwards/forwards compatible filenames:
+    # - older notebooks expect "summary_results.parquet"
+    # - newer code uses a more explicit name
     results.to_parquet(out_dir_path / "impactor_results_summary.parquet")
+    results.to_parquet(out_dir_path / "summary_results.parquet")
     logger.info(f"Saved impact study results to {out_dir_path}")
 
     return results
@@ -1011,30 +1016,33 @@ def run_all_analysis(
     """
     Perform all analysis on the impact study results.
     """
+    out_dir_path = pathlib.Path(out_dir).absolute()
+    out_dir_path.mkdir(parents=True, exist_ok=True)
+
     # Collect all the results
     impactor_orbits, observations, results_timing, window_results = collect_all_results(
         run_dir
     )
 
     # Persist collected results to output directory
-    impactor_orbits.to_parquet(out_dir / "impactor_orbits.parquet")
-    observations.to_parquet(out_dir / "observations.parquet")
-    results_timing.to_parquet(out_dir / "results_timing.parquet")
-    window_results.to_parquet(out_dir / "window_results.parquet")
+    impactor_orbits.to_parquet(out_dir_path / "impactor_orbits.parquet")
+    observations.to_parquet(out_dir_path / "observations.parquet")
+    results_timing.to_parquet(out_dir_path / "results_timing.parquet")
+    window_results.to_parquet(out_dir_path / "window_results.parquet")
 
     # Summarize the results
     summary_results = summarize_impact_study_results(
-        impactor_orbits, observations, results_timing, window_results, out_dir
+        impactor_orbits, observations, results_timing, window_results, out_dir_path
     )
 
     # Make the summary plots
     if summary_plots:
-        make_analysis_plots(summary_results, window_results, out_dir)
+        make_analysis_plots(summary_results, window_results, out_dir_path)
 
     # Make the individual plots
     if individual_plots:
         plot_individual_orbit_ip_over_time(
-            impactor_orbits, window_results, out_dir, summary_results=summary_results
+            impactor_orbits, window_results, out_dir_path, summary_results=summary_results
         )
 
 
@@ -1042,8 +1050,18 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument("--run-dir", type=str, required=True)
     parser.add_argument("--out-dir", type=str, required=True)
-    parser.add_argument("--summary-plots", type=bool, default=True)
-    parser.add_argument("--individual-plots", type=bool, default=True)
+    parser.add_argument(
+        "--summary-plots",
+        action=argparse.BooleanOptionalAction,
+        default=True,
+        help="Generate summary plots in out-dir (use --no-summary-plots to disable).",
+    )
+    parser.add_argument(
+        "--individual-plots",
+        action=argparse.BooleanOptionalAction,
+        default=True,
+        help="Generate individual orbit plots in out-dir (use --no-individual-plots to disable).",
+    )
     args = parser.parse_args()
     run_all_analysis(
         args.run_dir, args.out_dir, args.summary_plots, args.individual_plots
