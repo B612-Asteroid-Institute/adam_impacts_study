@@ -25,7 +25,7 @@ sys.path.insert(0, f"{REPO}/src")
 from adam_impact_study.types import ImpactorResultSummary
 
 LEAD_YR = 5.0
-BINS = np.arange(0, 1.0001, 0.05)
+BINS = np.arange(0, 1.0001, 0.1)
 
 s = ImpactorResultSummary.from_parquet(f"{DATA}/summary_results.parquet")
 s = s.apply_mask(s.prograde_orbits())
