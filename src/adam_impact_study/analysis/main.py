@@ -1,4 +1,3 @@
-
 import logging
 import pathlib
 from typing import Literal, Optional, Union
@@ -8,7 +7,6 @@ import pyarrow as pa
 import pyarrow.compute as pc
 import quivr as qv
 import ray
-from adam_core.ray_cluster import initialize_use_ray
 from adam_core.time import Timestamp
 
 from adam_impact_study.analysis.collect import collect_all_results
@@ -16,6 +14,7 @@ from adam_impact_study.analysis.plots import (
     make_analysis_plots,
     plot_individual_orbit_ip_over_time,
 )
+from adam_impact_study.ray_cluster import initialize_use_ray
 from adam_impact_study.types import (
     DiscoveryDates,
     ImpactorOrbits,

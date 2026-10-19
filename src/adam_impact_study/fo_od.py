@@ -100,6 +100,8 @@ def observations_to_ades(observations: Observations) -> Tuple[str, ADESObservati
             telescope=TelescopeObsContext(
                 name="Simonyi Survey Telescope",
                 design="Reflector",
+                aperture=8.4,
+                detector="CCD",
             ),
         ),
     }

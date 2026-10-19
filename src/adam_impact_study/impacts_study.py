@@ -20,12 +20,12 @@ from adam_core.dynamics.impacts import (
 from adam_core.observations.ades import ADESObservations
 from adam_core.observers.utils import calculate_observing_night
 from adam_core.orbits import VariantOrbits
-from adam_core.ray_cluster import initialize_use_ray
 from adam_core.time import Timestamp
 from adam_fo.config import check_build_exists
 
 from adam_impact_study.conversions import Observations
 from adam_impact_study.fo_od import run_fo_od
+from adam_impact_study.ray_cluster import initialize_use_ray
 from adam_impact_study.sorcha_utils import run_sorcha
 from adam_impact_study.types import (
     ImpactorOrbits,
