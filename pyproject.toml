@@ -10,8 +10,8 @@ authors = [
 ]
 dependencies = [
     "matplotlib>=3.10.0",
-    "adam-core>=0.4.0",
-    "adam-assist>=0.3.0",
+    "adam-core==0.6.1",
+    "adam-assist==0.5.0",
     "ray[default]==2.39.0",
     "quivr>=0.8.0",
     "ipdb>=0.13.13",
